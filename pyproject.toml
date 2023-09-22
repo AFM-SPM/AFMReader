@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[project]
+name = "topofileformats"
+version = "0.1.0"
+authors = [{ name = "Sylvia Whittle", email = "sylviwhittle@gmail.com" }]
+description = "Read and retrieve data from various AFM file formats."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+]
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+dev = ["pytest", "black", "pylint"]
