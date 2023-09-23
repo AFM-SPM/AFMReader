@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import BinaryIO, Union
 
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 
 class VoltageLevelConverter:
@@ -123,6 +125,8 @@ def load_asd(file_path: Union[Path, str], channel: str):
             y_pixels=header_dict["y_pixels"],
             analogue_digital_converter=analogue_digital_converter,
         )
+
+        frames = np.array(frames)
 
         return frames, pixel_to_nanometre_scaling_factor, header_dict
 
@@ -555,3 +559,17 @@ def create_analogue_digital_converter(analogue_digital_range, scaling_factor, re
     print(f"Analogue to digital mapping | Range: {analogue_digital_range} -> {mapping}")
     print(f"Converter: {converter}")
     return converter
+
+
+def create_animation_and_save(file_name: str, frames: np.ndarray) -> None:
+    fig, ax = plt.subplots()
+
+    def update(frame):
+        ax.imshow(frames[frame])
+        return ax
+
+    # Create the animation object
+    ani = animation.FuncAnimation(fig, update, frames=frames.shape[0], interval=200)
+
+    # Save the animation to a file using ffmpeg
+    ani.save(f"{file_name}.mp4", writer="ffmpeg")
