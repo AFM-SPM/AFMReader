@@ -105,7 +105,7 @@ def load_asd(file_path: Union[Path, str], channel: str):
             _ = f.read(length_of_all_first_channel_frames)
         else:
             raise ValueError(
-                f"Channel {channel} not in this file's available channels: {header_dict['channel1']}, {header_dict['channel2']}"
+                f"Channel {channel} not found in this file's available channels: {header_dict['channel1']}, {header_dict['channel2']}"
             )
 
         scaling_factor = calculate_scaling_factor(
@@ -522,7 +522,7 @@ def create_analogue_digital_converter(analogue_digital_range, scaling_factor, re
         converter = UnipolarConverter(
             analogue_digital_range=analogue_digital_range,
             max_voltage=5.0,
-            reolution=resolution,
+            resolution=resolution,
             scaling_factor=scaling_factor,
         )
     elif analogue_digital_range == hex(0x00010000):
@@ -561,7 +561,7 @@ def create_analogue_digital_converter(analogue_digital_range, scaling_factor, re
     return converter
 
 
-def create_animation_and_save(file_name: str, frames: np.ndarray) -> None:
+def create_animation(file_name: str, frames: np.ndarray, format=".gif") -> None:
     fig, ax = plt.subplots()
 
     def update(frame):
@@ -571,5 +571,9 @@ def create_animation_and_save(file_name: str, frames: np.ndarray) -> None:
     # Create the animation object
     ani = animation.FuncAnimation(fig, update, frames=frames.shape[0], interval=200)
 
-    # Save the animation to a file using ffmpeg
-    ani.save(f"{file_name}.mp4", writer="ffmpeg")
+    if format == ".mp4":
+        ani.save(f"{file_name}.mp4", writer="ffmpeg")
+    elif format == ".gif":
+        ani.save(f"{file_name}.gif", writer="imagemagick")
+    else:
+        raise ValueError(f"{format} format not supported yet.")
