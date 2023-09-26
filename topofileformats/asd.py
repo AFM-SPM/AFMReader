@@ -561,7 +561,19 @@ def create_analogue_digital_converter(analogue_digital_range, scaling_factor, re
     return converter
 
 
-def create_animation(file_name: str, frames: np.ndarray, format=".gif") -> None:
+def create_animation(file_name: str, frames: np.ndarray, file_format: str = ".gif") -> None:
+    """Create animation from a numpy array of frames (2d numpy arrays). File format can be specified, defaults to .gif.
+
+    Parameters
+    ----------
+    file_name: str
+        Name of the file to save
+    frames: np.ndarray
+        Numpy array of frames of shape (N x W x H) where N is the number of frames, W is the width of the frames and 
+        H is the height of the frames.
+    file_format: str
+        Optional string for the file format to save as. Formats currently available: .mp4, .gif.
+    """
     fig, ax = plt.subplots()
 
     def update(frame):
@@ -571,9 +583,9 @@ def create_animation(file_name: str, frames: np.ndarray, format=".gif") -> None:
     # Create the animation object
     ani = animation.FuncAnimation(fig, update, frames=frames.shape[0], interval=200)
 
-    if format == ".mp4":
+    if file_format == ".mp4":
         ani.save(f"{file_name}.mp4", writer="ffmpeg")
-    elif format == ".gif":
+    elif file_format == ".gif":
         ani.save(f"{file_name}.gif", writer="imagemagick")
     else:
-        raise ValueError(f"{format} format not supported yet.")
+        raise ValueError(f"{file_format} format not supported yet.")
