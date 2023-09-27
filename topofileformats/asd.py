@@ -23,27 +23,91 @@ import matplotlib.animation as animation
 
 
 class VoltageLevelConverter:
+    """A class for converting arbitrary height levels from the AFM into real world nanometre heights.
+    Different .asd files require different functions to perform this calculation based on many factors,
+    hence why we need to define the correct function in each case."""
+
     def __init__(self, analogue_digital_range, max_voltage, scaling_factor, resolution):
         self.ad_range = int(analogue_digital_range, 16)
         self.max_voltage = max_voltage
         self.scaling_factor = scaling_factor
         self.resolution = resolution
         print(
-            f"created voltage converter. ad_range: {analogue_digital_range} -> {self.ad_range}, max voltage: {max_voltage}, scaling factor: {scaling_factor}, resolution: {resolution}"
+            f"created voltage converter. ad_range: {analogue_digital_range} -> {self.ad_range}, \
+max voltage: {max_voltage}, scaling factor: {scaling_factor}, resolution: {resolution}"
         )
 
 
 class UnipolarConverter(VoltageLevelConverter):
+    """A VoltageLevelConverter for unipolar encodings. (0 to +X Volts)"""
+
     def level_to_voltage(self, level):
+        """Calculate the real world height scale in nanometres for an arbitrary level value.
+
+        Parameters
+        ----------
+        level: float
+            Arbitrary height measurement from the AFM that needs converting into real world
+            length scale units.
+
+        Returns
+        -------
+        float
+            Real world nanometre height for the input height level.
+        """
         return (self.ad_range * level / self.resolution) * self.scaling_factor
 
 
 class BipolarConverter(VoltageLevelConverter):
+    """A VoltageLevelConverter for bipolar encodings. (-X to +X Volts)"""
+
     def level_to_voltage(self, level):
+        """Calculate the real world height scale in nanometres for an arbitrary level value.
+
+        Parameters
+        ----------
+        level: float
+            Arbitrary height measurement from the AFM that needs converting into real world
+            length scale units.
+
+        Returns
+        -------
+        float
+            Real world nanometre height for the input height level.
+        """
         return (self.ad_range - 2 * level * self.ad_range / self.resolution) * self.scaling_factor
 
 
-def calculate_scaling_factor(channel, z_piezo_gain, z_piezo_extension, scanner_sensitivity, phase_sensitivity):
+def calculate_scaling_factor(
+    channel: str,
+    z_piezo_gain: float,
+    z_piezo_extension: float,
+    scanner_sensitivity: float,
+    phase_sensitivity: float,
+) -> float:
+    """Calculate the correct scaling factor to enable conversion between arbitrary level values from the AFM into real
+    world nanometre height values. To be used in conjunction with the VoltageLevelConverter class to define the correct
+    function to perform this operation.
+
+    Parameters
+    ----------
+    channel: str
+        The .asd channel being used.
+    z_piezo_gain: float
+        The z_piezo_gain listed in the header metadata for the .asd file.
+    z_piezo_extension: float
+        The z_piezo_extension listed in the header metadata for the .asd file.
+    scanner_sensitivity: float
+        The scanner_sensitivity listed in the header metadata for the .asd file.
+    phase_sensitivity: float
+        The phase_sensitivity listed in the heder metadata for the .asd file.
+
+    Returns
+    -------
+    scaling_factor: float
+        The appropriate scaling factor to pass to a VoltageLevelConverter to convert arbitrary height levels to real world nanometre heights for
+        the frame data in the specified channl in the .asd file.
+    """
     if channel == "TP":
         print(
             f"Scaling factor: Type: {channel} -> TP | piezo extension {z_piezo_gain} * piezo gain {z_piezo_extension} = scaling factor {z_piezo_gain * z_piezo_extension}"
@@ -64,6 +128,31 @@ def calculate_scaling_factor(channel, z_piezo_gain, z_piezo_extension, scanner_s
 
 
 def load_asd(file_path: Union[Path, str], channel: str):
+    """Load a .asd file.
+
+    Parameters
+    ----------
+    file_path: Union[Path, str]
+        Path to the .asd file.
+    channel: str
+        Channel to load. Note that only two channels seem to be
+        present in a single .asd file. Options: TP, ER, PH
+
+    Returns
+    -------
+    frames: np.ndarray
+        The .asd file frames data as a numpy 3D array N x W x H
+        (Number of frames x Width of each frame x height of each frame).
+    pixel_to_nanometre_scaling_factor: float
+        The number of nanometres per pixel for the .asd file. (AKA the resolution).
+        Enables converting between pixels and nanometres
+        when working with the data, in order to use real-world length scales.
+    metadata: dict
+        Dictionary of metadata for the .asd file. The number of entries is too long to list here,
+        and changes based on the file version please either look into the `read_header_file_version_x`
+        functions or print the keys too see what metadata is available.
+    """
+
     with open(file_path, "rb") as f:
         file_version = read_file_version(f)
 
@@ -77,7 +166,8 @@ def load_asd(file_path: Union[Path, str], channel: str):
             header_dict = read_header_file_version_2(f)
         else:
             raise ValueError(
-                f"File version {file_version} unknown. Please add support if you know how to decode this file version."
+                f"File version {file_version} unknown. Please add support if you\
+know how to decode this file version."
             )
         print(header_dict)
 
@@ -85,27 +175,36 @@ def load_asd(file_path: Union[Path, str], channel: str):
         pixel_to_nanometre_scaling_factor_y = header_dict["y_nm"] / header_dict["y_pixels"]
         if pixel_to_nanometre_scaling_factor_x != pixel_to_nanometre_scaling_factor_y:
             print(
-                f"WARNING: Resolution of image is different in x and y directions: x: {pixel_to_nanometre_scaling_factor_x}\
+                f"WARNING: Resolution of image is different in x and y directions:\
+x: {pixel_to_nanometre_scaling_factor_x}\
  y: {pixel_to_nanometre_scaling_factor_y}"
             )
         pixel_to_nanometre_scaling_factor = pixel_to_nanometre_scaling_factor_x
 
         if channel == header_dict["channel1"]:
-            print(f"Requested channel {channel} matches first channel in file: {header_dict['channel1']}")
+            print(
+                f"Requested channel {channel} matches first channel in file: {header_dict['channel1']}"
+            )
         elif channel == header_dict["channel2"]:
-            print(f"Requested channel {channel} matches second channel in file: {header_dict['channel2']}")
+            print(
+                f"Requested channel {channel} matches second channel in file: {header_dict['channel2']}"
+            )
 
             # Skip first channel data
             size_of_frame_header = header_dict["frame_header_length"]
             # Remember that each value is two bytes (since signed int16)
             size_of_single_frame_plus_header = (
-                header_dict["frame_header_length"] + header_dict["x_pixels"] * header_dict["y_pixels"] * 2
+                header_dict["frame_header_length"]
+                + header_dict["x_pixels"] * header_dict["y_pixels"] * 2
             )
-            length_of_all_first_channel_frames = header_dict["num_frames"] * size_of_single_frame_plus_header
+            length_of_all_first_channel_frames = (
+                header_dict["num_frames"] * size_of_single_frame_plus_header
+            )
             _ = f.read(length_of_all_first_channel_frames)
         else:
             raise ValueError(
-                f"Channel {channel} not found in this file's available channels: {header_dict['channel1']}, {header_dict['channel2']}"
+                f"Channel {channel} not found in this file's available channels: \
+{header_dict['channel1']}, {header_dict['channel2']}"
             )
 
         scaling_factor = calculate_scaling_factor(
@@ -116,7 +215,8 @@ def load_asd(file_path: Union[Path, str], channel: str):
             phase_sensitivity=header_dict["phase_sensitivity"],
         )
         analogue_digital_converter = create_analogue_digital_converter(
-            analogue_digital_range=header_dict["analogue_digital_range"], scaling_factor=scaling_factor
+            analogue_digital_range=header_dict["analogue_digital_range"],
+            scaling_factor=scaling_factor,
         )
         frames = read_channel_data(
             f=f,
@@ -152,6 +252,13 @@ def read_file_version(open_file):
 
 
 def read_header_file_version_0(f):
+    """Read the header metadata for a .asd file using file version 0.
+
+    Returns
+    -------
+    header_dict: dict
+        Dictionary of metadata decoded from the file header.
+    """
     header_dict = {}
 
     # There only ever seem to be two channels available
@@ -219,7 +326,9 @@ def read_header_file_version_0(f):
     # ID of the file
     header_dict["file_id"] = read_int16(f)
     # Name of the user
-    header_dict["user_name"] = read_null_separated_utf8(f, length_bytes=header_dict["user_name_size"])
+    header_dict["user_name"] = read_null_separated_utf8(
+        f, length_bytes=header_dict["user_name_size"]
+    )
     # Sensitivity of the scanner in nm / V
     header_dict["scanner_sensitivity"] = read_float(f)
     # Phase sensitivity
@@ -238,11 +347,20 @@ def read_header_file_version_0(f):
 
 
 def read_header_file_version_1(f):
+    """Read the header metadata for a .asd file using file version 1.
+
+    Returns
+    -------
+    header_dict: dict
+        Dictionary of metadata decoded from the file header.
+    """
+
     header_dict = {}
 
     # length of file metadata header in bytes - so we can skip it to get to the data
     header_dict["header_length"] = read_int32(f)
-    # Frame header is the length of the header for each frame to be skipped before reading frame data.
+    # Frame header is the length of the header for each frame to be skipped before
+    # reading frame data.
     header_dict["frame_header_length"] = read_int32(f)
     # Encoding for strings
     header_dict["text_encoding"] = read_int32(f)
@@ -315,13 +433,13 @@ def read_header_file_version_1(f):
 
     # Read the user name
     user_name = []
-    for i in range(header_dict["user_name_size"]):
+    for _ in range(header_dict["user_name_size"]):
         user_name.append(chr(read_int8(f)))
     header_dict["user_name"] = "".join([c for c in user_name if c != "\x00"])
 
     # Read a comment
     comment = []
-    for i in range(header_dict["comment_size"]):
+    for _ in range(header_dict["comment_size"]):
         comment.append(chr(read_int8(f)))
     header_dict["comment_without_null"] = "".join([c for c in comment if c != "\x00"])
 
@@ -329,6 +447,14 @@ def read_header_file_version_1(f):
 
 
 def read_header_file_version_2(f):
+    """Read the header metadata for a .asd file using file version 2.
+
+    Returns
+    -------
+    header_dict: dict
+        Dictionary of metadata decoded from the file header.
+    """
+
     header_dict = {}
 
     # length of file metadata header in bytes - so we can skip it to get to the data
@@ -453,13 +579,35 @@ def read_header_file_version_2(f):
 
 
 def read_channel_data(f, num_frames, x_pixels, y_pixels, analogue_digital_converter):
+    """Read frame data from an open .asd file, starting at the current position.
+
+    Parameters
+    ----------
+    f: BinaryIO
+        An open binary file object for a .asd file.
+    num_frames: int
+        The number of frames for this set of frame data.
+    x_pixels: int
+        The width of each frame in pixels.
+    y_pixels: int
+        The height of each frame in pixels.
+    analogue_digital_converter: A VoltageLevelConverter instance for converting the raw
+    level values to real world nanometre vertical heights.
+
+    Returns
+    -------
+    frames: np.ndarray
+        The extracted frame heightmap data as a N x W x H 3D numpy array
+        (number of frames x width of each frame x height of each frame). Units are nanometres.
+    """
+
     # List to store the frames as numpy arrays
     frames = []
     # Dictionary to store all the variables together in case we want to return them.
     # Very useful for debugging!
     frame_header_dict = {}
 
-    for i in range(num_frames):
+    for _ in range(num_frames):
         frame_header_dict["frame_number"] = read_int32(f)
         frame_header_dict["max_data"] = read_int16(f)
         frame_header_dict["min_data"] = read_int16(f)
@@ -490,6 +638,28 @@ def read_channel_data(f, num_frames, x_pixels, y_pixels, analogue_digital_conver
 
 
 def create_analogue_digital_converter(analogue_digital_range, scaling_factor, resolution=4096):
+    """Create an analogue to digital converter for a given range, scaling factor and resolution.
+    Used for converting raw level values into real world height scales in nanometres.
+
+    Parameters
+    ----------
+    analogue_digital_range: float
+        The range of analogue voltage values.
+    scaling factor: float
+        A scaling factor calculated elsewhere that scales the heightmap appropriately based on
+        the type of channel and sensor parameters.
+    resolution: int
+        The vertical resolution of the instrumen. Dependant on the number of bits used to store
+        its values. Typically 12, hence 2^12 = 4096 sensitivity levels.
+
+    Returns
+    -------
+    converter: VoltageLevelConverter
+        An instance of the VoltageLevelConverter class with a tailored function `level_to_voltage`
+        which converts arbitrary level values into real world nanometre heights for the given .asd
+        file. Note that this is file specific since the parameters will change between files.
+    """
+
     # Analogue to digital hex conversion range encoding:
     # unipolar_1_0V : 0x00000001 +0.0 to +1.0 V
     # unipolar_2_5V : 0x00000002 +0.0 to +2.5 V
@@ -554,7 +724,8 @@ def create_analogue_digital_converter(analogue_digital_range, scaling_factor, re
         )
     else:
         raise ValueError(
-            f"Analogue to digital range hex value {analogue_digital_range} has no known analogue-digital mapping."
+            f"Analogue to digital range hex value {analogue_digital_range} has no known \
+analogue-digital mapping."
         )
     print(f"Analogue to digital mapping | Range: {analogue_digital_range} -> {mapping}")
     print(f"Converter: {converter}")
@@ -562,23 +733,24 @@ def create_analogue_digital_converter(analogue_digital_range, scaling_factor, re
 
 
 def create_animation(file_name: str, frames: np.ndarray, file_format: str = ".gif") -> None:
-    """Create animation from a numpy array of frames (2d numpy arrays). File format can be specified, defaults to .gif.
+    """Create animation from a numpy array of frames (2d numpy arrays).
+    File format can be specified, defaults to .gif.
 
     Parameters
     ----------
     file_name: str
         Name of the file to save
     frames: np.ndarray
-        Numpy array of frames of shape (N x W x H) where N is the number of frames, W is the width of the frames and 
-        H is the height of the frames.
+        Numpy array of frames of shape (N x W x H) where N is the number of frames,
+        W is the width of the frames and H is the height of the frames.
     file_format: str
         Optional string for the file format to save as. Formats currently available: .mp4, .gif.
     """
-    fig, ax = plt.subplots()
+    fig, axis = plt.subplots()
 
     def update(frame):
-        ax.imshow(frames[frame])
-        return ax
+        axis.imshow(frames[frame])
+        return axis
 
     # Create the animation object
     ani = animation.FuncAnimation(fig, update, frames=frames.shape[0], interval=200)
