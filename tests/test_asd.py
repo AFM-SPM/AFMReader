@@ -30,7 +30,9 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         ),
     ],
 )
-def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_nm_scaling: float) -> None:
+def test_load_asd(
+    file_name: str, channel: str, number_of_frames: int, pixel_to_nm_scaling: float
+) -> None:
     """Test the normal operation of loading a .asd file."""
 
     result_frames = list
@@ -42,3 +44,4 @@ def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_
 
     assert len(result_frames) == number_of_frames
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
+    assert isinstance(result_metadata, dict)
