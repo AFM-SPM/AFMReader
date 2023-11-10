@@ -1,18 +1,15 @@
 """Test the functioning of loading .asd files."""
-
-from topofileformats.asd import load_asd
-
 from pathlib import Path
 import pytest
 
-import numpy as np
+from topofileformats.asd import load_asd
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
 
 
 @pytest.mark.parametrize(
-    "file_name, channel, number_of_frames, pixel_to_nm_scaling",
+    ("file_name", "channel", "number_of_frames", "pixel_to_nm_scaling"),
     [
         # File type 0
         (
@@ -30,11 +27,8 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         ),
     ],
 )
-def test_load_asd(
-    file_name: str, channel: str, number_of_frames: int, pixel_to_nm_scaling: float
-) -> None:
+def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_nm_scaling: float) -> None:
     """Test the normal operation of loading a .asd file."""
-
     result_frames = list
     result_pixel_to_nm_scaling = float
     result_metadata = dict

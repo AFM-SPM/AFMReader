@@ -1,7 +1,7 @@
-"""For decoding and loading .asd AFM file format into Python Numpy arrays"""
+"""For decoding and loading .asd AFM file format into Python Numpy arrays."""
 
 from pathlib import Path
-from typing import BinaryIO, Union
+from typing import BinaryIO
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -24,11 +24,12 @@ from topofileformats.io import (
 
 # pylint: disable=too-few-public-methods
 class VoltageLevelConverter:
-    """A class for converting arbitrary height levels from the AFM into real world
-    nanometre heights.
+    """A class for converting arbitrary height levels from the AFM into real world nanometre heights.
+
     Different .asd files require different functions to perform this calculation
     based on many factors, hence why we need to define the correct function in
-    each case."""
+    each case.
+    """
 
     def __init__(self, analogue_digital_range, max_voltage, scaling_factor, resolution):
         self.ad_range = int(analogue_digital_range, 16)
@@ -43,7 +44,7 @@ max voltage: {max_voltage}, scaling factor: {scaling_factor}, resolution: {resol
 
 # pylint: disable=too-few-public-methods
 class UnipolarConverter(VoltageLevelConverter):
-    """A VoltageLevelConverter for unipolar encodings. (0 to +X Volts)"""
+    """A VoltageLevelConverter for unipolar encodings. (0 to +X Volts)."""
 
     def level_to_voltage(self, level):
         """Calculate the real world height scale in nanometres for an arbitrary level value.
@@ -64,7 +65,7 @@ class UnipolarConverter(VoltageLevelConverter):
 
 # pylint: disable=too-few-public-methods
 class BipolarConverter(VoltageLevelConverter):
-    """A VoltageLevelConverter for bipolar encodings. (-X to +X Volts)"""
+    """A VoltageLevelConverter for bipolar encodings. (-X to +X Volts)."""
 
     def level_to_voltage(self, level):
         """Calculate the real world height scale in nanometres for an arbitrary level value.
@@ -90,9 +91,10 @@ def calculate_scaling_factor(
     scanner_sensitivity: float,
     phase_sensitivity: float,
 ) -> float:
-    """Calculate the correct scaling factor to enable conversion between arbitrary level values from
-    the AFM into real world nanometre height values. To be used in conjunction with the
-    VoltageLevelConverter class to define the correct function to perform this operation.
+    """Calculate the correct scaling factor.
+
+    This function should be used in conjunction with the VoltageLevelConverter class to define the correct function and
+    enables conversion between arbitrary level values from the AFM into real world nanometre height values.
 
     Parameters
     ----------
@@ -136,7 +138,7 @@ def calculate_scaling_factor(
     raise ValueError(f"channel {channel} not known for .asd file type.")
 
 
-def load_asd(file_path: Union[Path, str], channel: str):
+def load_asd(file_path: Path | str, channel: str):
     """Load a .asd file.
 
     Parameters
@@ -144,8 +146,8 @@ def load_asd(file_path: Union[Path, str], channel: str):
     file_path: Union[Path, str]
         Path to the .asd file.
     channel: str
-        Channel to load. Note that only two channels seem to be
-        present in a single .asd file. Options: TP, ER, PH
+        Channel to load. Note that only three channels seem to be present in a single .asd file. Options: TP
+    (Topograph), ER (Error) and PH (Phase).
 
     Returns
     -------
@@ -154,16 +156,14 @@ def load_asd(file_path: Union[Path, str], channel: str):
         (Number of frames x Width of each frame x height of each frame).
     pixel_to_nanometre_scaling_factor: float
         The number of nanometres per pixel for the .asd file. (AKA the resolution).
-        Enables converting between pixels and nanometres
-        when working with the data, in order to use real-world length scales.
+        Enables converting between pixels and nanometres when working with the data, in order to use real-world length
+    scales.
     metadata: dict
-        Dictionary of metadata for the .asd file. The number of entries is too long to list here,
-        and changes based on the file version please either look into the
-        `read_header_file_version_x` functions or print the keys too see what metadata is
-        available.
+        Metadata for the .asd file. The number of entries is too long to list here, and changes based on the file
+    version please either look into the `read_header_file_version_x` functions or print the keys too see what metadata
+    is available.
     """
-
-    with open(file_path, "rb") as open_file:
+    with Path.open(file_path, "rb", encoding="UTF-8") as open_file:
         file_version = read_file_version(open_file)
 
         if file_version == 0:
@@ -206,12 +206,9 @@ x: {pixel_to_nanometre_scaling_factor_x}\
             _size_of_frame_header = header_dict["frame_header_length"]
             # Remember that each value is two bytes (since signed int16)
             size_of_single_frame_plus_header = (
-                header_dict["frame_header_length"]
-                + header_dict["x_pixels"] * header_dict["y_pixels"] * 2
+                header_dict["frame_header_length"] + header_dict["x_pixels"] * header_dict["y_pixels"] * 2
             )
-            length_of_all_first_channel_frames = (
-                header_dict["num_frames"] * size_of_single_frame_plus_header
-            )
+            length_of_all_first_channel_frames = header_dict["num_frames"] * size_of_single_frame_plus_header
             _ = open_file.read(length_of_all_first_channel_frames)
         else:
             raise ValueError(
@@ -245,6 +242,7 @@ x: {pixel_to_nanometre_scaling_factor_x}\
 
 def read_file_version(open_file):
     """Read the file version from an open asd file. File versions are 0, 1 and 2.
+
     Different file versions require different functions to read the headers as
     the formatting changes between them.
 
@@ -345,9 +343,7 @@ def read_header_file_version_0(open_file: BinaryIO):
     # ID of the file
     header_dict["file_id"] = read_int16(open_file)
     # Name of the user
-    header_dict["user_name"] = read_null_separated_utf8(
-        open_file, length_bytes=header_dict["user_name_size"]
-    )
+    header_dict["user_name"] = read_null_separated_utf8(open_file, length_bytes=header_dict["user_name_size"])
     # Sensitivity of the scanner in nm / V
     header_dict["scanner_sensitivity"] = read_float(open_file)
     # Phase sensitivity
@@ -379,7 +375,6 @@ def read_header_file_version_1(open_file: BinaryIO):
     header_dict: dict
         Dictionary of metadata decoded from the file header.
     """
-
     header_dict = {}
 
     # length of file metadata header in bytes - so we can skip it to get to the data
@@ -485,7 +480,6 @@ def read_header_file_version_2(open_file):
     header_dict: dict
         Dictionary of metadata decoded from the file header.
     """
-
     header_dict = {}
 
     # length of file metadata header in bytes - so we can skip it to get to the data
@@ -632,7 +626,6 @@ def read_channel_data(open_file, num_frames, x_pixels, y_pixels, analogue_digita
         The extracted frame heightmap data as a N x W x H 3D numpy array
         (number of frames x width of each frame x height of each frame). Units are nanometres.
     """
-
     # List to store the frames as numpy arrays
     frames = []
     # Dictionary to store all the variables together in case we want to return them.
@@ -671,6 +664,7 @@ def read_channel_data(open_file, num_frames, x_pixels, y_pixels, analogue_digita
 
 def create_analogue_digital_converter(analogue_digital_range, scaling_factor, resolution=4096):
     """Create an analogue to digital converter for a given range, scaling factor and resolution.
+
     Used for converting raw level values into real world height scales in nanometres.
 
     Parameters
@@ -691,7 +685,6 @@ def create_analogue_digital_converter(analogue_digital_range, scaling_factor, re
         which converts arbitrary level values into real world nanometre heights for the given .asd
         file. Note that this is file specific since the parameters will change between files.
     """
-
     # Analogue to digital hex conversion range encoding:
     # unipolar_1_0V : 0x00000001 +0.0 to +1.0 V
     # unipolar_2_5V : 0x00000002 +0.0 to +2.5 V
@@ -766,6 +759,7 @@ analogue-digital mapping."
 
 def create_animation(file_name: str, frames: np.ndarray, file_format: str = ".gif") -> None:
     """Create animation from a numpy array of frames (2d numpy arrays).
+
     File format can be specified, defaults to .gif.
 
     Parameters
