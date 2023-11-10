@@ -1,8 +1,10 @@
 """For decoding and loading .asd AFM file format into Python Numpy arrays"""
 
 from pathlib import Path
+import sys
 from typing import BinaryIO, Union
 
+from loguru import logger
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
@@ -21,6 +23,9 @@ from topofileformats.io import (
     skip_bytes,
 )
 
+logger.remove()
+logger.add(sys.stderr, format="<white>{time}</white> | <level>{level}</level> | <blue>{message}</blue>")
+
 
 # pylint: disable=too-few-public-methods
 class VoltageLevelConverter:
@@ -35,7 +40,7 @@ class VoltageLevelConverter:
         self.max_voltage = max_voltage
         self.scaling_factor = scaling_factor
         self.resolution = resolution
-        print(
+        logger.info(
             f"created voltage converter. ad_range: {analogue_digital_range} -> {self.ad_range}, \
 max voltage: {max_voltage}, scaling factor: {scaling_factor}, resolution: {resolution}"
         )
@@ -115,19 +120,19 @@ def calculate_scaling_factor(
         in the .asd file.
     """
     if channel == "TP":
-        print(
+        logger.info(
             f"Scaling factor: Type: {channel} -> TP | piezo extension {z_piezo_gain} \
 * piezo gain {z_piezo_extension} = scaling factor {z_piezo_gain * z_piezo_extension}"
         )
         return z_piezo_gain * z_piezo_extension
     if channel == "ER":
-        print(
+        logger.info(
             f"Scaling factor: Type: {channel} -> ER | - scanner sensitivity {-scanner_sensitivity} \
 = scaling factor {-scanner_sensitivity}"
         )
         return -scanner_sensitivity
     if channel == "PH":
-        print(
+        logger.info(
             f"Scaling factor: Type: {channel} -> PH | - phase sensitivity {-phase_sensitivity} \
 = scaling factor {-phase_sensitivity}"
         )
@@ -179,12 +184,12 @@ def load_asd(file_path: Union[Path, str], channel: str):
                 f"File version {file_version} unknown. Please add support if you\
 know how to decode this file version."
             )
-        print(header_dict)
+        logger.info(f"header dict: \n{header_dict}")
 
         pixel_to_nanometre_scaling_factor_x = header_dict["x_nm"] / header_dict["x_pixels"]
         pixel_to_nanometre_scaling_factor_y = header_dict["y_nm"] / header_dict["y_pixels"]
         if pixel_to_nanometre_scaling_factor_x != pixel_to_nanometre_scaling_factor_y:
-            print(
+            logger.warning(
                 f"WARNING: Resolution of image is different in x and y directions:\
 x: {pixel_to_nanometre_scaling_factor_x}\
  y: {pixel_to_nanometre_scaling_factor_y}"
@@ -192,12 +197,12 @@ x: {pixel_to_nanometre_scaling_factor_x}\
         pixel_to_nanometre_scaling_factor = pixel_to_nanometre_scaling_factor_x
 
         if channel == header_dict["channel1"]:
-            print(
+            logger.info(
                 f"Requested channel {channel} matches first channel in file: \
 {header_dict['channel1']}"
             )
         elif channel == header_dict["channel2"]:
-            print(
+            logger.info(
                 f"Requested channel {channel} matches second channel in file: \
 {header_dict['channel2']}"
             )
@@ -206,12 +211,9 @@ x: {pixel_to_nanometre_scaling_factor_x}\
             _size_of_frame_header = header_dict["frame_header_length"]
             # Remember that each value is two bytes (since signed int16)
             size_of_single_frame_plus_header = (
-                header_dict["frame_header_length"]
-                + header_dict["x_pixels"] * header_dict["y_pixels"] * 2
+                header_dict["frame_header_length"] + header_dict["x_pixels"] * header_dict["y_pixels"] * 2
             )
-            length_of_all_first_channel_frames = (
-                header_dict["num_frames"] * size_of_single_frame_plus_header
-            )
+            length_of_all_first_channel_frames = header_dict["num_frames"] * size_of_single_frame_plus_header
             _ = open_file.read(length_of_all_first_channel_frames)
         else:
             raise ValueError(
@@ -259,7 +261,7 @@ def read_file_version(open_file):
         Integer file version decoded from file.
     """
     file_version = read_int32(open_file)
-    print(f"file version: {file_version}")
+    logger.info(f"file version: {file_version}")
     return file_version
 
 
@@ -345,9 +347,7 @@ def read_header_file_version_0(open_file: BinaryIO):
     # ID of the file
     header_dict["file_id"] = read_int16(open_file)
     # Name of the user
-    header_dict["user_name"] = read_null_separated_utf8(
-        open_file, length_bytes=header_dict["user_name_size"]
-    )
+    header_dict["user_name"] = read_null_separated_utf8(open_file, length_bytes=header_dict["user_name_size"])
     # Sensitivity of the scanner in nm / V
     header_dict["scanner_sensitivity"] = read_float(open_file)
     # Phase sensitivity
@@ -759,8 +759,8 @@ def create_analogue_digital_converter(analogue_digital_range, scaling_factor, re
             f"Analogue to digital range hex value {analogue_digital_range} has no known \
 analogue-digital mapping."
         )
-    print(f"Analogue to digital mapping | Range: {analogue_digital_range} -> {mapping}")
-    print(f"Converter: {converter}")
+    logger.info(f"Analogue to digital mapping | Range: {analogue_digital_range} -> {mapping}")
+    logger.info(f"Converter: {converter}")
     return converter
 
 
