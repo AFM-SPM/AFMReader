@@ -111,12 +111,13 @@ def read_float(open_file: BinaryIO) -> float:
     Returns
     -------
     float
-        Float decoded value."""
+    Float decoded value.
+    """
     return struct.unpack("f", open_file.read(4))[0]
 
 
 def read_bool(open_file: BinaryIO) -> bool:
-    """Read a boolean from an open binary file
+    """Read a boolean from an open binary file.
 
     Parameters
     ----------
@@ -132,7 +133,7 @@ def read_bool(open_file: BinaryIO) -> bool:
 
 
 def read_double(open_file: BinaryIO) -> float:
-    """Read an 8 byte double from an open binary file
+    """Read an 8 byte double from an open binary file.
 
     Parameters
     ----------
@@ -166,8 +167,9 @@ def read_ascii(open_file: BinaryIO, length_bytes: int = 1) -> str:
 
 
 def read_null_separated_utf8(open_file: BinaryIO, length_bytes: int = 2) -> str:
-    """Read an ascii string of defined length from an open binary file where each
-    character is separated by a null byte. This encodingis known as UTF-16LE (Little Endian).
+    r"""Read an ASCII string of defined length from an open binary file.
+
+    Each character is separated by a null byte. This encoding is known as UTF-16LE (Little Endian).
     Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.
 
     Parameters
