@@ -22,7 +22,10 @@ keywords = [
   "afm",
   "image processing"
 ]
-dependencies = ["numpy"]
+dependencies = [
+  "matplotlib",
+  "numpy"
+]
 
 [project.optional-dependencies]
 dev = [
@@ -39,7 +42,7 @@ dev = [
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "--cov --mpl"
+addopts = "--cov"
 testpaths = [
     "tests",
 ]
