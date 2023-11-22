@@ -24,6 +24,11 @@ keywords = [
   "image processing"
 ]
 
+dependencies = [
+  "matplotlib",
+  "numpy"
+]
+
 [project.optional-dependencies]
 dev = [
   "black",
@@ -39,7 +44,7 @@ dev = [
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "--cov --mpl"
+addopts = "--cov"
 testpaths = [
     "tests",
 ]
