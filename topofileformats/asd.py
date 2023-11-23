@@ -192,7 +192,7 @@ know how to decode this file version."
         pixel_to_nanometre_scaling_factor_y = header_dict["y_nm"] / header_dict["y_pixels"]
         if pixel_to_nanometre_scaling_factor_x != pixel_to_nanometre_scaling_factor_y:
             logger.warning(
-                f"WARNING: Resolution of image is different in x and y directions:\
+                f"Resolution of image is different in x and y directions:\
 x: {pixel_to_nanometre_scaling_factor_x}\
  y: {pixel_to_nanometre_scaling_factor_y}"
             )
