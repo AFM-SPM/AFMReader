@@ -186,7 +186,7 @@ def load_asd(file_path: Path, channel: str):
                 f"File version {file_version} unknown. Please add support if you "
                 "know how to decode this file version."
             )
-        logger.info(f"header dict: \n{header_dict}")
+        logger.debug(f"header dict: \n{header_dict}")
 
         pixel_to_nanometre_scaling_factor_x = header_dict["x_nm"] / header_dict["x_pixels"]
         pixel_to_nanometre_scaling_factor_y = header_dict["y_nm"] / header_dict["y_pixels"]
