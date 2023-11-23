@@ -9,6 +9,7 @@ logger.remove()
 logger.add(
     sys.stderr,
     colorize=True,
-    format="<blue>{time:HH:mm:ss}</blue> | <green>{file}</green>:<green>{module}</green>:<green>"
-    "{function}</green>:<green>{line}</green> | <level>{message}</level>",
+    format="<blue>{time:HH:mm:ss}</blue> | <level>{level}</level> |"
+    "<magenta>{file}</magenta>:<magenta>{module}</magenta>:<magenta>"
+    "{function}</magenta>:<magenta>{line}</magenta> | <level>{message}</level>",
 )
