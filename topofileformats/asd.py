@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 from pathlib import Path
-import sys
+
 from typing import BinaryIO
 
-from loguru import logger
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
 
+
+from topofileformats.logging import logger
 from topofileformats.io import (
     read_int32,
     read_int16,
@@ -23,9 +25,6 @@ from topofileformats.io import (
     read_double,
     skip_bytes,
 )
-
-logger.remove()
-logger.add(sys.stderr, format="<white>{time}</white> | <level>{level}</level> | <blue>{message}</blue>")
 
 
 # pylint: disable=too-few-public-methods
@@ -144,12 +143,12 @@ def calculate_scaling_factor(
     raise ValueError(f"channel {channel} not known for .asd file type.")
 
 
-def load_asd(file_path: Path | str, channel: str):
+def load_asd(file_path: Path, channel: str):
     """Load a .asd file.
 
     Parameters
     ----------
-    file_path: Union[Path, str]
+    file_path: Path
         Path to the .asd file.
     channel: str
         Channel to load. Note that only three channels seem to be present in a single .asd file. Options: TP
