@@ -1,5 +1,5 @@
 """For decoding and loading .asd AFM file format into Python Numpy arrays."""
-
+from __future__ import annotations
 from pathlib import Path
 from typing import BinaryIO
 
@@ -163,7 +163,7 @@ def load_asd(file_path: Path | str, channel: str):
     version please either look into the `read_header_file_version_x` functions or print the keys too see what metadata
     is available.
     """
-    with Path.open(file_path, "rb", encoding="UTF-8") as open_file:
+    with Path.open(file_path, "rb", encoding=None) as open_file:  # pylint: disable=W1514
         file_version = read_file_version(open_file)
 
         if file_version == 0:
