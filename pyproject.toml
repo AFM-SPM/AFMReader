@@ -1,9 +1,13 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = [
+  "setuptools",
+  "setuptools_scm[toml]>=6.2",
+  "wheel"
+]
 
 [project]
 name = "topofileformats"
-version = "0.1.0"
+dynamic = ["version"]
 authors = [{ name = "Sylvia Whittle", email = "sylviwhittle@gmail.com" }]
 description = "Read and retrieve data from various AFM file formats."
 readme = "README.md"
@@ -39,6 +43,9 @@ dev = [
 [project.urls]
 "Homepage" = "https://github.com/AFM-SPM/topofileformats"
 "Bug Tracker" = "https://github.com/AFM-SPM/topofileformats/issues"
+
+[tool.setuptools_scm]
+write_to = "topofileformats/_version.py"
 
 [tool.pytest.ini_options]
 minversion = "7.0"
