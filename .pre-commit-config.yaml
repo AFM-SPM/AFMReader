@@ -7,11 +7,13 @@ repos:
       - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml
+      - id: debug-statements
       - id: end-of-file-fixer
         types: [python]
       - id: fix-byte-order-marker
       - id: name-tests-test
         args: ["--pytest-test-first"]
+      - id: no-commit-to-branch # Protects main/master by default
       - id: requirements-txt-fixer
       - id: trailing-whitespace
         types: [python, yaml, markdown]
@@ -35,8 +37,8 @@ repos:
       - id: ruff
         args: [ --fix, --exit-non-zero-on-fix ]
 
-  - repo: https://github.com/psf/black
-    rev: 23.12.0
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 23.12.1
     hooks:
       - id: black
         types: [python]
