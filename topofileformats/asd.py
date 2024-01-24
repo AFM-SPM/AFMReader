@@ -199,7 +199,7 @@ def load_asd(file_path: Path, channel: str):
         pixel_to_nanometre_scaling_factor = pixel_to_nanometre_scaling_factor_x
 
         if channel == header_dict["channel1"]:
-            logger.info(f"Requested channel {channel} matches first channel in file: " f"{header_dict['channel1']}")
+            logger.info(f"Requested channel {channel} matches first channel in file: {header_dict['channel1']}")
         elif channel == header_dict["channel2"]:
             logger.info(f"Requested channel {channel} matches second channel in file: " f"{header_dict['channel2']}")
 
