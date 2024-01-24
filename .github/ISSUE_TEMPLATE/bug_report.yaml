@@ -1,0 +1,82 @@
+name: Bug report
+description: Create a report to help us improve
+title: '[Bug]: '
+labels: 'bug'
+assignees:
+  - ''
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please report any issues you encounter using `topofileformats`.
+  - type: textarea
+    id: describe-the-bug
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is and what may be causing it.
+    validations:
+      required: true
+  - type: textarea
+    id: copy-of-output
+    attributes:
+      label: Copy of the output
+      description: |
+        Please copy and paste the output from your terminal below. At a minimum this should include the bottom section showing where the error arose and the subsequent output. If there is no output and an image shows the problem please paste a URL to that image here. If able to include any images which demonstrate the problem please attach them using the paper clip in the menu above.
+    validations:
+      required: true
+  - type: textarea
+    id: to-reproduce
+    attributes:
+      label: To Reproduce
+      description: |
+        If it is possible to share the file (e.g. via cloud services) that caused the error that would greatly assist in reproducing and investigating the problem. In addition the _exact_ command used that failed should be pasted below.
+    validations:
+      required: false
+  - type: dropdown
+    id: version-topofileformats
+    attributes:
+      label: Topofileformats Version
+      description: What version of our software are you running? You can find this out using `pip show topofileformats`.
+      options:
+        - 0.1.0
+        - Git main branch
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: version-python
+    attributes:
+      label: Python Version
+      description: |
+        What version of Python are you running? If unsure type `python --version`.
+      options:
+        - 3.8
+        - 3.9
+        - 3.10
+        - 3.11
+        - 3.12
+      default: 3
+    validations:
+      required: true
+  - type: dropdown
+    id: version-os
+    attributes:
+      label: Operating System
+      description: |
+        What Operating System are you running?
+      options:
+        - Windows
+        - MacOS Intel (pre-2021)
+        - MacOS M1/M2 (post-2021)
+        - GNU/Linux
+      default: 3
+    validations:
+      required: true
+  - type: textarea
+    id: version-dependencies
+    attributes:
+      label: Python Packages
+      description: |
+        If you are able to provide a list of your installed packages that may be useful. The best way to get this is to copy and paste the results of typing `pip freeze`.
+    validations:
+      required: false

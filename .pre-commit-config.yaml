@@ -7,17 +7,19 @@ repos:
       - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml
+      - id: debug-statements
       - id: end-of-file-fixer
         types: [python]
       - id: fix-byte-order-marker
       - id: name-tests-test
         args: ["--pytest-test-first"]
+      - id: no-commit-to-branch # Protects main/master by default
       - id: requirements-txt-fixer
       - id: trailing-whitespace
         types: [python, yaml, markdown]
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.10.0
+    rev: v0.12.1
     hooks:
       - id: markdownlint-cli2
         args: []
@@ -30,13 +32,13 @@ repos:
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.1.4
+    rev: v0.1.14
     hooks:
       - id: ruff
         args: [ --fix, --exit-non-zero-on-fix ]
 
-  - repo: https://github.com/psf/black
-    rev: 23.10.1
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 23.12.1
     hooks:
       - id: black
         types: [python]
