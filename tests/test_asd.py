@@ -11,20 +11,8 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 @pytest.mark.parametrize(
     ("file_name", "channel", "number_of_frames", "pixel_to_nm_scaling"),
     [
-        # File type 0
-        (
-            "sample_0.asd",
-            "TP",
-            142,
-            0.78125,
-        ),
-        # File type 1
-        (
-            "sample_1.asd",
-            "TP",
-            197,
-            2.0,
-        ),
+        pytest.param("sample_0.asd", "TP", 142, 0.78125, id="file type 0"),
+        pytest.param("sample_1.asd", "TP", 197, 2.0, id="file type 1"),
     ],
 )
 def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_nm_scaling: float) -> None:
