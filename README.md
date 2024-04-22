@@ -19,16 +19,16 @@ for use with [TopoStats](https://github.com/AFM-SPM/TopoStats).
 
 Supported file formats
 
-| File format | Description    |
-|-------------|----------------|
-| `.asd`      | High-speed AFM |
+| File format | Description      |
+|-------------|------------------|
+| `.asd`      | High-speed AFM   |
+| `.spm`      | [Bruker's Format](https://www.bruker.com/)  |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into topofileformats these are denoted in bold below.
 
 | File format | Description                                             | Status                                     |
 |-------------|---------------------------------------------------------|--------------------------------------------|
-| `.spm`      | [Bruker](https://www.bruker.com/)                       | TopoStats supported, to be migrated (#16). |
 | `.ibw`      | [WaveMetrics](https://www.wavemetrics.com/)             | TopoStats supported, to be migrated (#17). |
 | `.gwy`      | [Gwyddion](http://gwyddion.net/)                        | TopoStats supported, to be migrated (#1).  |
 | `.nhf`      | [Nanosurf](https://www.nanosurf.com/en/)                | To Be Implemented.                         |
@@ -39,6 +39,18 @@ awaiting refactoring to move their functionality into topofileformats these are 
 
 If you wish to process AFM images supported by `topofileformats` it is recommend you use
 [TopoStats](https://github.com/AFM-SPM/TopoStats) to do so, however the library can be used on its own.
+
+### .spm
+
+You can open `.spm` files using the `load_spm` function. Just pass in the path to the file and the
+channel name that you want to use. (If in doubt use one of the following: "Height", "ZSensor",
+"Height Sensor").
+
+```python
+from topofileformats.spm import load_spm
+
+image, pixel_to_nanometre_scaling_factor = load_spm(file_path="./my_spm_file.spm", channel="Height")
+```
 
 ### .asd
 
@@ -51,9 +63,9 @@ will want to use unless you know you specifically want something else.
 Other channels: `"ER"` - Error, `"PH"` - Phase
 
 ```python
-from topofileformats import load_asd
+from topofileformats.asd import load_asd
 
-frames, pixel_to_nanometre_scaling_factor, metadata = load_asd(file_path="./my_asd_file.asd")
+frames, pixel_to_nanometre_scaling_factor, metadata = load_asd(file_path="./my_asd_file.asd", channel="TP)
 ```
 
 ## Contributing
