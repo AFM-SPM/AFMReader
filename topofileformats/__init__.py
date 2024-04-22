@@ -1,4 +1,5 @@
 """topofileformats."""
+
 from importlib.metadata import version
 
 release = version("topofileformats")
