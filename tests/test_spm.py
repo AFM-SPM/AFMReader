@@ -12,12 +12,21 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 
 
 @pytest.mark.parametrize(
-    ("file_name", "channel", "pixel_to_nm_scaling"),
+    ("file_name", "channel", "pixel_to_nm_scaling", "image_shape", "image_dtype", "image_sum"),
     [
-        pytest.param("sample_0.spm", "Height", 0.4940029296875, id="file type 0"),
+        pytest.param(
+            "sample_0.spm", "Height", 0.4940029296875, (1024, 1024), np.float64, 30695369.188316286, id="file type 0"
+        ),
     ],
 )
-def test_load_spm(file_name: str, channel: str, pixel_to_nm_scaling: float) -> None:
+def test_load_spm(
+    file_name: str,
+    channel: str,
+    pixel_to_nm_scaling: float,
+    image_shape: tuple[int, int],
+    image_dtype: type,
+    image_sum: float,
+) -> None:
     """Test the normal operation of loading a .spm file."""
     result_image = np.ndarray
     result_pixel_to_nm_scaling = float
@@ -27,6 +36,6 @@ def test_load_spm(file_name: str, channel: str, pixel_to_nm_scaling: float) -> N
 
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
     assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == (1024, 1024)
-    assert result_image.dtype == np.float64
-    assert result_image.sum() == 30695369.188316286
+    assert result_image.shape == image_shape
+    assert result_image.dtype == image_dtype
+    assert result_image.sum() == image_sum
