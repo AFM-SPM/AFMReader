@@ -30,7 +30,7 @@ keywords = [
 
 dependencies = [
   "matplotlib",
-  "numpy",
+  "tifffile",
   "loguru",
 ]
 
