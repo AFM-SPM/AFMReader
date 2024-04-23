@@ -19,9 +19,10 @@ for use with [TopoStats](https://github.com/AFM-SPM/TopoStats).
 
 Supported file formats
 
-| File format | Description      |
-|-------------|------------------|
-| `.asd`      | High-speed AFM   |
+| File format | Description    |
+|-------------|----------------|
+| `.asd`      | High-speed AFM |
+| `.ibw`      | [WaveMetrics](https://www.wavemetrics.com/)  |
 | `.spm`      | [Bruker's Format](https://www.bruker.com/)  |
 | `.jpk`      | [Bruker](https://www.bruker.com/) |
 
@@ -67,6 +68,18 @@ Other channels: `"ER"` - Error, `"PH"` - Phase
 from topofileformats.asd import load_asd
 
 frames, pixel_to_nanometre_scaling_factor, metadata = load_asd(file_path="./my_asd_file.asd", channel="TP")
+```
+
+### .ibw
+
+You can open `.spm` files using the `load_spm` function. Just pass in the path to the file
+and the channel name that you want to use. (If in doubt, use `HeightTracee` (yes, with the
+exta 'e'), `ZSensorTrace`, or `ZSensor`).
+
+```python
+from topofileformats.ibw import load_ibw
+
+image, pixel_to_nanometre_scaling_factor = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
 ```
 
 ### .jpk
