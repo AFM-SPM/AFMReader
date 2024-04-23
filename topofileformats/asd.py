@@ -1,4 +1,5 @@
 """For decoding and loading .asd AFM file format into Python Numpy arrays."""
+
 from __future__ import annotations
 from pathlib import Path
 from typing import BinaryIO
