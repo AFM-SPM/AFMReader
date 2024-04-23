@@ -22,6 +22,7 @@ Supported file formats
 | File format | Description    |
 |-------------|----------------|
 | `.asd`      | High-speed AFM |
+| `.ibw`      | [WaveMetrics](https://www.wavemetrics.com/)  |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into topofileformats these are denoted in bold below.
@@ -29,7 +30,6 @@ awaiting refactoring to move their functionality into topofileformats these are 
 | File format | Description                                             | Status                                     |
 |-------------|---------------------------------------------------------|--------------------------------------------|
 | `.spm`      | [Bruker](https://www.bruker.com/)                       | TopoStats supported, to be migrated (#16). |
-| `.ibw`      | [WaveMetrics](https://www.wavemetrics.com/)             | TopoStats supported, to be migrated (#17). |
 | `.gwy`      | [Gwyddion](http://gwyddion.net/)                        | TopoStats supported, to be migrated (#1).  |
 | `.nhf`      | [Nanosurf](https://www.nanosurf.com/en/)                | To Be Implemented.                         |
 | `.aris`     | [Imaris Oxford Instruments](https://imaris.oxinst.com/) | To Be Implemented.                         |
@@ -54,6 +54,18 @@ Other channels: `"ER"` - Error, `"PH"` - Phase
 from topofileformats import load_asd
 
 frames, pixel_to_nanometre_scaling_factor, metadata = load_asd(file_path="./my_asd_file.asd")
+```
+
+### .ibw
+
+You can open `.spm` files using the `load_spm` function. Just pass in the path to the file
+and the channel name that you want to use. (If in doubt, use `HeightTracee` (yes, with the
+exta 'e'), `ZSensorTrace`, or `ZSensor`).
+
+```python
+from topofileformats.ibw import load_ibw
+
+image, pixel_to_nanometre_scaling_factor = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
 ```
 
 ## Contributing
