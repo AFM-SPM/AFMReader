@@ -12,10 +12,17 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 
 
 @pytest.mark.parametrize(
-    ("file_name", "channel", "pixel_to_nm_scaling"),
-    [pytest.param("sample_0.ibw", "HeightTracee", 1.5625, id="test image 0")],
+    ("file_name", "channel", "pixel_to_nm_scaling", "image_shape", "image_dtype", "image_sum"),
+    [pytest.param("sample_0.ibw", "HeightTracee", 1.5625, (512, 512), "f4", -218091520.0, id="test image 0")],
 )
-def test_load_ibw(file_name: str, channel: str, pixel_to_nm_scaling: float) -> None:
+def test_load_ibw(
+    file_name: str,
+    channel: str,
+    pixel_to_nm_scaling: float,
+    image_shape: tuple[int, int],
+    image_dtype: type,
+    image_sum: float,
+) -> None:
     """Test the normal operation of loading an .ibw file."""
     result_image = np.ndarray
     result_pixel_to_nm_scaling = float
@@ -25,6 +32,6 @@ def test_load_ibw(file_name: str, channel: str, pixel_to_nm_scaling: float) -> N
 
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
     assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == (512, 512)
-    assert result_image.dtype == "f4"
-    assert result_image.sum() == -218091520.0
+    assert result_image.shape == image_shape
+    assert result_image.dtype == image_dtype
+    assert result_image.sum() == image_sum
