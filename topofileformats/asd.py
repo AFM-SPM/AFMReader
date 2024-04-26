@@ -26,6 +26,8 @@ from topofileformats.io import (
     skip_bytes,
 )
 
+logger.enable(__package__)
+
 
 # pylint: disable=too-few-public-methods
 class VoltageLevelConverter:
