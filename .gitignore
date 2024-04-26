@@ -132,3 +132,6 @@ _version.py
 # Emacs
 *~
 \#*
+
+# Ignore topostats/_version.py as per setuptools_scm
+topofileformats/_version.py
