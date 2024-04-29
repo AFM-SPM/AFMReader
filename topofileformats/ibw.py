@@ -6,6 +6,10 @@ from pathlib import Path
 import numpy as np
 from igor2 import binarywave
 
+from topofileformats.logging import logger
+
+logger.enable(__package__)
+
 
 def _ibw_pixel_to_nm_scaling(scan: dict) -> float:
     """
@@ -50,12 +54,12 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     tuple[np.ndarray, float]
         A tuple containing the image and its pixel to nanometre scaling value.
     """
-    print(f"Loading image from : {file_path}")
+    logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
     filename = file_path.stem
     try:
         scan = binarywave.load(file_path)
-        print(f"[{filename}] : Loaded image from : {file_path}")
+        logger.info(f"[{filename}] : Loaded image from : {file_path}")
         labels = []
         for label_list in scan["wave"]["labels"]:
             for label in label_list:
@@ -64,14 +68,14 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
         channel_idx = labels.index(channel)
         image = scan["wave"]["wData"][:, :, channel_idx].T * 1e9  # Looks to be in m
         image = np.flipud(image)
-        print(f"[{filename}] : Extracted channel {channel}")
+        logger.info(f"[{filename}] : Extracted channel {channel}")
     except FileNotFoundError:
-        print(f"[{filename}] File not found : {file_path}")
+        logger.error(f"[{filename}] File not found : {file_path}")
     except ValueError:
-        print(f"[{filename}] : {channel} not in {file_path.suffix} channel list: {labels}")
+        logger.error(f"[{filename}] : {channel} not in {file_path.suffix} channel list: {labels}")
         raise
     except Exception as e:
-        print(f"[{filename}] : {e}")
+        logger.error(f"[{filename}] : {e}")
         raise e
 
     return (image, _ibw_pixel_to_nm_scaling(scan))
