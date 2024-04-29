@@ -6,6 +6,10 @@ from pathlib import Path
 import pySPM
 import numpy as np
 
+from topofileformats.logging import logger
+
+logger.enable(__package__)
+
 
 def spm_pixel_to_nm_scaling(filename: str, channel_data: pySPM.SPM.SPM_image) -> float:
     """Extract pixel to nm scaling from the SPM image metadata.
@@ -32,8 +36,8 @@ def spm_pixel_to_nm_scaling(filename: str, channel_data: pySPM.SPM.SPM_image) ->
     )[0]
     if px_to_real[0][0] == 0 and px_to_real[1][0] == 0:
         pixel_to_nm_scaling = 1
-        print(f"[{filename}] : Pixel size not found in metadata, defaulting to 1nm")
-    print(f"[{filename}] : Pixel to nm scaling : {pixel_to_nm_scaling}")
+        logger.info(f"[{filename}] : Pixel size not found in metadata, defaulting to 1nm")
+    logger.info(f"[{filename}] : Pixel to nm scaling : {pixel_to_nm_scaling}")
     return pixel_to_nm_scaling
 
 
@@ -45,17 +49,17 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
     tuple(np.ndarray, float)
         A tuple containing the image and its pixel to nanometre scaling value.
     """
-    print(f"Loading image from : {file_path}")
+    logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
     filename = file_path.stem
     try:
         scan = pySPM.Bruker(file_path)
-        print(f"[{filename}] : Loaded image from : {file_path}")
+        logger.info(f"[{filename}] : Loaded image from : {file_path}")
         channel_data = scan.get_channel(channel)
-        print(f"[{filename}] : Extracted channel {channel}")
+        logger.info(f"[{filename}] : Extracted channel {channel}")
         image = np.flipud(np.array(channel_data.pixels))
     except FileNotFoundError:
-        print(f"[{filename}] File not found : {file_path}")
+        logger.info(f"[{filename}] File not found : {file_path}")
         raise
     except Exception as e:
         if "Channel" in str(e) and "not found" in str(e):
@@ -65,7 +69,7 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
                 channel_name = channel_option.decode("latin1").split(" ")[1][1:-1]
                 # channel_description = channel.decode('latin1').split('"')[1] # incase the blank field raises quesions?
                 labels.append(channel_name)
-            print(f"[{filename}] : {channel} not in {file_path.suffix} channel list: {labels}")
+            logger.info(f"[{filename}] : {channel} not in {file_path.suffix} channel list: {labels}")
             raise ValueError(f"{channel} not in {file_path.suffix} channel list: {labels}") from e
         raise e
 
