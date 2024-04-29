@@ -59,7 +59,7 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
         logger.info(f"[{filename}] : Extracted channel {channel}")
         image = np.flipud(np.array(channel_data.pixels))
     except FileNotFoundError:
-        logger.info(f"[{filename}] File not found : {file_path}")
+        logger.error(f"[{filename}] File not found : {file_path}")
         raise
     except Exception as e:
         if "Channel" in str(e) and "not found" in str(e):
@@ -69,7 +69,7 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
                 channel_name = channel_option.decode("latin1").split(" ")[1][1:-1]
                 # channel_description = channel.decode('latin1').split('"')[1] # incase the blank field raises quesions?
                 labels.append(channel_name)
-            logger.info(f"[{filename}] : {channel} not in {file_path.suffix} channel list: {labels}")
+            logger.error(f"[{filename}] : {channel} not in {file_path.suffix} channel list: {labels}")
             raise ValueError(f"{channel} not in {file_path.suffix} channel list: {labels}") from e
         raise e
 
