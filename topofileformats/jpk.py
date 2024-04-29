@@ -6,6 +6,10 @@ from pathlib import Path
 import numpy as np
 import tifffile
 
+from topofileformats.logging import logger
+
+logger.enable(__package__)
+
 
 def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage) -> float:
     """
@@ -48,13 +52,13 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     tuple[npt.NDArray, float]
         A tuple containing the image and its pixel to nanometre scaling value.
     """
-    print(f"Loading image from : {file_path}")
+    logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
     filename = file_path.stem
     try:
         tif = tifffile.TiffFile(file_path)
     except FileNotFoundError:
-        print(f"[{filename}] File not found : {file_path}")
+        logger.error(f"[{filename}] File not found : {file_path}")
         raise
     # Obtain channel list for all channels in file
     channel_list = {}
@@ -68,7 +72,7 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     try:
         channel_idx = channel_list[channel]
     except KeyError:
-        print(f"{channel} not in channel list: {channel_list}")
+        logger.error(f"{channel} not in channel list: {channel_list}")
         raise
 
     # Get image and if applicable, scale it
