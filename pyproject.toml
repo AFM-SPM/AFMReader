@@ -22,13 +22,16 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
 ]
+
 keywords = [
   "afm",
   "image processing"
 ]
+
 dependencies = [
   "matplotlib",
-  "numpy"
+  "numpy",
+  "loguru",
 ]
 
 [project.optional-dependencies]

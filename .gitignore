@@ -123,6 +123,9 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Package version
+_version.py
+
 # VSCode
 .vscode/
 

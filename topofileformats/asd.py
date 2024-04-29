@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 from pathlib import Path
+
 from typing import BinaryIO
+
 
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
 
+
+from topofileformats.logging import logger
 from topofileformats.io import (
     read_int32,
     read_int16,
@@ -21,6 +25,8 @@ from topofileformats.io import (
     read_double,
     skip_bytes,
 )
+
+logger.enable(__package__)
 
 
 # pylint: disable=too-few-public-methods
@@ -37,9 +43,9 @@ class VoltageLevelConverter:
         self.max_voltage = max_voltage
         self.scaling_factor = scaling_factor
         self.resolution = resolution
-        print(
-            f"created voltage converter. ad_range: {analogue_digital_range} -> {self.ad_range}, \
-max voltage: {max_voltage}, scaling factor: {scaling_factor}, resolution: {resolution}"
+        logger.info(
+            f"created voltage converter. ad_range: {analogue_digital_range} -> {self.ad_range}, "
+            f"max voltage: {max_voltage}, scaling factor: {scaling_factor}, resolution: {resolution}"
         )
 
 
@@ -118,33 +124,33 @@ def calculate_scaling_factor(
         in the .asd file.
     """
     if channel == "TP":
-        print(
-            f"Scaling factor: Type: {channel} -> TP | piezo extension {z_piezo_gain} \
-* piezo gain {z_piezo_extension} = scaling factor {z_piezo_gain * z_piezo_extension}"
+        logger.info(
+            f"Scaling factor: Type: {channel} -> TP | piezo extension {z_piezo_gain} "
+            f"* piezo gain {z_piezo_extension} = scaling factor {z_piezo_gain * z_piezo_extension}"
         )
         return z_piezo_gain * z_piezo_extension
     if channel == "ER":
-        print(
-            f"Scaling factor: Type: {channel} -> ER | - scanner sensitivity {-scanner_sensitivity} \
-= scaling factor {-scanner_sensitivity}"
+        logger.info(
+            f"Scaling factor: Type: {channel} -> ER | - scanner sensitivity {-scanner_sensitivity} "
+            f"= scaling factor {-scanner_sensitivity}"
         )
         return -scanner_sensitivity
     if channel == "PH":
-        print(
-            f"Scaling factor: Type: {channel} -> PH | - phase sensitivity {-phase_sensitivity} \
-= scaling factor {-phase_sensitivity}"
+        logger.info(
+            f"Scaling factor: Type: {channel} -> PH | - phase sensitivity {-phase_sensitivity} "
+            f"= scaling factor {-phase_sensitivity}"
         )
         return -phase_sensitivity
 
     raise ValueError(f"channel {channel} not known for .asd file type.")
 
 
-def load_asd(file_path: Path | str, channel: str):
+def load_asd(file_path: Path, channel: str):
     """Load a .asd file.
 
     Parameters
     ----------
-    file_path: Union[Path, str]
+    file_path: Path
         Path to the .asd file.
     channel: str
         Channel to load. Note that only three channels seem to be present in a single .asd file. Options: TP
@@ -164,7 +170,9 @@ def load_asd(file_path: Path | str, channel: str):
     version please either look into the `read_header_file_version_x` functions or print the keys too see what metadata
     is available.
     """
-    with Path.open(file_path, "rb", encoding=None) as open_file:  # pylint: disable=W1514
+    # Binary mode open does not take an encoding argument
+    # pylint: disable=unspecified-encoding
+    with Path.open(file_path, "rb") as open_file:
         file_version = read_file_version(open_file)
 
         if file_version == 0:
@@ -177,31 +185,25 @@ def load_asd(file_path: Path | str, channel: str):
             header_dict = read_header_file_version_2(open_file)
         else:
             raise ValueError(
-                f"File version {file_version} unknown. Please add support if you\
-know how to decode this file version."
+                f"File version {file_version} unknown. Please add support if you "
+                "know how to decode this file version."
             )
-        print(header_dict)
+        logger.debug(f"header dict: \n{header_dict}")
 
         pixel_to_nanometre_scaling_factor_x = header_dict["x_nm"] / header_dict["x_pixels"]
         pixel_to_nanometre_scaling_factor_y = header_dict["y_nm"] / header_dict["y_pixels"]
         if pixel_to_nanometre_scaling_factor_x != pixel_to_nanometre_scaling_factor_y:
-            print(
-                f"WARNING: Resolution of image is different in x and y directions:\
-x: {pixel_to_nanometre_scaling_factor_x}\
- y: {pixel_to_nanometre_scaling_factor_y}"
+            logger.warning(
+                f"Resolution of image is different in x and y directions:"
+                f"x: {pixel_to_nanometre_scaling_factor_x}"
+                f"y: {pixel_to_nanometre_scaling_factor_y}"
             )
         pixel_to_nanometre_scaling_factor = pixel_to_nanometre_scaling_factor_x
 
         if channel == header_dict["channel1"]:
-            print(
-                f"Requested channel {channel} matches first channel in file: \
-{header_dict['channel1']}"
-            )
+            logger.info(f"Requested channel {channel} matches first channel in file: {header_dict['channel1']}")
         elif channel == header_dict["channel2"]:
-            print(
-                f"Requested channel {channel} matches second channel in file: \
-{header_dict['channel2']}"
-            )
+            logger.info(f"Requested channel {channel} matches second channel in file: " f"{header_dict['channel2']}")
 
             # Skip first channel data
             _size_of_frame_header = header_dict["frame_header_length"]
@@ -213,8 +215,8 @@ x: {pixel_to_nanometre_scaling_factor_x}\
             _ = open_file.read(length_of_all_first_channel_frames)
         else:
             raise ValueError(
-                f"Channel {channel} not found in this file's available channels: \
-{header_dict['channel1']}, {header_dict['channel2']}"
+                f"Channel {channel} not found in this file's available channels: "
+                f"{header_dict['channel1']}, {header_dict['channel2']}"
             )
 
         scaling_factor = calculate_scaling_factor(
@@ -258,7 +260,7 @@ def read_file_version(open_file):
         Integer file version decoded from file.
     """
     file_version = read_int32(open_file)
-    print(f"file version: {file_version}")
+    logger.info(f"file version: {file_version}")
     return file_version
 
 
@@ -750,11 +752,10 @@ def create_analogue_digital_converter(analogue_digital_range, scaling_factor, re
         )
     else:
         raise ValueError(
-            f"Analogue to digital range hex value {analogue_digital_range} has no known \
-analogue-digital mapping."
+            f"Analogue to digital range hex value {analogue_digital_range} has no known " "analogue-digital mapping."
         )
-    print(f"Analogue to digital mapping | Range: {analogue_digital_range} -> {mapping}")
-    print(f"Converter: {converter}")
+    logger.info(f"Analogue to digital mapping | Range: {analogue_digital_range} -> {mapping}")
+    logger.info(f"Converter: {converter}")
     return converter
 
 

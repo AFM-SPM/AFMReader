@@ -1,4 +1,4 @@
-"""topofileformats."""
+"""A module for loading AFM files of different formats."""
 
 from importlib.metadata import version
 
