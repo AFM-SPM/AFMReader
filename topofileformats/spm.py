@@ -66,9 +66,11 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
 
     Examples
     --------
-    ```python
-    from topofileformats.spm import load_spm
-    image, pixel_to_nm = load_spm(file_path="path/to/file.spm", channel="Height")
+    Load the image and pixel to nanometre scaling factor, available channels are 'Height', 'ZSensor' and 'Height
+    Sensor'.
+
+    >>> from topofileformats.spm import load_spm
+    >>> image, pixel_to_nm = load_spm(file_path="path/to/file.spm", channel="Height")
     ```
     """
     logger.info(f"Loading image from : {file_path}")
