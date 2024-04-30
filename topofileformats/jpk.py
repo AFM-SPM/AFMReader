@@ -61,11 +61,10 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
 
     Examples
     --------
-    ```python
-    from topofileformats.jpk import load_jpk
-    # Load height trace channel from the .jpk file. "height_trace" is the default channel name.
-    image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
-    ```
+    Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
+
+    >>> from topofileformats.jpk import load_jpk
+    >>> image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
