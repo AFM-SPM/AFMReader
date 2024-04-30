@@ -44,10 +44,32 @@ def spm_pixel_to_nm_scaling(filename: str, channel_data: pySPM.SPM.SPM_image) ->
 def load_spm(file_path: Path | str, channel: str) -> tuple:
     """Extract image and pixel to nm scaling from the Bruker .spm file.
 
+    Parameters
+    ----------
+    file_path : Path or str
+        Path to the .spm file.
+    channel : str
+        Channel name to extract from the .spm file.
+
+
     Returns
     -------
     tuple(np.ndarray, float)
         A tuple containing the image and its pixel to nanometre scaling value.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file is not found.
+    ValueError
+        If the channel is not found in the .spm file.
+
+    Examples
+    --------
+    ```python
+    from topofileformats.spm import load_spm
+    image, pixel_to_nm = load_spm(file_path="path/to/file.spm", channel="Height")
+    ```
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
@@ -66,8 +88,7 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
             # trying to return the error with options of possible channel values
             labels = []
             for channel_option in [layer[b"@2:Image Data"][0] for layer in scan.layers]:
-                channel_name = channel_option.decode("latin1").split(" ")[1][1:-1]
-                # channel_description = channel.decode('latin1').split('"')[1] # incase the blank field raises quesions?
+                channel_name = channel_option.decode("latin1").split('"')[1][1:-1]
                 labels.append(channel_name)
             logger.error(f"[{filename}] : {channel} not in {file_path.suffix} channel list: {labels}")
             raise ValueError(f"{channel} not in {file_path.suffix} channel list: {labels}") from e
