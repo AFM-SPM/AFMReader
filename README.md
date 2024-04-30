@@ -66,7 +66,7 @@ Other channels: `"ER"` - Error, `"PH"` - Phase
 ```python
 from topofileformats.asd import load_asd
 
-frames, pixel_to_nanometre_scaling_factor, metadata = load_asd(file_path="./my_asd_file.asd", channel="TP)
+frames, pixel_to_nanometre_scaling_factor, metadata = load_asd(file_path="./my_asd_file.asd", channel="TP")
 ```
 
 ### .jpk
