@@ -51,6 +51,21 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     -------
     tuple[npt.NDArray, float]
         A tuple containing the image and its pixel to nanometre scaling value.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file is not found.
+    KeyError
+        If the channel is not found in the file.
+
+    Examples
+    --------
+    ```python
+    from topofileformats.jpk import load_jpk
+    # Load height trace channel from the .jpk file. "height_trace" is the default channel name.
+    image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
+    ```
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
