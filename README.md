@@ -74,7 +74,7 @@ frames, pixel_to_nanometre_scaling_factor, metadata = load_asd(file_path="./my_a
 
 You can open `.ibw` files using the `load_ibw` function. Just pass in the path to the file
 and the channel name that you want to use. (If in doubt, use `HeightTracee` (yes, with the
-exta 'e'), `ZSensorTrace`, or `ZSensor`).
+extra 'e'), `ZSensorTrace`, or `ZSensor`).
 
 ```python
 from topofileformats.ibw import load_ibw
