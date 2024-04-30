@@ -53,6 +53,22 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     -------
     tuple[np.ndarray, float]
         A tuple containing the image and its pixel to nanometre scaling value.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file is not found.
+    ValueError
+        If the channel is not found in the .ibw file.
+
+    Examples
+    --------
+    ```python
+    from topofileformats.ibw import load_ibw
+    # Load the image and pixel to nanometre scaling factor - HeightTracee is the default channel name
+    # (yes, with the extra e)
+    image, pixel_to_nanometre_scaling_factor = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
+    ```
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
