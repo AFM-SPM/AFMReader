@@ -116,26 +116,26 @@ exclude = [
 # per-file-ignores = []
 line-length = 120
 target-version = "py310"
-select = ["A", "B", "C", "D", "E", "F", "PT", "PTH", "R", "S", "W", "U"]
-ignore = [
+lint.select = ["A", "B", "C", "D", "E", "F", "PT", "PTH", "R", "S", "W", "U"]
+lint.ignore = [
   "B905",
   "E501",
   "S101",
   "T201"]
 # Allow autofix for all enabled rules (when `--fix`) is provided.
-fixable = ["A", "B", "C", "D", "E", "F", "PT", "PTH", "R", "S", "W", "U"]
-unfixable = []
+lint.fixable = ["A", "B", "C", "D", "E", "F", "PT", "PTH", "R", "S", "W", "U"]
+lint.unfixable = []
 
-[tool.ruff.flake8-quotes]
+[tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 case-sensitive = true
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
-[tool.ruff.flake8-pytest-style]
+[tool.ruff.lint.flake8-pytest-style]
 fixture-parentheses = true
 
 [tool.coverage.run]
@@ -144,4 +144,24 @@ omit = [
   "topofileformats/_version.py",
   "*tests*",
   "**/__init__*",
+]
+
+[tool.numpydoc_validation]
+checks = [
+  "all", # Perform all check except those listed below
+  "ES01",
+  "EX01",
+  "PR10", # Conflicts with black formatting
+  "SA01",
+]
+exclude = [  # don't report on objects that match any of these regex
+    "\\.undocumented_method$",
+    "\\.__repr__$",
+    "^test_",
+    "^conftest",
+]
+override_SS05 = [  # override SS05 to allow docstrings starting with these words
+    "^Process ",
+    "^Assess ",
+    "^Access ",
 ]

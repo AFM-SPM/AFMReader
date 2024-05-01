@@ -7,6 +7,7 @@ from typing import BinaryIO
 
 
 import numpy as np
+import numpy.typing as npt
 import matplotlib.pyplot as plt
 from matplotlib import animation
 
@@ -31,14 +32,45 @@ logger.enable(__package__)
 
 # pylint: disable=too-few-public-methods
 class VoltageLevelConverter:
-    """A class for converting arbitrary height levels from the AFM into real world nanometre heights.
+    """
+    A class for converting arbitrary height levels from the AFM into real world nanometre heights.
 
-    Different .asd files require different functions to perform this calculation
-    based on many factors, hence why we need to define the correct function in
-    each case.
+    Different .asd files require different functions to perform this calculation based on many factors, hence why we
+    need to define the correct function in each case.
+
+    Parameters
+    ----------
+    analogue_digital_range : float
+        The range of analogue voltage values.
+    max_voltage : float
+        Maximum voltage.
+    scaling_factor : float
+        A scaling factor calculated elsewhere that scales the heightmap appropriately based on the type of channel
+        and sensor parameters.
+    resolution : int
+        The vertical resolution of the instrument. Dependant on the number of bits used to store its
+        values. Typically 12, hence 2^12 = 4096 sensitivity levels.
     """
 
-    def __init__(self, analogue_digital_range, max_voltage, scaling_factor, resolution):
+    def __init__(
+        self, analogue_digital_range: float, max_voltage: float, scaling_factor: float, resolution: int
+    ) -> None:
+        """
+        Convert arbitrary height levels from the AFM into real world nanometre heights.
+
+        Parameters
+        ----------
+        analogue_digital_range : float
+            The range of analogue voltage values.
+        max_voltage : float
+            Maximum voltage.
+        scaling_factor : float
+            A scaling factor calculated elsewhere that scales the heightmap appropriately based on the type of channel
+            and sensor parameters.
+        resolution : int
+            The vertical resolution of the instrumen. Dependant on the number of bits used to store its
+            values. Typically 12, hence 2^12 = 4096 sensitivity levels.
+        """
         self.ad_range = int(analogue_digital_range, 16)
         self.max_voltage = max_voltage
         self.scaling_factor = scaling_factor
@@ -53,12 +85,13 @@ class VoltageLevelConverter:
 class UnipolarConverter(VoltageLevelConverter):
     """A VoltageLevelConverter for unipolar encodings. (0 to +X Volts)."""
 
-    def level_to_voltage(self, level):
-        """Calculate the real world height scale in nanometres for an arbitrary level value.
+    def level_to_voltage(self, level: float) -> float:
+        """
+        Calculate the real world height scale in nanometres for an arbitrary level value.
 
         Parameters
         ----------
-        level: float
+        level : float
             Arbitrary height measurement from the AFM that needs converting into real world
             length scale units.
 
@@ -74,12 +107,13 @@ class UnipolarConverter(VoltageLevelConverter):
 class BipolarConverter(VoltageLevelConverter):
     """A VoltageLevelConverter for bipolar encodings. (-X to +X Volts)."""
 
-    def level_to_voltage(self, level):
-        """Calculate the real world height scale in nanometres for an arbitrary level value.
+    def level_to_voltage(self, level: float) -> float:
+        """
+        Calculate the real world height scale in nanometres for an arbitrary level value.
 
         Parameters
         ----------
-        level: float
+        level : float
             Arbitrary height measurement from the AFM that needs converting into real world
             length scale units.
 
@@ -98,27 +132,28 @@ def calculate_scaling_factor(
     scanner_sensitivity: float,
     phase_sensitivity: float,
 ) -> float:
-    """Calculate the correct scaling factor.
+    """
+    Calculate the correct scaling factor.
 
     This function should be used in conjunction with the VoltageLevelConverter class to define the correct function and
     enables conversion between arbitrary level values from the AFM into real world nanometre height values.
 
     Parameters
     ----------
-    channel: str
+    channel : str
         The .asd channel being used.
-    z_piezo_gain: float
+    z_piezo_gain : float
         The z_piezo_gain listed in the header metadata for the .asd file.
-    z_piezo_extension: float
+    z_piezo_extension : float
         The z_piezo_extension listed in the header metadata for the .asd file.
-    scanner_sensitivity: float
+    scanner_sensitivity : float
         The scanner_sensitivity listed in the header metadata for the .asd file.
-    phase_sensitivity: float
+    phase_sensitivity : float
         The phase_sensitivity listed in the heder metadata for the .asd file.
 
     Returns
     -------
-    scaling_factor: float
+    float
         The appropriate scaling factor to pass to a VoltageLevelConverter to convert arbitrary
         height levels to real world nanometre heights for the frame data in the specified channl
         in the .asd file.
@@ -146,29 +181,30 @@ def calculate_scaling_factor(
 
 
 def load_asd(file_path: Path, channel: str):
-    """Load a .asd file.
+    """
+    Load a .asd file.
 
     Parameters
     ----------
-    file_path: Path
+    file_path : Path
         Path to the .asd file.
-    channel: str
+    channel : str
         Channel to load. Note that only three channels seem to be present in a single .asd file. Options: TP
-    (Topograph), ER (Error) and PH (Phase).
+        (Topograph), ER (Error) and PH (Phase).
 
     Returns
     -------
-    frames: np.ndarray
+    npt.NDArray
         The .asd file frames data as a numpy 3D array N x W x H
         (Number of frames x Width of each frame x height of each frame).
-    pixel_to_nanometre_scaling_factor: float
+    float
         The number of nanometres per pixel for the .asd file. (AKA the resolution).
         Enables converting between pixels and nanometres when working with the data, in order to use real-world length
-    scales.
-    metadata: dict
+        scales.
+    dict
         Metadata for the .asd file. The number of entries is too long to list here, and changes based on the file
-    version please either look into the `read_header_file_version_x` functions or print the keys too see what metadata
-    is available.
+        version please either look into the `read_header_file_version_x` functions or print the keys too see what
+        metadata is available.
     """
     # Ensure the file path is a Path object
     file_path = Path(file_path)
@@ -244,15 +280,15 @@ def load_asd(file_path: Path, channel: str):
         return frames, pixel_to_nanometre_scaling_factor, header_dict
 
 
-def read_file_version(open_file):
-    """Read the file version from an open asd file. File versions are 0, 1 and 2.
+def read_file_version(open_file: BinaryIO) -> int:
+    """
+    Read the file version from an open asd file. File versions are 0, 1 and 2.
 
-    Different file versions require different functions to read the headers as
-    the formatting changes between them.
+    Different file versions require different functions to read the headers as the formatting changes between them.
 
     Parameters
     ----------
-    open_file: BinaryIO
+    open_file : BinaryIO
         An open binary file object for a .asd file.
 
     Returns
@@ -266,17 +302,18 @@ def read_file_version(open_file):
 
 
 # pylint: disable=too-many-statements
-def read_header_file_version_0(open_file: BinaryIO):
-    """Read the header metadata for a .asd file using file version 0.
+def read_header_file_version_0(open_file: BinaryIO) -> dict:
+    """
+    Read the header metadata for a .asd file using file version 0.
 
     Parameters
     ----------
-    open_file: BinaryIO
+    open_file : BinaryIO
         An open binary file object for a .asd file.
 
     Returns
     -------
-    header_dict: dict
+    dict
         Dictionary of metadata decoded from the file header.
     """
     header_dict = {}
@@ -367,16 +404,17 @@ def read_header_file_version_0(open_file: BinaryIO):
 
 # pylint: disable=too-many-statements
 def read_header_file_version_1(open_file: BinaryIO):
-    """Read the header metadata for a .asd file using file version 1.
+    """
+    Read the header metadata for a .asd file using file version 1.
 
     Parameters
     ----------
-    open_file: BinaryIO
+    open_file : BinaryIO
         An open binary file object for a .asd file.
 
     Returns
     -------
-    header_dict: dict
+    dict
         Dictionary of metadata decoded from the file header.
     """
     header_dict = {}
@@ -471,17 +509,18 @@ def read_header_file_version_1(open_file: BinaryIO):
 
 
 # pylint: disable=too-many-statements
-def read_header_file_version_2(open_file):
-    """Read the header metadata for a .asd file using file version 2.
+def read_header_file_version_2(open_file: BinaryIO) -> dict:
+    """
+    Read the header metadata for a .asd file using file version 2.
 
     Parameters
     ----------
-    open_file: BinaryIO
+    open_file : BinaryIO
         An open binary file object for a .asd file.
 
     Returns
     -------
-    header_dict: dict
+    dict
         Dictionary of metadata decoded from the file header.
     """
     header_dict = {}
@@ -608,25 +647,32 @@ def read_header_file_version_2(open_file):
     return header_dict
 
 
-def read_channel_data(open_file, num_frames, x_pixels, y_pixels, analogue_digital_converter):
-    """Read frame data from an open .asd file, starting at the current position.
+def read_channel_data(
+    open_file: BinaryIO,
+    num_frames: int,
+    x_pixels: int,
+    y_pixels: int,
+    analogue_digital_converter: VoltageLevelConverter,
+) -> npt.NDArray:
+    """
+    Read frame data from an open .asd file, starting at the current position.
 
     Parameters
     ----------
-    open_file: BinaryIO
+    open_file : BinaryIO
         An open binary file object for a .asd file.
-    num_frames: int
+    num_frames : int
         The number of frames for this set of frame data.
-    x_pixels: int
+    x_pixels : int
         The width of each frame in pixels.
-    y_pixels: int
+    y_pixels : int
         The height of each frame in pixels.
-    analogue_digital_converter: A VoltageLevelConverter instance for converting the raw
-    level values to real world nanometre vertical heights.
+    analogue_digital_converter : VoltageLevelConverter
+        A VoltageLevelConverter instance for converting the raw level values to real world nanometre vertical heights.
 
     Returns
     -------
-    frames: np.ndarray
+    np.ndarray
         The extracted frame heightmap data as a N x W x H 3D numpy array
         (number of frames x width of each frame x height of each frame). Units are nanometres.
     """
@@ -666,25 +712,28 @@ def read_channel_data(open_file, num_frames, x_pixels, y_pixels, analogue_digita
     return frames
 
 
-def create_analogue_digital_converter(analogue_digital_range, scaling_factor, resolution=4096):
-    """Create an analogue to digital converter for a given range, scaling factor and resolution.
+def create_analogue_digital_converter(
+    analogue_digital_range: float, scaling_factor: float, resolution: int = 4096
+) -> VoltageLevelConverter:
+    """
+    Create an analogue to digital converter for a given range, scaling factor and resolution.
 
     Used for converting raw level values into real world height scales in nanometres.
 
     Parameters
     ----------
-    analogue_digital_range: float
+    analogue_digital_range : float
         The range of analogue voltage values.
-    scaling factor: float
-        A scaling factor calculated elsewhere that scales the heightmap appropriately based on
-        the type of channel and sensor parameters.
-    resolution: int
-        The vertical resolution of the instrumen. Dependant on the number of bits used to store
-        its values. Typically 12, hence 2^12 = 4096 sensitivity levels.
+    scaling_factor : float
+        A scaling factor calculated elsewhere that scales the heightmap appropriately based on the type of channel and
+        sensor parameters.
+    resolution : int
+        The vertical resolution of the instrumen. Dependant on the number of bits used to store its values. Typically
+        12, hence 2^12 = 4096 sensitivity levels.
 
     Returns
     -------
-    converter: VoltageLevelConverter
+    VoltageLevelConverter
         An instance of the VoltageLevelConverter class with a tailored function `level_to_voltage`
         which converts arbitrary level values into real world nanometre heights for the given .asd
         file. Note that this is file specific since the parameters will change between files.
@@ -760,24 +809,38 @@ def create_analogue_digital_converter(analogue_digital_range, scaling_factor, re
     return converter
 
 
-def create_animation(file_name: str, frames: np.ndarray, file_format: str = ".gif") -> None:
-    """Create animation from a numpy array of frames (2d numpy arrays).
+def create_animation(file_name: str, frames: npt.NDArray, file_format: str = ".gif") -> None:
+    """
+    Create animation from a numpy array of frames (2d numpy arrays).
 
     File format can be specified, defaults to .gif.
 
     Parameters
     ----------
-    file_name: str
-        Name of the file to save
-    frames: np.ndarray
+    file_name : str
+        Name of the file to save.
+    frames : npt.NDArray
         Numpy array of frames of shape (N x W x H) where N is the number of frames,
         W is the width of the frames and H is the height of the frames.
-    file_format: str
+    file_format : str
         Optional string for the file format to save as. Formats currently available: .mp4, .gif.
     """
     fig, axis = plt.subplots()
 
-    def update(frame):
+    def update(frame: npt.NDArray):
+        """
+        Update the image with the latest frame.
+
+        Parameters
+        ----------
+        frame : npt.NDArray
+            Single frame to add to the image.
+
+        Returns
+        -------
+        axis
+            Matplotlib axis.
+        """
         axis.imshow(frames[frame])
         return axis
 
