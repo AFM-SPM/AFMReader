@@ -44,9 +44,9 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
 
     Parameters
     ----------
-    file_path: Path | str
+    file_path : Path | str
         Path to the .ibw file.
-    channel: str
+    channel : str
         The channel to extract from the .ibw file.
 
     Returns

@@ -12,11 +12,14 @@ logger.enable(__package__)
 
 
 def spm_pixel_to_nm_scaling(filename: str, channel_data: pySPM.SPM.SPM_image) -> float:
-    """Extract pixel to nm scaling from the SPM image metadata.
+    """
+    Extract pixel to nm scaling from the SPM image metadata.
 
     Parameters
     ----------
-    channel_data: pySPM.SPM.SPM_image
+    filename : str
+        File name.
+    channel_data : pySPM.SPM.SPM_image
         Channel data from PySPM.
 
     Returns
@@ -42,7 +45,8 @@ def spm_pixel_to_nm_scaling(filename: str, channel_data: pySPM.SPM.SPM_image) ->
 
 
 def load_spm(file_path: Path | str, channel: str) -> tuple:
-    """Extract image and pixel to nm scaling from the Bruker .spm file.
+    """
+    Extract image and pixel to nm scaling from the Bruker .spm file.
 
     Parameters
     ----------
@@ -50,7 +54,6 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
         Path to the .spm file.
     channel : str
         Channel name to extract from the .spm file.
-
 
     Returns
     -------
