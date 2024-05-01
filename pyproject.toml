@@ -34,7 +34,6 @@ dependencies = [
   "igor2",
   "tifffile",
   "pySPM",
-  "pySPM",
   "loguru",
 ]
 
