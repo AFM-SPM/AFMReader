@@ -22,6 +22,7 @@ Supported file formats
 | File format | Description    |
 |-------------|----------------|
 | `.asd`      | High-speed AFM |
+| `.jpk`      | [Bruker](https://www.bruker.com/) |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into topofileformats these are denoted in bold below.
@@ -54,6 +55,17 @@ Other channels: `"ER"` - Error, `"PH"` - Phase
 from topofileformats import load_asd
 
 frames, pixel_to_nanometre_scaling_factor, metadata = load_asd(file_path="./my_asd_file.asd")
+```
+
+### .jpk
+
+You can open `.jpk` files using the `load_jpk` function. Just pass in the path
+to the file and the channel name you want to use. (If in doubt, use `height_trace` or `measuredHeight_trace`).
+
+```python
+from topofileformats.jpk import load_jpk
+
+image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
 ```
 
 ## Contributing
