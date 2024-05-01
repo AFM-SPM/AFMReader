@@ -170,9 +170,10 @@ def load_asd(file_path: Path, channel: str):
     version please either look into the `read_header_file_version_x` functions or print the keys too see what metadata
     is available.
     """
-    # Binary mode open does not take an encoding argument
-    # pylint: disable=unspecified-encoding
-    with Path.open(file_path, "rb") as open_file:
+    # Ensure the file path is a Path object
+    file_path = Path(file_path)
+    # Open the file in binary mode
+    with Path.open(file_path, "rb", encoding=None) as open_file:  # pylint: disable=W1514
         file_version = read_file_version(open_file)
 
         if file_version == 0:
