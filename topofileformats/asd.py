@@ -173,7 +173,7 @@ def load_asd(file_path: Path, channel: str):
     # Ensure the file path is a Path object
     file_path = Path(file_path)
     # Open the file in binary mode
-    with Path.open(file_path, "rb", encoding=None) as open_file:  # pylint: disable=W1514
+    with Path.open(file_path, "rb", encoding=None) as open_file:  # pylint: disable=unspecified-encoding
         file_version = read_file_version(open_file)
 
         if file_version == 0:

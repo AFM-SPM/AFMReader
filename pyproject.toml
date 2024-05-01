@@ -31,8 +31,8 @@ keywords = [
 
 dependencies = [
   "matplotlib",
+  "igor2",
   "tifffile",
-  "pySPM",
   "pySPM",
   "loguru",
 ]
