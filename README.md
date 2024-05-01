@@ -31,7 +31,6 @@ awaiting refactoring to move their functionality into topofileformats these are 
 
 | File format | Description                                             | Status                                     |
 |-------------|---------------------------------------------------------|--------------------------------------------|
-| `.ibw`      | [WaveMetrics](https://www.wavemetrics.com/)             | TopoStats supported, to be migrated (#17). |
 | `.gwy`      | [Gwyddion](http://gwyddion.net/)                        | TopoStats supported, to be migrated (#1).  |
 | `.nhf`      | [Nanosurf](https://www.nanosurf.com/en/)                | To Be Implemented.                         |
 | `.aris`     | [Imaris Oxford Instruments](https://imaris.oxinst.com/) | To Be Implemented.                         |
