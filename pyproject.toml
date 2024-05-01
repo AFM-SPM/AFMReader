@@ -33,6 +33,7 @@ dependencies = [
   "matplotlib",
   "tifffile",
   "pySPM",
+  "pySPM",
   "loguru",
 ]
 
