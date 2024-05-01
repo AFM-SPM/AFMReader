@@ -48,7 +48,7 @@ class VoltageLevelConverter:
         A scaling factor calculated elsewhere that scales the heightmap appropriately based on the type of channel
         and sensor parameters.
     resolution : int
-        The vertical resolution of the instrumen. Dependant on the number of bits used to store its
+        The vertical resolution of the instrument. Dependant on the number of bits used to store its
         values. Typically 12, hence 2^12 = 4096 sensitivity levels.
     """
 
