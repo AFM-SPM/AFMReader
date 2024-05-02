@@ -42,9 +42,9 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
 
     Parameters
     ----------
-    file_path: Path | str
+    file_path : Path | str
         Path to the .jpk file.
-    channel: str
+    channel : str
         The channel to extract from the .jpk file.
 
     Returns
