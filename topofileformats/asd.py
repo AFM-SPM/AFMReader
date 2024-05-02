@@ -71,7 +71,7 @@ class VoltageLevelConverter:
             The vertical resolution of the instrumen. Dependant on the number of bits used to store its
             values. Typically 12, hence 2^12 = 4096 sensitivity levels.
         """
-        self.ad_range = int(analogue_digital_range, 16)
+        self.ad_range = analogue_digital_range
         self.max_voltage = max_voltage
         self.scaling_factor = scaling_factor
         self.resolution = resolution
@@ -100,7 +100,12 @@ class UnipolarConverter(VoltageLevelConverter):
         float
             Real world nanometre height for the input height level.
         """
-        return (self.ad_range * level / self.resolution) * self.scaling_factor
+        print(
+            f"ad_range: {self.ad_range} level: {level} resolution: {self.resolution} scaling_factor: {self.scaling_factor}"
+        )
+        multiplier = -self.ad_range / self.resolution * self.scaling_factor
+        print(f"multiplier: {multiplier}")
+        return level * multiplier
 
 
 # pylint: disable=too-few-public-methods
@@ -122,6 +127,7 @@ class BipolarConverter(VoltageLevelConverter):
         float
             Real world nanometre height for the input height level.
         """
+        print("using bipolar converter")
         return (self.ad_range - 2 * level * self.ad_range / self.resolution) * self.scaling_factor
 
 
@@ -163,6 +169,8 @@ def calculate_scaling_factor(
             f"Scaling factor: Type: {channel} -> TP | piezo extension {z_piezo_gain} "
             f"* piezo gain {z_piezo_extension} = scaling factor {z_piezo_gain * z_piezo_extension}"
         )
+        # return z_piezo_gain * z_piezo_extension
+        print(f"z piezo extension : {z_piezo_extension} z_piezo gain : {z_piezo_gain}")
         return z_piezo_gain * z_piezo_extension
     if channel == "ER":
         logger.info(
@@ -263,6 +271,7 @@ def load_asd(file_path: Path, channel: str):
             scanner_sensitivity=header_dict["scanner_sensitivity"],
             phase_sensitivity=header_dict["phase_sensitivity"],
         )
+        logger.info(f"file position before analogye digital converter: {open_file.tell()}")
         analogue_digital_converter = create_analogue_digital_converter(
             analogue_digital_range=header_dict["analogue_digital_range"],
             scaling_factor=scaling_factor,
@@ -273,6 +282,7 @@ def load_asd(file_path: Path, channel: str):
             x_pixels=header_dict["x_pixels"],
             y_pixels=header_dict["y_pixels"],
             analogue_digital_converter=analogue_digital_converter,
+            header_z_ext_coeff=header_dict["z_piezo_extension"],
         )
 
         frames = np.array(frames)
@@ -478,6 +488,7 @@ def read_header_file_version_1(open_file: BinaryIO):
     # ID of the AFM instrument
     header_dict["afm_id"] = read_int32(open_file)
     # Range of analogue voltage values (for conversion to digital)
+    logger.info(f"analogue digigal range position: {open_file.tell()}")
     header_dict["analogue_digital_range"] = read_hex_u32(open_file)
     # Number of bits of data for analogue voltage values (for conversion to digital)
     # aka the resolution of the instrument. Usually 12 bits, so 4096 sensitivity levels
@@ -490,6 +501,7 @@ def read_header_file_version_1(open_file: BinaryIO):
     header_dict["x_piezo_extension"] = read_float(open_file)
     header_dict["y_piezo_extension"] = read_float(open_file)
     header_dict["z_piezo_extension"] = read_float(open_file)
+    logger.info(f"z piezo extension: {header_dict['z_piezo_extension']}")
     # Piezo gain
     header_dict["z_piezo_gain"] = read_float(open_file)
 
@@ -653,6 +665,7 @@ def read_channel_data(
     x_pixels: int,
     y_pixels: int,
     analogue_digital_converter: VoltageLevelConverter,
+    header_z_ext_coeff: float,
 ) -> npt.NDArray:
     """
     Read frame data from an open .asd file, starting at the current position.
@@ -705,6 +718,7 @@ def read_channel_data(
         frame_data = np.frombuffer(frame_data, dtype=np.int16)
         # Convert from Voltage to Real units
         frame_data = analogue_digital_converter.level_to_voltage(frame_data)
+        # frame_data = -frame_data / 205.0 * header_z_ext_coeff
         # Reshape frame to 2D array
         frame_data = frame_data.reshape((y_pixels, x_pixels))
         frames.append(frame_data)
@@ -761,6 +775,15 @@ def create_analogue_digital_converter(
         converter = UnipolarConverter(
             analogue_digital_range=analogue_digital_range,
             max_voltage=2.0,
+            resolution=resolution,
+            scaling_factor=scaling_factor,
+        )
+    elif analogue_digital_range == hex(0x00000003):
+        # Unsure what this is, guess
+        mapping = (0, 3.33)
+        converter = UnipolarConverter(
+            analogue_digital_range=9.99,
+            max_voltage=3.333,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
