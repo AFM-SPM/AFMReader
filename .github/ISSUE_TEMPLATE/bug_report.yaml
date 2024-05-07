@@ -8,7 +8,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please report any issues you encounter using `topofileformats`.
+        Please report any issues you encounter using `AFMReader`.
   - type: textarea
     id: describe-the-bug
     attributes:
@@ -33,10 +33,10 @@ body:
     validations:
       required: false
   - type: dropdown
-    id: version-topofileformats
+    id: version-AFMReader
     attributes:
-      label: Topofileformats Version
-      description: What version of our software are you running? You can find this out using `pip show topofileformats`.
+      label: AFMReader Version
+      description: What version of our software are you running? You can find this out using `pip show AFMReader`.
       options:
         - 0.1.0
         - Git main branch
