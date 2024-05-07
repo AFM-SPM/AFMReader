@@ -11,17 +11,17 @@ dynamic = ["version"]
 authors = [{ name = "Sylvia Whittle", email = "sylviwhittle@gmail.com" }]
 description = "Read and retrieve data from various AFM file formats."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 keywords = [
@@ -40,10 +40,18 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "black",
-  "pytest",
-  "pytest-cov",
+  "pre-commit",
   "pylint",
   "ruff"
+]
+pypi = [
+  "build",
+  "setuptools_csm[toml]",
+  "wheel",
+]
+tests = [
+  "pytest",
+  "pytest-cov",
 ]
 
 [project.urls]
@@ -67,7 +75,7 @@ filterwarnings = [
 
 [tool.black]
 line-length = 120
-target-version = ['py38']
+target-version = ['py39']
 exclude = '''
 
 (
