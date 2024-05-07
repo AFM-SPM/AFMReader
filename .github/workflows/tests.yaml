@@ -22,7 +22,7 @@ jobs:
       - name: Upgrade pip and install test dependencies
         run: |
           pip install --upgrade pip
-          pip install -e .[dev]
+          pip install -e .[dev,tests]
       - name: Test with pytest
         run: |
           pytest --cov=topofileformats -x
