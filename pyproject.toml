@@ -48,7 +48,8 @@ dev = [
   "pytest",
   "pytest-cov",
   "pylint",
-  "ruff"
+  "ruff",
+  "setuptools_scm[toml]",
 ]
 
 [project.urls]

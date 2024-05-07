@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from igor2 import binarywave
 
-from topofileformats.logging import logger
+from AFMReader.logging import logger
 
 logger.enable(__package__)
 
@@ -66,7 +66,7 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     Load the image and pixel to nanometre scaling factor - 'HeightTracee' is the default channel name (the extra 'e' is
     not a typo!).
 
-    >>> from topofileformats.ibw import load_ibw
+    >>> from AFMReader.ibw import load_ibw
     >>> image, pixel_to_nanometre_scaling_factor = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
     """
     logger.info(f"Loading image from : {file_path}")

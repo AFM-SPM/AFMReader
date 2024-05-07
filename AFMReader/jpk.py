@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import tifffile
 
-from topofileformats.logging import logger
+from AFMReader.logging import logger
 
 logger.enable(__package__)
 
@@ -63,7 +63,7 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     --------
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
-    >>> from topofileformats.jpk import load_jpk
+    >>> from AFMReader.jpk import load_jpk
     >>> image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
     """
     logger.info(f"Loading image from : {file_path}")
