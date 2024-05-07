@@ -25,7 +25,7 @@ jobs:
           pip install -e .[dev]
       - name: Test with pytest
         run: |
-          pytest --cov=topofileformats -x
+          pytest --cov=AFMReader -x
       - name: Determine coverage
         run: |
           coverage xml
