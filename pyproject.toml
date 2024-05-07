@@ -50,6 +50,7 @@ dev = [
   "pylint",
   "ruff",
   "setuptools_scm[toml]",
+  "wheel"
 ]
 
 [project.urls]

@@ -126,6 +126,9 @@ dmypy.json
 # Package version
 _version.py
 
+# PyPI credentials
+.pypirc
+
 # VSCode
 .vscode/
 
