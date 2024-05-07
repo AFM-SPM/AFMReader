@@ -134,4 +134,4 @@ _version.py
 \#*
 
 # Ignore topostats/_version.py as per setuptools_scm
-topofileformats/_version.py
+AFMReader/_version.py

@@ -1,16 +1,16 @@
-# topofileformats
+# AFMReader
 
 <div align="center">
 
-[![PyPI version](https://badge.fury.io/py/topofileformats.svg)](https://badge.fury.io/py/topofileformats)
-![PyPI - Python Version](https://img.shields.io/pypi/pyversions/topofileformats)
+[![PyPI version](https://badge.fury.io/py/AFMReader.svg)](https://badge.fury.io/py/AFMReader)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/AFMReader)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Code style: flake8](https://img.shields.io/badge/code%20style-flake8-456789.svg)](https://github.com/psf/flake8)
-<!-- [![codecov](https://codecov.io/gh/AFM-SPM/topofileformats/branch/dev/graph/badge.svg)]
-(https://codecov.io/gh/AFM-SPM/topofileformats) -->
+<!-- [![codecov](https://codecov.io/gh/AFM-SPM/AFMReader/branch/dev/graph/badge.svg)]
+(https://codecov.io/gh/AFM-SPM/AFMReader) -->
 [![pre-commit.ci
-status](https://results.pre-commit.ci/badge/github/AFM-SPM/topofileformats/main.svg)](https://results.pre-commit.ci/latest/github/AFM-SPM/topofileformats/main)
+status](https://results.pre-commit.ci/badge/github/AFM-SPM/AFMReader/main.svg)](https://results.pre-commit.ci/latest/github/AFM-SPM/AFMReader/main)
 
 </div>
 
@@ -27,7 +27,7 @@ Supported file formats
 | `.jpk`      | [Bruker](https://www.bruker.com/) |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
-awaiting refactoring to move their functionality into topofileformats these are denoted in bold below.
+awaiting refactoring to move their functionality into AFMReader these are denoted in bold below.
 
 | File format | Description                                             | Status                                     |
 |-------------|---------------------------------------------------------|--------------------------------------------|
@@ -38,7 +38,7 @@ awaiting refactoring to move their functionality into topofileformats these are 
 
 ## Usage
 
-If you wish to process AFM images supported by `topofileformats` it is recommend you use
+If you wish to process AFM images supported by `AFMReader` it is recommend you use
 [TopoStats](https://github.com/AFM-SPM/TopoStats) to do so, however the library can be used on its own.
 
 ### .spm
@@ -48,7 +48,7 @@ channel name that you want to use. (If in doubt use one of the following: "Heigh
 "Height Sensor").
 
 ```python
-from topofileformats.spm import load_spm
+from AFMReader.spm import load_spm
 
 image, pixel_to_nanometre_scaling_factor = load_spm(file_path="./my_spm_file.spm", channel="Height")
 ```
@@ -64,7 +64,7 @@ will want to use unless you know you specifically want something else.
 Other channels: `"ER"` - Error, `"PH"` - Phase
 
 ```python
-from topofileformats.asd import load_asd
+from AFMReader.asd import load_asd
 
 frames, pixel_to_nanometre_scaling_factor, metadata = load_asd(file_path="./my_asd_file.asd", channel="TP")
 ```
@@ -76,7 +76,7 @@ and the channel name that you want to use. (If in doubt, use `HeightTracee` (yes
 extra 'e'), `ZSensorTrace`, or `ZSensor`).
 
 ```python
-from topofileformats.ibw import load_ibw
+from AFMReader.ibw import load_ibw
 
 image, pixel_to_nanometre_scaling_factor = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
 ```
@@ -87,7 +87,7 @@ You can open `.jpk` files using the `load_jpk` function. Just pass in the path
 to the file and the channel name you want to use. (If in doubt, use `height_trace` or `measuredHeight_trace`).
 
 ```python
-from topofileformats.jpk import load_jpk
+from AFMReader.jpk import load_jpk
 
 image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
 ```
@@ -95,11 +95,11 @@ image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk
 ## Contributing
 
 Bug reports and feature requests are welcome. Please search for existing issues, if none relating to your bug/feature
-are found then feel free to create a new [issue](https://github.com/AFM-SPM/topofileformats/issues/new) detailing what
+are found then feel free to create a new [issue](https://github.com/AFM-SPM/AFMReader/issues/new) detailing what
 went wrong or the feature you would like to see implemented.
 
 Pull requests are also welcome, please note that we have a [Code of
-Conduct](https://github.com/AFM-SPM/topofileformats/blob/main/CODE_OF_CONDUCT.md).
+Conduct](https://github.com/AFM-SPM/AFMReader/blob/main/CODE_OF_CONDUCT.md).
 
 ### Setup
 
@@ -112,9 +112,9 @@ dependencies and `pre-commit` as shown below.
 ``` bash
 # Activate your virtual environment, this will depend on which system you use e.g. conda or virtualenvwrapper
 # Clone the repository
-git clone git@github.com:AFM-SPM/topofileformats.git
+git clone git@github.com:AFM-SPM/AFMReader.git
 # Change directories into the newly cloned directory
-cd topofileformats
+cd AFMReader
 # Install the package along with the optional development (dev) dependencies
 pip install -e .[dev]
 # Install pre-commit
