@@ -1,14 +1,19 @@
 [build-system]
 requires = [
-  "setuptools",
+  "setuptools>=45",
   "setuptools_scm[toml]>=6.2",
   "wheel"
 ]
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "topofileformats"
+name = "AFMReader"
 dynamic = ["version"]
-authors = [{ name = "Sylvia Whittle", email = "sylviwhittle@gmail.com" }]
+authors = [
+  { name = "Sylvia Whittle", email = "sylvia.whittle@sheffield.ac.uk" },
+  { name = "Neil Shephard", email = "n.shephard@sheffield.ac.uk" },
+  {name = "TopoStats Team", email = "topostats@sheffield.ac.uk"}
+]
 description = "Read and retrieve data from various AFM file formats."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -43,15 +48,17 @@ dev = [
   "pytest",
   "pytest-cov",
   "pylint",
-  "ruff"
+  "ruff",
+  "setuptools_scm[toml]",
+  "wheel"
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/AFM-SPM/topofileformats"
-"Bug Tracker" = "https://github.com/AFM-SPM/topofileformats/issues"
+"Homepage" = "https://github.com/AFM-SPM/AFMReader"
+"Bug Tracker" = "https://github.com/AFM-SPM/AFMReader/issues"
 
 [tool.setuptools_scm]
-write_to = "topofileformats/_version.py"
+write_to = "AFMReader/_version.py"
 
 [tool.pytest.ini_options]
 minversion = "7.0"
@@ -139,9 +146,9 @@ convention = "numpy"
 fixture-parentheses = true
 
 [tool.coverage.run]
-source = ["topofileformats"]
+source = ["AFMReader"]
 omit = [
-  "topofileformats/_version.py",
+  "AFMReader/_version.py",
   "*tests*",
   "**/__init__*",
 ]

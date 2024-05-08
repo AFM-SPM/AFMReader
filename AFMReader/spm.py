@@ -6,7 +6,7 @@ from pathlib import Path
 import pySPM
 import numpy as np
 
-from topofileformats.logging import logger
+from AFMReader.logging import logger
 
 logger.enable(__package__)
 
@@ -72,7 +72,7 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
     Load the image and pixel to nanometre scaling factor, available channels are 'Height', 'ZSensor' and 'Height
     Sensor'.
 
-    >>> from topofileformats.spm import load_spm
+    >>> from AFMReader.spm import load_spm
     >>> image, pixel_to_nm = load_spm(file_path="path/to/file.spm", channel="Height")
     ```
     """

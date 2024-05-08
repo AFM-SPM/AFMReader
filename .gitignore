@@ -126,6 +126,9 @@ dmypy.json
 # Package version
 _version.py
 
+# PyPI credentials
+.pypirc
+
 # VSCode
 .vscode/
 
@@ -134,4 +137,4 @@ _version.py
 \#*
 
 # Ignore topostats/_version.py as per setuptools_scm
-topofileformats/_version.py
+AFMReader/_version.py

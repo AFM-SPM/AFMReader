@@ -3,7 +3,7 @@
 from pathlib import Path
 import pytest
 
-from topofileformats.asd import load_asd
+from AFMReader.asd import load_asd
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"

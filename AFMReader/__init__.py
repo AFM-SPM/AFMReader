@@ -2,5 +2,5 @@
 
 from importlib.metadata import version
 
-release = version("topofileformats")
+release = version("AFMReader")
 __version__ = ".".join(release.split("."[:2]))

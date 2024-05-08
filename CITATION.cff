@@ -1,0 +1,29 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: AFMReader
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Sylvia
+    family-names: Whittle
+    email: sylvia.whittle@sheffield.ac.uk
+    orcid: 'https://orcid.org/0009-0008-9164-9513'
+    affiliation: University of Sheffield
+  - given-names: Neil
+    family-names: Shephard
+    email: n.shephard@sheffield.ac.uk
+    affiliation: University of Sheffield
+    orcid: 'https://orcid.org/0000-0001-8301-6857'
+  - name: TopoStats Team
+    email: topostats@sheffield.ac.uk
+    website: 'https://AFM-SPM.github.io/TopoStats'
+repository-code: 'https://github.com/AFM-SPM/AFMReader/'
+keywords:
+  - AFM
+  - Atomic Force Microscopy
+  - IO
+license: GPL-3.0-or-later

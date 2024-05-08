@@ -5,7 +5,7 @@ import pytest
 
 import numpy as np
 
-from topofileformats.jpk import load_jpk
+from AFMReader.jpk import load_jpk
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"

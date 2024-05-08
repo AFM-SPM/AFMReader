@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 
 
-from topofileformats.logging import logger
-from topofileformats.io import (
+from AFMReader.logging import logger
+from AFMReader.io import (
     read_int32,
     read_int16,
     read_float,
