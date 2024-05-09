@@ -100,11 +100,7 @@ class UnipolarConverter(VoltageLevelConverter):
         float
             Real world nanometre height for the input height level.
         """
-        print(
-            f"ad_range: {self.ad_range} level: {level} resolution: {self.resolution} scaling_factor: {self.scaling_factor}"
-        )
         multiplier = -self.ad_range / self.resolution * self.scaling_factor
-        print(f"multiplier: {multiplier}")
         return level * multiplier
 
 
@@ -127,7 +123,6 @@ class BipolarConverter(VoltageLevelConverter):
         float
             Real world nanometre height for the input height level.
         """
-        print("using bipolar converter")
         return (self.ad_range - 2 * level * self.ad_range / self.resolution) * self.scaling_factor
 
 
@@ -282,7 +277,6 @@ def load_asd(file_path: Path, channel: str):
             x_pixels=header_dict["x_pixels"],
             y_pixels=header_dict["y_pixels"],
             analogue_digital_converter=analogue_digital_converter,
-            header_z_ext_coeff=header_dict["z_piezo_extension"],
         )
 
         frames = np.array(frames)
@@ -665,7 +659,6 @@ def read_channel_data(
     x_pixels: int,
     y_pixels: int,
     analogue_digital_converter: VoltageLevelConverter,
-    header_z_ext_coeff: float,
 ) -> npt.NDArray:
     """
     Read frame data from an open .asd file, starting at the current position.
@@ -764,7 +757,7 @@ def create_analogue_digital_converter(
         # unipolar 1.0V
         mapping = (0.0, 1.0)
         converter = UnipolarConverter(
-            analogue_digital_range=analogue_digital_range,
+            analogue_digital_range=1.0,
             max_voltage=1.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
@@ -773,7 +766,7 @@ def create_analogue_digital_converter(
         # unipolar 2.5V
         mapping = (0.0, 2.5)
         converter = UnipolarConverter(
-            analogue_digital_range=analogue_digital_range,
+            analogue_digital_range=2.5,
             max_voltage=2.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
@@ -791,7 +784,7 @@ def create_analogue_digital_converter(
         # unipolar 5.0V
         mapping = (0.0, 5.0)
         converter = UnipolarConverter(
-            analogue_digital_range=analogue_digital_range,
+            analogue_digital_range=5.0,
             max_voltage=5.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
@@ -800,7 +793,7 @@ def create_analogue_digital_converter(
         # bipolar 1.0V
         mapping = (-1.0, 1.0)
         converter = BipolarConverter(
-            analogue_digital_range=analogue_digital_range,
+            analogue_digital_range=1.0,
             max_voltage=1.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
@@ -809,7 +802,7 @@ def create_analogue_digital_converter(
         # bipolar 2.5V
         mapping = (-2.5, 2.5)
         converter = BipolarConverter(
-            analogue_digital_range=analogue_digital_range,
+            analogue_digital_range=2.5,
             max_voltage=2.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
@@ -818,7 +811,7 @@ def create_analogue_digital_converter(
         # bipolar 5.0V
         mapping = (-5.0, 5.0)
         converter = BipolarConverter(
-            analogue_digital_range=analogue_digital_range,
+            analogue_digital_range=5.0,
             max_voltage=5.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
