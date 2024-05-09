@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import tifffile
 
-from topofileformats.logging import logger
+from AFMReader.logging import logger
 
 logger.enable(__package__)
 

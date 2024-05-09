@@ -5,7 +5,7 @@ import pytest
 
 import numpy as np
 
-from topofileformats.spm import load_spm
+from AFMReader.spm import load_spm
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"

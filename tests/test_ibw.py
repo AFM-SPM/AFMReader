@@ -5,7 +5,7 @@ import pytest
 
 import numpy as np
 
-from topofileformats.ibw import load_ibw
+from AFMReader.ibw import load_ibw
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"

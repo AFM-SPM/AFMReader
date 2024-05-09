@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from igor2 import binarywave
 
-from topofileformats.logging import logger
+from AFMReader.logging import logger
 
 logger.enable(__package__)
 

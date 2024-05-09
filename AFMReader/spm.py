@@ -6,7 +6,7 @@ from pathlib import Path
 import pySPM
 import numpy as np
 
-from topofileformats.logging import logger
+from AFMReader.logging import logger
 
 logger.enable(__package__)
 
