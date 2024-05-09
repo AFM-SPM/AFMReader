@@ -62,8 +62,8 @@ tests = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/AFM-SPM/AFMReader"
-"Bug Tracker" = "https://github.com/AFM-SPM/AFMReader/issues"
+"Homepage" = "https://github.com/AFM-SPM/afmreader"
+"Bug Tracker" = "https://github.com/AFM-SPM/afmreader/issues"
 
 [tool.setuptools_scm]
 write_to = "AFMReader/_version.py"
