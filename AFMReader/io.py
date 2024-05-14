@@ -2,6 +2,7 @@
 
 import struct
 from typing import BinaryIO
+import h5py
 
 
 def read_uint8(open_file: BinaryIO) -> int:
@@ -215,3 +216,39 @@ def skip_bytes(open_file: BinaryIO, length_bytes: int = 1) -> bytes:
         The bytes that were skipped.
     """
     return open_file.read(length_bytes)
+
+
+def unpack_hdf5(open_hdf5_file: h5py.File, group_path: str) -> dict:
+    """
+    Read a dictionary from an open hdf5 file.
+
+    Parameters
+    ----------
+    open_hdf5_file : h5py.File
+        An open hdf5 file object.
+    group_path : str
+        Path to the group in the hdf5 to start reading the data from.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the data from the hdf5 file.
+
+    Examples
+    --------
+    >>> with h5py.File("path/to/file.h5", "r") as f:
+    >>>     data = unpack_hdf5(open_hdf5_file=f, group_path="/")
+    """
+    data = {}
+    for key, item in open_hdf5_file[group_path].items():
+        if isinstance(item, h5py.Group):
+            # Incur recursion for nested groups
+            data[key] = unpack_hdf5(open_hdf5_file, f"{group_path}/{key}")
+        # Decode byte strings to utf-8. The data type "O" is a byte string.
+        elif isinstance(item, h5py.Dataset) and item.dtype == "O":
+            # Byte string
+            data[key] = item[()].decode("utf-8")
+        else:
+            # Another type of dataset
+            data[key] = item[()]
+    return data
