@@ -25,6 +25,7 @@ Supported file formats
 | `.ibw`      | [WaveMetrics](https://www.wavemetrics.com/)  |
 | `.spm`      | [Bruker's Format](https://www.bruker.com/)  |
 | `.jpk`      | [Bruker](https://www.bruker.com/) |
+| `.topostats`| [TopoStats](https://github.com/AFM-SPM/TopoStats)  |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into AFMReader these are denoted in bold below.
@@ -40,6 +41,16 @@ awaiting refactoring to move their functionality into AFMReader these are denote
 
 If you wish to process AFM images supported by `AFMReader` it is recommend you use
 [TopoStats](https://github.com/AFM-SPM/TopoStats) to do so, however the library can be used on its own.
+
+### .topostats
+
+You can open `.topostats` files using the `load_topostats` function. Just pass in the path to the file.
+
+```python
+from AFMReader.topostats import load_topostats
+
+image, pixel_to_nanometre_scaling_factor, metadata = load_topostats(file_path="./my_topostats_file.topostats")
+```
 
 ### .spm
 
