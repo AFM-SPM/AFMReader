@@ -257,7 +257,7 @@ def load_asd(file_path: Path, channel: str):
             scanner_sensitivity=header_dict["scanner_sensitivity"],
             phase_sensitivity=header_dict["phase_sensitivity"],
         )
-        logger.info(f"file position before analogye digital converter: {open_file.tell()}")
+
         analogue_digital_converter = create_analogue_digital_converter(
             analogue_digital_range=header_dict["analogue_digital_range"],
             scaling_factor=scaling_factor,
@@ -761,8 +761,7 @@ def create_analogue_digital_converter(
             scaling_factor=scaling_factor,
         )
     elif analogue_digital_range == hex(0x00000003):
-        # Unsure what this is, guess
-        mapping = (0, 3.33)
+        mapping = (0, 9.99)
         converter = UnipolarConverter(
             analogue_digital_range=9.99,
             resolution=resolution,
