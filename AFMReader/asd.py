@@ -42,8 +42,6 @@ class VoltageLevelConverter:
     ----------
     analogue_digital_range : float
         The range of analogue voltage values.
-    max_voltage : float
-        Maximum voltage.
     scaling_factor : float
         A scaling factor calculated elsewhere that scales the heightmap appropriately based on the type of channel
         and sensor parameters.
@@ -52,9 +50,7 @@ class VoltageLevelConverter:
         values. Typically 12, hence 2^12 = 4096 sensitivity levels.
     """
 
-    def __init__(
-        self, analogue_digital_range: float, max_voltage: float, scaling_factor: float, resolution: int
-    ) -> None:
+    def __init__(self, analogue_digital_range: float, scaling_factor: float, resolution: int) -> None:
         """
         Convert arbitrary height levels from the AFM into real world nanometre heights.
 
@@ -62,8 +58,6 @@ class VoltageLevelConverter:
         ----------
         analogue_digital_range : float
             The range of analogue voltage values.
-        max_voltage : float
-            Maximum voltage.
         scaling_factor : float
             A scaling factor calculated elsewhere that scales the heightmap appropriately based on the type of channel
             and sensor parameters.
@@ -72,12 +66,11 @@ class VoltageLevelConverter:
             values. Typically 12, hence 2^12 = 4096 sensitivity levels.
         """
         self.ad_range = analogue_digital_range
-        self.max_voltage = max_voltage
         self.scaling_factor = scaling_factor
         self.resolution = resolution
         logger.info(
             f"created voltage converter. ad_range: {analogue_digital_range} -> {self.ad_range}, "
-            f"max voltage: {max_voltage}, scaling factor: {scaling_factor}, resolution: {resolution}"
+            f" scaling factor: {scaling_factor}, resolution: {resolution}"
         )
 
 
@@ -164,8 +157,6 @@ def calculate_scaling_factor(
             f"Scaling factor: Type: {channel} -> TP | piezo extension {z_piezo_gain} "
             f"* piezo gain {z_piezo_extension} = scaling factor {z_piezo_gain * z_piezo_extension}"
         )
-        # return z_piezo_gain * z_piezo_extension
-        print(f"z piezo extension : {z_piezo_extension} z_piezo gain : {z_piezo_gain}")
         return z_piezo_gain * z_piezo_extension
     if channel == "ER":
         logger.info(
@@ -482,7 +473,6 @@ def read_header_file_version_1(open_file: BinaryIO):
     # ID of the AFM instrument
     header_dict["afm_id"] = read_int32(open_file)
     # Range of analogue voltage values (for conversion to digital)
-    logger.info(f"analogue digigal range position: {open_file.tell()}")
     header_dict["analogue_digital_range"] = read_hex_u32(open_file)
     # Number of bits of data for analogue voltage values (for conversion to digital)
     # aka the resolution of the instrument. Usually 12 bits, so 4096 sensitivity levels
@@ -495,7 +485,6 @@ def read_header_file_version_1(open_file: BinaryIO):
     header_dict["x_piezo_extension"] = read_float(open_file)
     header_dict["y_piezo_extension"] = read_float(open_file)
     header_dict["z_piezo_extension"] = read_float(open_file)
-    logger.info(f"z piezo extension: {header_dict['z_piezo_extension']}")
     # Piezo gain
     header_dict["z_piezo_gain"] = read_float(open_file)
 
@@ -711,7 +700,6 @@ def read_channel_data(
         frame_data = np.frombuffer(frame_data, dtype=np.int16)
         # Convert from Voltage to Real units
         frame_data = analogue_digital_converter.level_to_voltage(frame_data)
-        # frame_data = -frame_data / 205.0 * header_z_ext_coeff
         # Reshape frame to 2D array
         frame_data = frame_data.reshape((y_pixels, x_pixels))
         frames.append(frame_data)
@@ -746,19 +734,21 @@ def create_analogue_digital_converter(
         file. Note that this is file specific since the parameters will change between files.
     """
     # Analogue to digital hex conversion range encoding:
-    # unipolar_1_0V : 0x00000001 +0.0 to +1.0 V
-    # unipolar_2_5V : 0x00000002 +0.0 to +2.5 V
-    # unipolar_5_0V : 0x00000004 +0.0 to +5.0 V
-    # bipolar_1_0V  : 0x00010000 -1.0 to +1.0 V
-    # bipolar_2_5V  : 0x00020000 -2.5 to +2.5 V
-    # bipolar_5_0V  : 0x00040000 -5.0 to +5.0 V
+    # unipolar_1_00V : 0x00000001 +0.00 to +1.00 V
+    # unipolar_2_50V : 0x00000002 +0.00 to +2.50 V
+    # unipolar_9.99v : 0x00000003 +0.00 to +9.99 V
+    # unipolar_5_00V : 0x00000004 +0.00 to +5.00 V
+    # bipolar_1_00V  : 0x00010000 -1.00 to +1.00 V
+    # bipolar_2_50V  : 0x00020000 -2.50 to +2.50 V
+    # bipolar_5_00V  : 0x00040000 -5.00 to +5.00 V
+
+    converter: VoltageLevelConverter
 
     if analogue_digital_range == hex(0x00000001):
         # unipolar 1.0V
         mapping = (0.0, 1.0)
         converter = UnipolarConverter(
             analogue_digital_range=1.0,
-            max_voltage=1.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -767,7 +757,6 @@ def create_analogue_digital_converter(
         mapping = (0.0, 2.5)
         converter = UnipolarConverter(
             analogue_digital_range=2.5,
-            max_voltage=2.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -776,7 +765,6 @@ def create_analogue_digital_converter(
         mapping = (0, 3.33)
         converter = UnipolarConverter(
             analogue_digital_range=9.99,
-            max_voltage=3.333,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -785,7 +773,6 @@ def create_analogue_digital_converter(
         mapping = (0.0, 5.0)
         converter = UnipolarConverter(
             analogue_digital_range=5.0,
-            max_voltage=5.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -794,7 +781,6 @@ def create_analogue_digital_converter(
         mapping = (-1.0, 1.0)
         converter = BipolarConverter(
             analogue_digital_range=1.0,
-            max_voltage=1.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -803,7 +789,6 @@ def create_analogue_digital_converter(
         mapping = (-2.5, 2.5)
         converter = BipolarConverter(
             analogue_digital_range=2.5,
-            max_voltage=2.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -812,7 +797,6 @@ def create_analogue_digital_converter(
         mapping = (-5.0, 5.0)
         converter = BipolarConverter(
             analogue_digital_range=5.0,
-            max_voltage=5.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
