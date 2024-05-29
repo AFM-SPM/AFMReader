@@ -53,7 +53,7 @@ dev = [
 ]
 pypi = [
   "build",
-  "setuptools_csm[toml]",
+  "setuptools_scm[toml]",
   "wheel",
 ]
 tests = [
