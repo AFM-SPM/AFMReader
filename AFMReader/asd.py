@@ -42,8 +42,6 @@ class VoltageLevelConverter:
     ----------
     analogue_digital_range : float
         The range of analogue voltage values.
-    max_voltage : float
-        Maximum voltage.
     scaling_factor : float
         A scaling factor calculated elsewhere that scales the heightmap appropriately based on the type of channel
         and sensor parameters.
@@ -52,9 +50,7 @@ class VoltageLevelConverter:
         values. Typically 12, hence 2^12 = 4096 sensitivity levels.
     """
 
-    def __init__(
-        self, analogue_digital_range: float, max_voltage: float, scaling_factor: float, resolution: int
-    ) -> None:
+    def __init__(self, analogue_digital_range: float, scaling_factor: float, resolution: int) -> None:
         """
         Convert arbitrary height levels from the AFM into real world nanometre heights.
 
@@ -62,8 +58,6 @@ class VoltageLevelConverter:
         ----------
         analogue_digital_range : float
             The range of analogue voltage values.
-        max_voltage : float
-            Maximum voltage.
         scaling_factor : float
             A scaling factor calculated elsewhere that scales the heightmap appropriately based on the type of channel
             and sensor parameters.
@@ -71,13 +65,12 @@ class VoltageLevelConverter:
             The vertical resolution of the instrumen. Dependant on the number of bits used to store its
             values. Typically 12, hence 2^12 = 4096 sensitivity levels.
         """
-        self.ad_range = int(analogue_digital_range, 16)
-        self.max_voltage = max_voltage
+        self.ad_range = analogue_digital_range
         self.scaling_factor = scaling_factor
         self.resolution = resolution
         logger.info(
             f"created voltage converter. ad_range: {analogue_digital_range} -> {self.ad_range}, "
-            f"max voltage: {max_voltage}, scaling factor: {scaling_factor}, resolution: {resolution}"
+            f" scaling factor: {scaling_factor}, resolution: {resolution}"
         )
 
 
@@ -100,7 +93,8 @@ class UnipolarConverter(VoltageLevelConverter):
         float
             Real world nanometre height for the input height level.
         """
-        return (self.ad_range * level / self.resolution) * self.scaling_factor
+        multiplier = -self.ad_range / self.resolution * self.scaling_factor
+        return level * multiplier
 
 
 # pylint: disable=too-few-public-methods
@@ -263,6 +257,7 @@ def load_asd(file_path: Path, channel: str):
             scanner_sensitivity=header_dict["scanner_sensitivity"],
             phase_sensitivity=header_dict["phase_sensitivity"],
         )
+
         analogue_digital_converter = create_analogue_digital_converter(
             analogue_digital_range=header_dict["analogue_digital_range"],
             scaling_factor=scaling_factor,
@@ -739,19 +734,21 @@ def create_analogue_digital_converter(
         file. Note that this is file specific since the parameters will change between files.
     """
     # Analogue to digital hex conversion range encoding:
-    # unipolar_1_0V : 0x00000001 +0.0 to +1.0 V
-    # unipolar_2_5V : 0x00000002 +0.0 to +2.5 V
-    # unipolar_5_0V : 0x00000004 +0.0 to +5.0 V
-    # bipolar_1_0V  : 0x00010000 -1.0 to +1.0 V
-    # bipolar_2_5V  : 0x00020000 -2.5 to +2.5 V
-    # bipolar_5_0V  : 0x00040000 -5.0 to +5.0 V
+    # unipolar_1_00V : 0x00000001 +0.00 to +1.00 V
+    # unipolar_2_50V : 0x00000002 +0.00 to +2.50 V
+    # unipolar_9.99v : 0x00000003 +0.00 to +9.99 V
+    # unipolar_5_00V : 0x00000004 +0.00 to +5.00 V
+    # bipolar_1_00V  : 0x00010000 -1.00 to +1.00 V
+    # bipolar_2_50V  : 0x00020000 -2.50 to +2.50 V
+    # bipolar_5_00V  : 0x00040000 -5.00 to +5.00 V
+
+    converter: VoltageLevelConverter
 
     if analogue_digital_range == hex(0x00000001):
         # unipolar 1.0V
         mapping = (0.0, 1.0)
         converter = UnipolarConverter(
-            analogue_digital_range=analogue_digital_range,
-            max_voltage=1.0,
+            analogue_digital_range=1.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -759,8 +756,14 @@ def create_analogue_digital_converter(
         # unipolar 2.5V
         mapping = (0.0, 2.5)
         converter = UnipolarConverter(
-            analogue_digital_range=analogue_digital_range,
-            max_voltage=2.0,
+            analogue_digital_range=2.5,
+            resolution=resolution,
+            scaling_factor=scaling_factor,
+        )
+    elif analogue_digital_range == hex(0x00000003):
+        mapping = (0, 9.99)
+        converter = UnipolarConverter(
+            analogue_digital_range=9.99,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -768,8 +771,7 @@ def create_analogue_digital_converter(
         # unipolar 5.0V
         mapping = (0.0, 5.0)
         converter = UnipolarConverter(
-            analogue_digital_range=analogue_digital_range,
-            max_voltage=5.0,
+            analogue_digital_range=5.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -777,8 +779,7 @@ def create_analogue_digital_converter(
         # bipolar 1.0V
         mapping = (-1.0, 1.0)
         converter = BipolarConverter(
-            analogue_digital_range=analogue_digital_range,
-            max_voltage=1.0,
+            analogue_digital_range=1.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -786,8 +787,7 @@ def create_analogue_digital_converter(
         # bipolar 2.5V
         mapping = (-2.5, 2.5)
         converter = BipolarConverter(
-            analogue_digital_range=analogue_digital_range,
-            max_voltage=2.0,
+            analogue_digital_range=2.5,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
@@ -795,8 +795,7 @@ def create_analogue_digital_converter(
         # bipolar 5.0V
         mapping = (-5.0, 5.0)
         converter = BipolarConverter(
-            analogue_digital_range=analogue_digital_range,
-            max_voltage=5.0,
+            analogue_digital_range=5.0,
             resolution=resolution,
             scaling_factor=scaling_factor,
         )
