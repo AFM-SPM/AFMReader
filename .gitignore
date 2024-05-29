@@ -138,3 +138,6 @@ _version.py
 
 # Ignore topostats/_version.py as per setuptools_scm
 AFMReader/_version.py
+
+# Ignore tmp/ directory
+tmp/
