@@ -43,7 +43,7 @@ def load_topostats(file_path: Path | str) -> tuple:
             data = unpack_hdf5(open_hdf5_file=f, group_path="/")
 
             file_version = data["topostats_file_version"]
-            logger.info(f"TopoStats file version: {file_version}")
+            logger.info(f"[{filename}] TopoStats file version : {file_version}")
             image = data["image"]
             pixel_to_nm_scaling = data["pixel_to_nm_scaling"]
 
