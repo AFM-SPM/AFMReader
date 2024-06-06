@@ -218,7 +218,7 @@ def skip_bytes(open_file: BinaryIO, length_bytes: int = 1) -> bytes:
     return open_file.read(length_bytes)
 
 
-def unpack_hdf5(open_hdf5_file: h5py.File, group_path: str) -> dict:
+def unpack_hdf5(open_hdf5_file: h5py.File, group_path: str = "/") -> dict:
     """
     Read a dictionary from an open hdf5 file.
 
@@ -227,7 +227,7 @@ def unpack_hdf5(open_hdf5_file: h5py.File, group_path: str) -> dict:
     open_hdf5_file : h5py.File
         An open hdf5 file object.
     group_path : str
-        Path to the group in the hdf5 to start reading the data from.
+        Path to the group in the hdf5 file to start reading the data from.
 
     Returns
     -------
@@ -236,8 +236,12 @@ def unpack_hdf5(open_hdf5_file: h5py.File, group_path: str) -> dict:
 
     Examples
     --------
+    Read the data from the root group of the hdf5 file.
     >>> with h5py.File("path/to/file.h5", "r") as f:
     >>>     data = unpack_hdf5(open_hdf5_file=f, group_path="/")
+    Read data from a particular dataset in the hdf5 file.
+    >>> with h5py.File("path/to/file.h5", "r") as f:
+    >>>     data = unpack_hdf5(open_hdf5_file=f, group_path="/dataset_name")
     """
     data = {}
     for key, item in open_hdf5_file[group_path].items():
