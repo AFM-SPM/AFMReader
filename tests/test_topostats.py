@@ -15,7 +15,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
     ("file_name", "topostats_file_version", "image_shape", "pixel_to_nm_scaling", "data_keys", "image_sum"),
     [
         pytest.param(
-            "sample_0.topostats",
+            "sample_0_1.topostats",
             0.1,
             (64, 64),
             1.97601171875,
