@@ -40,6 +40,7 @@ dependencies = [
   "tifffile",
   "pySPM",
   "loguru",
+  "h5py",
 ]
 
 [project.optional-dependencies]
