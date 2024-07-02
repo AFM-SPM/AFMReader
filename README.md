@@ -26,13 +26,13 @@ Supported file formats
 | `.spm`      | [Bruker's Format](https://www.bruker.com/)  |
 | `.jpk`      | [Bruker](https://www.bruker.com/) |
 | `.topostats`| [TopoStats](https://github.com/AFM-SPM/TopoStats)  |
+| `.gwy`      | [Gwydion] (<http://gwyddion.net>) |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into AFMReader these are denoted in bold below.
 
 | File format | Description                                             | Status                                     |
 |-------------|---------------------------------------------------------|--------------------------------------------|
-| `.gwy`      | [Gwyddion](http://gwyddion.net/)                        | TopoStats supported, to be migrated (#1).  |
 | `.nhf`      | [Nanosurf](https://www.nanosurf.com/en/)                | To Be Implemented.                         |
 | `.aris`     | [Imaris Oxford Instruments](https://imaris.oxinst.com/) | To Be Implemented.                         |
 | `.tiff`     | [Park Systems](https://www.parksystems.com/)            | To Be Implemented.                         |
@@ -62,6 +62,18 @@ channel name that you want to use. (If in doubt use one of the following: "Heigh
 from AFMReader.spm import load_spm
 
 image, pixel_to_nanometre_scaling_factor = load_spm(file_path="./my_spm_file.spm", channel="Height")
+```
+
+### .gwy
+
+You can open `.gwy` files using the `load_gwy` function. Just pass in the path to the file and the
+channel name that you want to use. (If in doubt use one one of the following: "Height", "ZSensor",
+"Height Sensor").
+
+```python
+from AFMReader.gwy import load_gwy
+
+image, pixel_to_nanometre_scaling_factor = load_gwy(file_path="./my_gwy_file.gwy", channel="Height")
 ```
 
 ### .asd
