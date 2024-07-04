@@ -26,7 +26,7 @@ Supported file formats
 | `.spm`      | [Bruker's Format](https://www.bruker.com/)  |
 | `.jpk`      | [Bruker](https://www.bruker.com/) |
 | `.topostats`| [TopoStats](https://github.com/AFM-SPM/TopoStats)  |
-| `.gwy`      | [Gwydion] (<http://gwyddion.net>) |
+| `.gwy`      | [Gwydion](<http://gwyddion.net>) |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into AFMReader these are denoted in bold below.
