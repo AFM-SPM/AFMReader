@@ -11,6 +11,14 @@
 (https://codecov.io/gh/AFM-SPM/AFMReader) -->
 [![pre-commit.ci
 status](https://results.pre-commit.ci/badge/github/AFM-SPM/AFMReader/main.svg)](https://results.pre-commit.ci/latest/github/AFM-SPM/AFMReader/main)
+[![fair-software.eu](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8B-yellow)](https://fair-software.eu)
+
+</div>
+<div align="center">
+
+[![Downloads](https://static.pepy.tech/badge/afmreader)](https://pepy.tech/project/afmreader)
+[![Downloads](https://static.pepy.tech/badge/afmreader/month)](https://pepy.tech/project/afmreader)
+[![Downloads](https://static.pepy.tech/badge/afmreader/week)](https://pepy.tech/project/afmreader)
 
 </div>
 
