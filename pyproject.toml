@@ -66,6 +66,12 @@ tests = [
 "Homepage" = "https://github.com/AFM-SPM/afmreader"
 "Bug Tracker" = "https://github.com/AFM-SPM/afmreader/issues"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["AFMReader"]
+exclude = ["tests"]
+namespaces = false
+
 [tool.setuptools_scm]
 write_to = "AFMReader/_version.py"
 
