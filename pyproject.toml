@@ -48,6 +48,7 @@ dev = [
   "black",
   "pre-commit",
   "pylint",
+  "pytest-testmon",
   "ruff",
   "setuptools_scm[toml]",
   "wheel"

@@ -139,5 +139,13 @@ _version.py
 # Ignore topostats/_version.py as per setuptools_scm
 AFMReader/_version.py
 
+# Emacs
+\#*
+*~
+.dir-locals.el
+
+# Pytest-testmon files
+.testmon*
+
 # Ignore tmp/ directory
 tmp/
