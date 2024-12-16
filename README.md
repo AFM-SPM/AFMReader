@@ -155,3 +155,18 @@ pre-commit install
 This will ensure that any commits and pull requests you make will pass the [Pre-commit Continuous
 Integration](https://pre-commit.ci). Where possible `ruff` will correct the changes it can, but it may require you to
 address some issues manually, before adding any changes and attempting to commit again.
+
+## Citing
+
+If you use or depend on AFMReader in your software please consider citing it in any derivative work that is
+published. Citation details can be found in the [CITATION.cff](CITATION.cff) file in this repository.
+
+Also, please let us know if you use AFMReader in your software. You can either make a Pull Request to add it to the list
+below or you can email us at [topostats@sheffield.ac.uk](mailto:topostats@sheffield.ac.uk) with details of your package.
+
+### Used By
+
+AFMReader is a dependency of the following packages.
+
+- [pNanoLocz](https://github.com/Heath-AFM-Lab/pNanoLocz/)
+- [TopoStats](https://github.com/AFM-SPM/TopoStats/)
