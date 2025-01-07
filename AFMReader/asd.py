@@ -3,7 +3,7 @@
 from __future__ import annotations
 from pathlib import Path
 
-from typing import BinaryIO
+from typing import BinaryIO, Self
 
 
 import numpy as np
@@ -50,7 +50,7 @@ class VoltageLevelConverter:
         values. Typically 12, hence 2^12 = 4096 sensitivity levels.
     """
 
-    def __init__(self, analogue_digital_range: float, scaling_factor: float, resolution: int) -> None:
+    def __init__(self: BipolarConverter, analogue_digital_range: float, scaling_factor: float, resolution: int) -> None:
         """
         Convert arbitrary height levels from the AFM into real world nanometre heights.
 
@@ -78,7 +78,7 @@ class VoltageLevelConverter:
 class UnipolarConverter(VoltageLevelConverter):
     """A VoltageLevelConverter for unipolar encodings. (0 to +X Volts)."""
 
-    def level_to_voltage(self, level: float) -> float:
+    def level_to_voltage(self: Self, level: float) -> float:
         """
         Calculate the real world height scale in nanometres for an arbitrary level value.
 
@@ -101,7 +101,7 @@ class UnipolarConverter(VoltageLevelConverter):
 class BipolarConverter(VoltageLevelConverter):
     """A VoltageLevelConverter for bipolar encodings. (-X to +X Volts)."""
 
-    def level_to_voltage(self, level: float) -> float:
+    def level_to_voltage(self: Self, level: float) -> float:
         """
         Calculate the real world height scale in nanometres for an arbitrary level value.
 
@@ -398,7 +398,7 @@ def read_header_file_version_0(open_file: BinaryIO) -> dict:
 
 
 # pylint: disable=too-many-statements
-def read_header_file_version_1(open_file: BinaryIO):
+def read_header_file_version_1(open_file: BinaryIO) -> dict[str, int]:
     """
     Read the header metadata for a .asd file using file version 1.
 
