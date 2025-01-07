@@ -1,7 +1,7 @@
 """Test the loading of spm files."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import numpy as np
 import pySPM
@@ -58,7 +58,7 @@ def test_load_spm(
     ],
 )
 def test__spm_pixel_to_nm_scaling(
-    mock_pxs,
+    mock_pxs: "MagicMock",
     spm_channel_data: pySPM.SPM.SPM_image,
     filename: str,
     unit: str,
