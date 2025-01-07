@@ -145,11 +145,11 @@ never-returning-functions=sys.exit,argparse.parse_error
 
 # The type of string formatting that logging methods do. `old` means using %
 # formatting, `new` is for `{}` formatting.
-logging-format-style=old
+logging-format-style=new
 
 # Logging modules to check that the string format arguments are in logging
 # function parameter format.
-logging-modules=logging
+logging-modules=loguru
 
 
 [SPELLING]
@@ -573,6 +573,8 @@ max-statements=50
 # Minimum number of public methods for a class (see R0903).
 min-public-methods=2
 
+# Maximum positional arguments
+max-positional-arguments=6
 
 
 [EXCEPTIONS]
