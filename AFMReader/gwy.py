@@ -1,10 +1,9 @@
 """For decoding and loading .gwy AFM file format into Python Numpy arrays."""
 
 from __future__ import annotations
-import io
 from pathlib import Path
 import re
-
+from typing import Any, BinaryIO
 
 from loguru import logger
 import numpy as np
@@ -12,7 +11,7 @@ import numpy as np
 from AFMReader.io import read_uint32, read_null_terminated_string, read_char, read_double
 
 
-def load_gwy(file_path: Path | str, channel: str):
+def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.dtypes.Float64DType], float]:
     """
     Extract image and pixel to nm scaling from the .gwy file.
 
@@ -45,13 +44,14 @@ def load_gwy(file_path: Path | str, channel: str):
     ```
     """
     logger.info(f"Loading image from : {file_path}")
+    file_path = Path(file_path)
     filename = file_path.stem
     try:
-        image_data_dict = {}
+        image_data_dict: dict[Any, Any] = {}
         with Path.open(file_path, "rb") as open_file:  # pylint: disable=unspecified-encoding
             # Read header
             header = open_file.read(4)
-            logger.debug(f"Gwy file header: {header}")
+            logger.debug(f"Gwy file header: {header.decode}")
 
             gwy_read_object(open_file, data_dict=image_data_dict)
 
@@ -89,13 +89,13 @@ def load_gwy(file_path: Path | str, channel: str):
     return (image, px_to_nm)
 
 
-def gwy_read_object(open_file: io.TextIOWrapper, data_dict: dict) -> None:
+def gwy_read_object(open_file: BinaryIO, data_dict: dict) -> None:
     """
     Parse and extract data from a `.gwy` file object, starting at the current open file read position.
 
     Parameters
     ----------
-    open_file : io.TextIOWrapper
+    open_file : BinaryIO
         An open file object.
     data_dict : dict
         Dictionary of `.gwy` file image properties.
@@ -114,13 +114,13 @@ def gwy_read_object(open_file: io.TextIOWrapper, data_dict: dict) -> None:
         read_data_size += component_data_size
 
 
-def gwy_read_component(open_file: io.TextIOWrapper, initial_byte_pos: int, data_dict: dict) -> int:
+def gwy_read_component(open_file: BinaryIO, initial_byte_pos: int, data_dict: dict) -> int:
     """
     Parse and extract data from a `.gwy` file object, starting at the current open file read position.
 
     Parameters
     ----------
-    open_file : io.TextIOWrapper
+    open_file : BinaryIO
         An open file object.
     initial_byte_pos : int
         Initial position, as byte.
@@ -137,7 +137,7 @@ def gwy_read_component(open_file: io.TextIOWrapper, initial_byte_pos: int, data_
 
     if data_type == "o":
         logger.debug(f"component name: {component_name} | dtype: {data_type} |")
-        sub_dict = {}
+        sub_dict: dict[Any, Any] = {}
         gwy_read_object(open_file=open_file, data_dict=sub_dict)
         data_dict[component_name] = sub_dict
     elif data_type == "c":
@@ -145,11 +145,11 @@ def gwy_read_component(open_file: io.TextIOWrapper, initial_byte_pos: int, data_
         logger.debug(f"component name: {component_name} | dtype: {data_type} | value: {value}")
         data_dict[component_name] = value
     elif data_type == "i":
-        value = read_uint32(open_file=open_file)
+        value = read_uint32(open_file=open_file)  # type: ignore
         logger.debug(f"component name: {component_name} | dtype: {data_type} | value: {value}")
         data_dict[component_name] = value
     elif data_type == "d":
-        value = read_double(open_file=open_file)
+        value = read_double(open_file=open_file)  # type: ignore
         logger.debug(f"component name: {component_name} | dtype: {data_type} | value: {value}")
         data_dict[component_name] = value
     elif data_type == "s":
@@ -202,7 +202,7 @@ def gwy_get_channels(gwy_file_structure: dict) -> dict:
     return channel_ids
 
 
-def read_gwy_component_dtype(open_file: io.TextIOWrapper) -> str:
+def read_gwy_component_dtype(open_file: BinaryIO) -> str:
     """
     Read the data type of a `.gwy` file component.
 
@@ -228,7 +228,7 @@ def read_gwy_component_dtype(open_file: io.TextIOWrapper) -> str:
 
     Parameters
     ----------
-    open_file : io.TextIOWrapper
+    open_file : BinaryIO
         An open file object.
 
     Returns
