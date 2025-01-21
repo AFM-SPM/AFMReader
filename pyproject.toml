@@ -53,6 +53,13 @@ dev = [
   "setuptools_scm[toml]",
   "wheel"
 ]
+docs = [
+  "mkdocs",
+  "mkdocs-material",
+  "mkdocs-mermaid2-plugin",
+  "mkdocs-terminal",
+  "mkdocstrings[python]",
+]
 pypi = [
   "build",
   "setuptools_scm[toml]",

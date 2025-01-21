@@ -1,0 +1,3 @@
+# Ignore API files which require mkdocs options to be indented
+docs/api/*.md
+TODO.md
