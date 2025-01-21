@@ -1,0 +1,46 @@
+site_name: AFMReader
+site_url: https://AFM-SPM.github.io/AFMReader/
+repo_url: https://github.com/AFM-SPM/AFMReader/
+theme:
+  name: terminal
+nav:
+  - Home: index.md
+  - Introduction: introduction.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - Workflow: workflow.md
+  - Contributing: contributing.md
+  - Links: links.md
+  - API:
+      - ASD: api/asd.md
+      - GWY: api/gwy.md
+      - IBW: api/ibw.md
+      - IO: api/io.md
+      - JPK: api/jpk.md
+      - Logging: api/logging.md
+      - SPM: api/spm.md
+      - TopoStats: api/topostats.md
+
+extra:
+  version:
+    provider: mike
+
+plugins:
+  - mermaid2:
+  - search
+  - mkdocstrings
+  - mike:
+      version: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid
