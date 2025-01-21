@@ -1,6 +1,5 @@
 """For reading and writing data from / to files."""
 
-import io
 import struct
 from typing import BinaryIO
 import h5py
@@ -260,13 +259,13 @@ def unpack_hdf5(open_hdf5_file: h5py.File, group_path: str = "/") -> dict:
     return data
 
 
-def read_null_terminated_string(open_file: io.TextIOWrapper, encoding: str = "utf-8") -> str:
+def read_null_terminated_string(open_file: BinaryIO, encoding: str = "utf-8") -> str:
     """
     Read an open file from the current position in the open binary file, until the next null value.
 
     Parameters
     ----------
-    open_file : io.TextIOWrapper
+    open_file : BinaryIO
         An open file object.
     encoding : str
         Encoding to use when decoding the bytes.
@@ -301,13 +300,13 @@ def read_null_terminated_string(open_file: io.TextIOWrapper, encoding: str = "ut
         raise e
 
 
-def read_char(open_file: io.TextIOWrapper) -> str:
+def read_char(open_file: BinaryIO) -> str:
     """
     Read a character from an open binary file.
 
     Parameters
     ----------
-    open_file : io.TextIOWrapper
+    open_file : BinaryIO
         An open file object.
 
     Returns

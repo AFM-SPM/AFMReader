@@ -25,6 +25,6 @@ def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_
     file_path = RESOURCES / file_name
     result_frames, result_pixel_to_nm_scaling, result_metadata = load_asd(file_path, channel)
 
-    assert len(result_frames) == number_of_frames
+    assert len(result_frames) == number_of_frames  # type: ignore
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
     assert isinstance(result_metadata, dict)

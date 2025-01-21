@@ -28,7 +28,7 @@ def test_load_ibw(
     result_pixel_to_nm_scaling = float
 
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling = load_ibw(file_path, channel)
+    result_image, result_pixel_to_nm_scaling = load_ibw(file_path, channel)  # type: ignore
 
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
     assert isinstance(result_image, np.ndarray)

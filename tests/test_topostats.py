@@ -44,6 +44,6 @@ def test_load_topostats(
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
     assert isinstance(result_image, np.ndarray)
     assert result_image.shape == image_shape
-    assert set(result_data.keys()) == data_keys
+    assert set(result_data.keys()) == data_keys  # type: ignore
     assert result_data["topostats_file_version"] == topostats_file_version
     assert result_image.sum() == image_sum

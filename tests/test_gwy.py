@@ -1,7 +1,7 @@
 """Test the loading of gwy files."""
 
 from pathlib import Path
-
+from typing import Any
 
 import pytest
 import numpy as np
@@ -12,7 +12,7 @@ BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
 
 
-def test_load_gwy():
+def test_load_gwy() -> None:
     """Test the normal operation of loading a .gwy file."""
     channel = "ZSensor"
     file_path = RESOURCES / "sample_0.gwy"
@@ -28,7 +28,7 @@ def test_gwy_read_object() -> None:
     """Test reading an object of a `.gwy` file object from an open binary file."""
     with Path.open(RESOURCES / "IO_binary_file.bin", "rb") as open_binary_file:  # pylint: disable=unspecified-encoding
         open_binary_file.seek(19)
-        test_dict = {}
+        test_dict: dict[Any, Any] = {}
         gwy.gwy_read_object(open_file=open_binary_file, data_dict=test_dict)
 
         assert list(test_dict.keys()) == ["test component", "test object component"]
@@ -39,7 +39,7 @@ def test_gwy_read_component() -> None:
     """Tests reading a component of a `.gwy` file object from an open binary file."""
     with Path.open(RESOURCES / "IO_binary_file.bin", "rb") as open_binary_file:  # pylint: disable=unspecified-encoding
         open_binary_file.seek(56)
-        test_dict = {}
+        test_dict: dict[Any, Any] = {}
         byte_size = gwy.gwy_read_component(initial_byte_pos=56, open_file=open_binary_file, data_dict=test_dict)
         assert byte_size == 73
         assert list(test_dict.keys()) == ["test object component"]

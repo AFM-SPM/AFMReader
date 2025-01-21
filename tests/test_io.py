@@ -8,6 +8,8 @@ import h5py
 
 from AFMReader.io import unpack_hdf5
 
+# mypy: disable-error-code="index"
+
 
 def test_unpack_hdf5_all_together_group_path_default(tmp_path: Path) -> None:
     """Test loading a nested dictionary with arrays from HDF5 format with group path as default."""
