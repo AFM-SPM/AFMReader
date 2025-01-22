@@ -1,8 +1,8 @@
 # Welcome to AFMReader
 
-AFMReader is a [Python](https://www.python.org) package for loading Atomic Force Microscopy (AFM) image files. It is
-primarily used by the [TopoStats](https://AFM-SPM.github.io/TopoStats) package for loading AFM images for
-processing. Both AFMReader and packages are written and maintained by members of the [Pyne
+AFMReader is a [Python](https://www.python.org) package for loading Atomic Force Microscopy (AFM) image files and
+metadata. It is primarily used by the [TopoStats](https://AFM-SPM.github.io/TopoStats) package for loading AFM images 
+for processing. Both AFMReader and packages are written and maintained by members of the [Pyne
 Lab](https://pyne-lab.uk/bio/) based at the [University of Sheffield](https://sheffield.ac.uk).
 
 - [Introduction](introduction.md)
