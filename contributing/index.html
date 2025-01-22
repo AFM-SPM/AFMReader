@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="generator" content="mkdocs-1.6.1, mkdocs-terminal-4.7.0">
+     
+     
+    
+    <link rel="canonical" href="https://AFM-SPM.github.io/AFMReader/contributing/"><link rel="icon" type="image/png" sizes="192x192" href="../img/android-chrome-192x192.png" />
+<link rel="icon" type="image/png" sizes="512x512" href="../img/android-chrome-512x512.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="../img/apple-touch-icon.png" />
+<link rel="shortcut icon" type="image/png" sizes="48x48" href="../img/favicon.ico" />
+<link rel="icon" type="image/png" sizes="16x16" href="../img/favicon-16x16.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="../img/favicon-32x32.png" />
+
+
+    
+ 
+<title>Contributing - AFMReader</title>
+
+
+<link href="../css/fontawesome/css/fontawesome.min.css" rel="stylesheet">
+<link href="../css/fontawesome/css/solid.min.css" rel="stylesheet">
+<link href="../css/normalize.css" rel="stylesheet">
+<link href="../css/terminal.css" rel="stylesheet">
+<link href="../css/theme.css" rel="stylesheet">
+<link href="../css/theme.tile_grid.css" rel="stylesheet">
+<link href="../css/theme.footer.css" rel="stylesheet">
+<!-- default color palette -->
+<link href="../css/palettes/default.css" rel="stylesheet">
+
+<!-- page layout -->
+<style>
+/* initially set page layout to a one column grid */
+.terminal-mkdocs-main-grid {
+    display: grid;
+    grid-column-gap: 1.4em;
+    grid-template-columns: auto;
+    grid-template-rows: auto;
+}
+
+/*  
+*   when side navigation is not hidden, use a two column grid.  
+*   if the screen is too narrow, fall back to the initial one column grid layout.
+*   in this case the main content will be placed under the navigation panel. 
+*/
+@media only screen and (min-width: 70em) {
+    .terminal-mkdocs-main-grid {
+        grid-template-columns: 4fr 9fr;
+    }
+}</style>
+
+
+
+    
+    <link href="../assets/_mkdocstrings.css" rel="stylesheet">  
+    
+    
+
+    
+    <!-- search css support -->
+<link href="../css/search/bootstrap-modal.css" rel="stylesheet">
+<!-- search scripts -->
+<script>
+    var base_url = "..",
+    shortcuts = "{}";
+</script>
+<script src="../js/jquery/jquery-1.10.1.min.js" defer></script>
+<script src="../js/bootstrap/bootstrap.min.js" defer></script>
+<script src="../js/mkdocs/base.js" defer></script>
+    
+    
+    
+    
+    <script src="../search/main.js"></script>
+    
+
+    
+</head>
+
+<body class="terminal"><div class="container">
+    <div class="terminal-nav">
+        <header class="terminal-logo">
+            <div id="mkdocs-terminal-site-name" class="logo terminal-prompt"><a href="https://AFM-SPM.github.io/AFMReader/" class="no-style">AFMReader</a></div>
+        </header>
+        
+        <nav class="terminal-menu">
+            
+            <ul vocab="https://schema.org/" typeof="BreadcrumbList">
+                
+                
+                <li property="itemListElement" typeof="ListItem">
+                    <a href=".." class="menu-item " property="item" typeof="WebPage">
+                        <span property="name">Home</span>
+                    </a>
+                    <meta property="position" content="0">
+                </li>
+                
+                
+                <li property="itemListElement" typeof="ListItem">
+                    <a href="../introduction/" class="menu-item " property="item" typeof="WebPage">
+                        <span property="name">Introduction</span>
+                    </a>
+                    <meta property="position" content="1">
+                </li>
+                
+                
+                <li property="itemListElement" typeof="ListItem">
+                    <a href="../installation/" class="menu-item " property="item" typeof="WebPage">
+                        <span property="name">Installation</span>
+                    </a>
+                    <meta property="position" content="2">
+                </li>
+                
+                
+                <li property="itemListElement" typeof="ListItem">
+                    <a href="../usage/" class="menu-item " property="item" typeof="WebPage">
+                        <span property="name">Usage</span>
+                    </a>
+                    <meta property="position" content="3">
+                </li>
+                
+                
+                <li property="itemListElement" typeof="ListItem">
+                    <a href="../workflow/" class="menu-item " property="item" typeof="WebPage">
+                        <span property="name">Workflow</span>
+                    </a>
+                    <meta property="position" content="4">
+                </li>
+                
+                
+                <li property="itemListElement" typeof="ListItem">
+                    <a href="./" class="menu-item active" property="item" typeof="WebPage">
+                        <span property="name">Contributing</span>
+                    </a>
+                    <meta property="position" content="5">
+                </li>
+                
+                
+                <li property="itemListElement" typeof="ListItem">
+                    <a href="../links/" class="menu-item " property="item" typeof="WebPage">
+                        <span property="name">Links</span>
+                    </a>
+                    <meta property="position" content="6">
+                </li>
+                
+                
+                
+                    
+                    
+
+
+<li property="itemListElement" typeof="ListItem">
+    <a href="#" class="menu-item" data-toggle="modal" data-target="#mkdocs_search_modal" property="item" typeof="SearchAction">
+        <i aria-hidden="true" class="fa fa-search"></i> <span property="name">Search</span>
+    </a>
+    <meta property="position" content="7">
+</li>
+                    
+            </ul>
+            
+        </nav>
+    </div>
+</div>
+        
+    <div class="container">
+        <div class="terminal-mkdocs-main-grid"><aside id="terminal-mkdocs-side-panel"><nav>
+  
+    <ul class="terminal-mkdocs-side-nav-items">
+        
+          
+
+
+
+<li class="terminal-mkdocs-side-nav-li">
+    
+    
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="..">Home</a>
+        
+    
+    
+    
+  </li>
+        
+          
+
+
+
+<li class="terminal-mkdocs-side-nav-li">
+    
+    
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../introduction/">Introduction</a>
+        
+    
+    
+    
+  </li>
+        
+          
+
+
+
+<li class="terminal-mkdocs-side-nav-li">
+    
+    
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../installation/">Installation</a>
+        
+    
+    
+    
+  </li>
+        
+          
+
+
+
+<li class="terminal-mkdocs-side-nav-li">
+    
+    
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../usage/">Usage</a>
+        
+    
+    
+    
+  </li>
+        
+          
+
+
+
+<li class="terminal-mkdocs-side-nav-li">
+    
+    
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../workflow/">Workflow</a>
+        
+    
+    
+    
+  </li>
+        
+          
+
+
+
+<li class="terminal-mkdocs-side-nav-li">
+    
+    
+    
+        
+        <span class="
+
+    terminal-mkdocs-side-nav-item--active">Contributing</span>
+    
+    
+    
+  </li>
+        
+          
+
+
+
+<li class="terminal-mkdocs-side-nav-li">
+    
+    
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../links/">Links</a>
+        
+    
+    
+    
+  </li>
+        
+          
+
+
+
+<li class="terminal-mkdocs-side-nav-li">
+    
+    
+        
+        
+
+        
+            
+    
+        
+        
+            
+            
+            <span class="
+        
+    
+
+    terminal-mkdocs-side-nav-item terminal-mkdocs-side-nav-section-no-index">API</span>
+        
+    
+    
+        
+      
+        
+            <ul class="terminal-mkdocs-side-nav-li-ul">
+        
+            
+            
+
+             
+                <li class="terminal-mkdocs-side-nav-li-ul-li">
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../api/asd/">ASD</a>
+        
+    
+    </li>
+            
+        
+            
+            
+
+             
+                <li class="terminal-mkdocs-side-nav-li-ul-li">
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../api/gwy/">GWY</a>
+        
+    
+    </li>
+            
+        
+            
+            
+
+             
+                <li class="terminal-mkdocs-side-nav-li-ul-li">
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../api/ibw/">IBW</a>
+        
+    
+    </li>
+            
+        
+            
+            
+
+             
+                <li class="terminal-mkdocs-side-nav-li-ul-li">
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../api/io/">IO</a>
+        
+    
+    </li>
+            
+        
+            
+            
+
+             
+                <li class="terminal-mkdocs-side-nav-li-ul-li">
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../api/jpk/">JPK</a>
+        
+    
+    </li>
+            
+        
+            
+            
+
+             
+                <li class="terminal-mkdocs-side-nav-li-ul-li">
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../api/logging/">Logging</a>
+        
+    
+    </li>
+            
+        
+            
+            
+
+             
+                <li class="terminal-mkdocs-side-nav-li-ul-li">
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../api/spm/">SPM</a>
+        
+    
+    </li>
+            
+        
+            
+            
+
+             
+                <li class="terminal-mkdocs-side-nav-li-ul-li">
+    
+        
+        
+            <a class="
+
+    terminal-mkdocs-side-nav-item" href="../api/topostats/">TopoStats</a>
+        
+    
+    </li>
+            
+            
+    </ul>
+        
+    
+  </li>
+        
+    </ul>
+  
+</nav><hr>
+<nav>
+    <ul>
+        <li><a href="#contributing">Contributing</a></li>
+        <li><a href="#bug-reports">Bug Reports</a></li><li><a href="#feature-requests">Feature Requests</a></li><li><a href="#code-contributions">Code Contributions</a></li><li><a href="#virtual-environments">Virtual Environments</a></li><li><a href="#cloning-the-repository">Cloning the Repository</a></li><li><a href="#git">Git</a></li><li><a href="#linting">Linting</a></li><li><a href="#pre-commit">Pre-commit</a></li><li><a href="#docstrings">Docstrings</a></li><li><a href="#testing">Testing</a></li><li><a href="#pull-requests">Pull Requests</a></li>
+    </ul>
+</nav>
+</aside>
+            <main id="terminal-mkdocs-main-content">
+<section id="mkdocs-terminal-content">
+    <h1 id="contributing">Contributing</h1>
+<p>This document describes how to contribute to the development of this software.</p>
+<h2 id="bug-reports">Bug Reports</h2>
+<p>If you find a but we need to know about it so we can fix it. Please report your <a href="https://github.com/AFM-SPM/AFMReader/issues/new?assignees=&amp;labels=bug&amp;projects=AFM-SPM%2F1&amp;template=bug_report.yaml&amp;title=%5Bbug%5D%3A+">bugs on our GitHub Issues
+page</a>.</p>
+<h2 id="feature-requests">Feature Requests</h2>
+<p>If you find AFMReader useful but think it can be improved you can <a href="https://github.com/AFM-SPM/AFMReader/issues/new?assignees=&amp;labels=enhancement&amp;projects=AFM-SPM%2F1&amp;template=feature_request.yaml&amp;title=%5Bfeature%5D+%3A+">make a feature request</a>.</p>
+<h2 id="code-contributions">Code Contributions</h2>
+<p>If you would like to fix a bug or add a new feature that is great, Pull Requests are very welcome.</p>
+<p>However, we have adopted a number of good software development practises that ensure the code and documentation is
+linted and that unit and regression tests pass both locally and on Continuous Integration. The rest of this page helps
+explain how to set yourself up with these various tools.</p>
+<h2 id="virtual-environments">Virtual Environments</h2>
+<p>Use of <a href="https://docs.python.org/3/library/venv.html">virtual environments</a>, particularly during development of Python packages, is encouraged. There are lots of
+options out there for you to choose from including...</p>
+<ul>
+<li><a href="https://docs.anaconda.com/miniconda/">Miniconda</a></li>
+<li><a href="https://docs.python.org/3/library/venv.html">venv</a></li>
+<li><a href="https://virtualenvwrapper.readthedocs.io/en/latest/">virtualenvwrapper</a></li>
+</ul>
+<p>Which you choose is up to you, although you should be wary of using the <a href="https://docs.anaconda.com/miniconda/">Miniconda</a> distribution from
+<a href="https://www.anaconda.com/blog/update-on-anacondas-terms-of-service-for-academia-and-research">Anaconda</a> if any of your work is carried out for or in conjunction with a commercial entity.</p>
+<h3 id="uv">uv</h3>
+<p>Developers are using the <a href="https://docs.astral.sh/uv/">uv</a> package manager to setup and control environments to which end a <a href="https://docs.astral.sh/uv/concepts/projects/#project-lockfile"><code>uv.lock</code></a>
+file is included in the repository. <a href="https://docs.astral.sh/uv/">uv</a> supports managing virtual environments so you may wish to install and use
+this tool at the system level to manage your virtual environments for this package.</p>
+<h2 id="cloning-the-repository">Cloning the Repository</h2>
+<p>Once you have setup your virtual environment you should clone the repository from GitHub</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">cd</span><span class="w"> </span>~/path/you/want/to/clone/to
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/AFM-SPM/AFMReader
+</span></code></pre></div>
+<h3 id="install-development">Install development</h3>
+<p>Once you have cloned the AFMReader repository you should install all the package along with all development and
+documentation dependencies in "editable" mode. This means you can test the changes you make in real time.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">cd</span><span class="w"> </span>AFMReader
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pip<span class="w"> </span>install<span class="w"> </span>--no-cache-dir<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>docs,dev,tests<span class="o">]</span>
+</span></code></pre></div>
+<h2 id="git">Git</h2>
+<p><a href="https://git-scm.com">Git</a> is used to version control development of the package. The <code>main</code> branch on GitHub and the <a href="#pre-commit">pre-commit
+hooks</a> have protections in place that prevent committing/pushing directly to the <code>main</code>
+branch. This means you should create a branch to undertake development or fix bugs.</p>
+<h3 id="issues">Issues</h3>
+<p>Ideally an <a href="https://github.com/AFM-SPM/AFMReader/issues/">issue</a> should have been created detailing the feature request. If it is a large amount of
+work this should be captured in an issue labelled "<em>Epic</em>" and the steps taken to achieve all work broken down into
+smaller issues.</p>
+<h3 id="branch-nomenclature">Branch nomenclature</h3>
+<p>When undertaking work on a particular issue it is useful to use informative branch names. These convey information about
+what the branch is for beyond simply "<code>adding-feature-x</code>". We ask that you create the branch using your GitHub username,
+followed by the issue number and a short description of the work being undertaken. For example
+<code>ns-rse/1021-add-xyz-support</code> as this allows others to know who has been undertaking the work, what issue the work
+relates to and has an informative name as to the nature of that work.</p>
+<h3 id="conventional-commits">Conventional Commits</h3>
+<p>We also ask that you try and follow the <a href="https://www.conventionalcommits.org/en/v1.0.0/">Conventional Commits</a> pattern for titling your commits
+and where required include additional information on <em>why</em> you have made the changes you are committing.</p>
+<h2 id="linting">Linting</h2>
+<p><a href="https://en.wikipedia.org/wiki/Lint_(software)">Linting</a> is the practice of following a consistent coding style. For Python that style is defined in
+<a href="https://peps.python.org/pep-0008/">PEP8</a>. By following a consistent style across a code base it is easier to read and understand the code written by
+others (including your past self!). We use the following linters implemented as <a href="#pre-commit">pre-commit</a> hooks</p>
+<ul>
+<li>Python</li>
+<li><a href="https://black.readthedocs.io/en/stable/index.html">Black</a></li>
+<li><a href="https://github.com/adamchainz/blacken-docs">Blacken-docs</a></li>
+<li><a href="https://flake8.pycqa.org/en/latest/">flake8</a></li>
+<li><a href="https://numpydoc.readthedocs.io/en/latest/validation.html">Numpydoc</a></li>
+<li><a href="https://docs.astral.sh/ruff">Ruff</a></li>
+<li>Other</li>
+<li><a href="https://github.com/codespell-project/codespell">Codespell</a> (Spelling across all filesyy)</li>
+<li><a href="https://github.com/DavidAnson/markdownlint-cli2">markdownlint-cli2</a> (Markdown)</li>
+<li><a href="https://prettier.io/docs/en/">prettier</a> (Markdown, YAML)</li>
+</ul>
+<h2 id="pre-commit">Pre-commit</h2>
+<p>Style checks are made using the <a href="https://pre-commit.com/">pre-commit</a> framework which is one of the development dependencies and
+should have been installed in the previous step. You can check if its is installed in your virtual environment with <code>pip
+show pre-commit</code>. If you have pre-commit installed install the hook using...</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pre-commit<span class="w"> </span>install
+</span></code></pre></div>
+<p>This adds a file to <code>.git/hooks/pre-commit</code> that will run all of the hooks specified in <code>.pre-commit-config.yaml</code>. The
+first time these are run it will take a little while as a number of virtual environments are downloaded for the first
+time. It might be a good time to run these manually on the code base you have just cloned which should pass all checks.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pre-commit<span class="w"> </span>run<span class="w"> </span>--all-files
+</span></code></pre></div>
+<p>These should all pass. Now whenever you try to make a <code>git commit</code> these checks will run <em>before</em> the commit is made and
+if any fail you will be advised of what has failed. Some of the linters such as <a href="https://black.readthedocs.io/en/stable/index.html">Black</a> and <a href="https://docs.astral.sh/ruff">Ruff</a> will
+automatically correct any errors that they find and you will have to stage the files that have changed again. Not all
+errors can be automatically corrected (e.g. <a href="https://numpydoc.readthedocs.io/en/latest/validation.html">Numpydoc validation</a> and <a href="https://www.pylint.org/">Pylint</a>) and you
+will have to manually correct these.</p>
+<h2 id="docstrings">Docstrings</h2>
+<p>It is sensible and easiest to write informative docstrings when first defining your modules, classes and
+methods/functions. Doing so is a useful <em>adie-memoire</em> not only for others but your future self and with modern Language
+Servers that will, on configuration, show you the docstrings when using the functions it helps save time.</p>
+<p>You will find your commits fail the <a href="https://numpydoc.readthedocs.io/en/latest/validation.html">numpydoc-validation</a> pre-commit hook if you do not write
+docstrings and will be prompted to add one.</p>
+<h2 id="testing">Testing</h2>
+<p>We use the <a href="https://pytest.org">pytest</a> framework with various plugins in our testing suite. When correcting bugs and adding
+features at a bare minimum the existing tests should not fail. Where possible we would be grateful of contributions to
+the test suite. This means if an edge case has been identified and a solution derived a test is added that checks the
+edge case is correctly handled. For new features would ideally mean writing <a href="https://en.wikipedia.org/wiki/Unit_testing">unit-tests</a> to ensure each
+function or method works as intended and for larger classes that behaviour is as expected. Sometimes tests will need
+updating in light of bug fixes and features which is to be expected, but remember to commit updates to tests as well as
+to code to ensure the Continuous Integration tests pass.</p>
+<h3 id="pytest-testmon">Pytest-testmon</h3>
+<p>To shorten the feedback loop during development the <a href="https://pypi.org/project/pytest-testmon/">pytest-testmon</a> plugin is used as a
+<a href="#pre-commit">pre-commit</a> hook so that only the tests affected by the changes that are being committed are run. This
+requires that on first installing the package you create a local database of the state of the tests by running the
+following...</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pytest<span class="w"> </span>--test-mon
+</span></code></pre></div>
+<p>This creates the files <code>.testmondata</code> which stores the current state of tests. Once created commits will only run
+affected tests. However if your environment has changed, such as adding new packages or updating installed packages you
+will have to recreate the database.</p>
+<h2 id="pull-requests">Pull Requests</h2>
+<p>Once you have made your changes and committed them you will at some point wish to make a <a href="https://github.com/AFM-SPM/AFMReader/pulls">Pull Request</a> to merge
+them into the <code>main</code> branch.</p>
+<p>In order to keep Git history clean and easier to understand you can perform an interactive <a href="https://git-scm.com/book/en/v2/Git-Tools-Rewriting-History"><code>git rebase -i</code></a>
+on your feature branch to squash related commits and tidy up your commit history.</p>
+<p>When your branch is ready for merging with <code>main</code> open a <a href="https://github.com/AFM-SPM/AFMReader/pulls">Pull Request</a>. You can use the <a href="https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/using-keywords-in-issues-and-pull-requests">GitHub
+keywords</a> of <code>close[s|d]</code>/<code>fix[es|ed]</code> / <code>resolve[s|d]</code> followed by the issue number in the body of your
+commit message which will change the status of the issue to "<em>Closed</em>" when the Pull Request is merged.</p>
+<p>Pull Requests will be reviewed in a timely and hopefully constructive manner.</p>
+</section>
+
+            </main>
+        </div>
+        <hr><footer>
+    <div class="terminal-mkdocs-footer-grid">
+        <div id="terminal-mkdocs-footer-copyright-info">
+             Site built with <a href="http://www.mkdocs.org">MkDocs</a> and <a href="https://github.com/ntno/mkdocs-terminal">Terminal for MkDocs</a>.
+        </div>
+    </div>
+</footer>
+    </div>
+
+    
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="alertdialog" aria-modal="true" aria-labelledby="searchModalLabel">
+    <div class="modal-dialog modal-lg" role="search">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="searchModalLabel">Search</h5>
+                <button type="button" class="close btn btn-default btn-ghost" data-dismiss="modal"><span aria-hidden="true">x</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+                <p id="searchInputLabel">Type to start searching</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" aria-labelledby="searchInputLabel" placeholder="" id="mkdocs-search-query" title="Please enter search terms here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No document matches found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    
+    
+</body>
+
+</html>

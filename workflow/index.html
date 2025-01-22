@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="ie=edge" http-equiv="X-UA-Compatible"/>
+<meta content="mkdocs-1.6.1, mkdocs-terminal-4.7.0" name="generator"/>
+<link href="https://AFM-SPM.github.io/AFMReader/workflow/" rel="canonical"/><link href="../img/android-chrome-192x192.png" rel="icon" sizes="192x192" type="image/png">
+<link href="../img/android-chrome-512x512.png" rel="icon" sizes="512x512" type="image/png"/>
+<link href="../img/apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180"/>
+<link href="../img/favicon.ico" rel="shortcut icon" sizes="48x48" type="image/png"/>
+<link href="../img/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png"/>
+<link href="../img/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png"/>
+<title>Workflow - AFMReader</title>
+<link href="../css/fontawesome/css/fontawesome.min.css" rel="stylesheet"/>
+<link href="../css/fontawesome/css/solid.min.css" rel="stylesheet"/>
+<link href="../css/normalize.css" rel="stylesheet"/>
+<link href="../css/terminal.css" rel="stylesheet"/>
+<link href="../css/theme.css" rel="stylesheet"/>
+<link href="../css/theme.tile_grid.css" rel="stylesheet"/>
+<link href="../css/theme.footer.css" rel="stylesheet"/>
+<!-- default color palette -->
+<link href="../css/palettes/default.css" rel="stylesheet"/>
+<!-- page layout -->
+<style>
+/* initially set page layout to a one column grid */
+.terminal-mkdocs-main-grid {
+    display: grid;
+    grid-column-gap: 1.4em;
+    grid-template-columns: auto;
+    grid-template-rows: auto;
+}
+
+/*  
+*   when side navigation is not hidden, use a two column grid.  
+*   if the screen is too narrow, fall back to the initial one column grid layout.
+*   in this case the main content will be placed under the navigation panel. 
+*/
+@media only screen and (min-width: 70em) {
+    .terminal-mkdocs-main-grid {
+        grid-template-columns: 4fr 9fr;
+    }
+}</style>
+<link href="../assets/_mkdocstrings.css" rel="stylesheet"/>
+<!-- search css support -->
+<link href="../css/search/bootstrap-modal.css" rel="stylesheet"/>
+<!-- search scripts -->
+<script>
+    var base_url = "..",
+    shortcuts = "{}";
+</script>
+<script defer="" src="../js/jquery/jquery-1.10.1.min.js"></script>
+<script defer="" src="../js/bootstrap/bootstrap.min.js"></script>
+<script defer="" src="../js/mkdocs/base.js"></script>
+<script src="../search/main.js"></script>
+</link></head>
+<body class="terminal"><div class="container">
+<div class="terminal-nav">
+<header class="terminal-logo">
+<div class="logo terminal-prompt" id="mkdocs-terminal-site-name"><a class="no-style" href="https://AFM-SPM.github.io/AFMReader/">AFMReader</a></div>
+</header>
+<nav class="terminal-menu">
+<ul typeof="BreadcrumbList" vocab="https://schema.org/">
+<li property="itemListElement" typeof="ListItem">
+<a class="menu-item" href=".." property="item" typeof="WebPage">
+<span property="name">Home</span>
+</a>
+<meta content="0" property="position"/>
+</li>
+<li property="itemListElement" typeof="ListItem">
+<a class="menu-item" href="../introduction/" property="item" typeof="WebPage">
+<span property="name">Introduction</span>
+</a>
+<meta content="1" property="position"/>
+</li>
+<li property="itemListElement" typeof="ListItem">
+<a class="menu-item" href="../installation/" property="item" typeof="WebPage">
+<span property="name">Installation</span>
+</a>
+<meta content="2" property="position"/>
+</li>
+<li property="itemListElement" typeof="ListItem">
+<a class="menu-item" href="../usage/" property="item" typeof="WebPage">
+<span property="name">Usage</span>
+</a>
+<meta content="3" property="position"/>
+</li>
+<li property="itemListElement" typeof="ListItem">
+<a class="menu-item active" href="./" property="item" typeof="WebPage">
+<span property="name">Workflow</span>
+</a>
+<meta content="4" property="position"/>
+</li>
+<li property="itemListElement" typeof="ListItem">
+<a class="menu-item" href="../contributing/" property="item" typeof="WebPage">
+<span property="name">Contributing</span>
+</a>
+<meta content="5" property="position"/>
+</li>
+<li property="itemListElement" typeof="ListItem">
+<a class="menu-item" href="../links/" property="item" typeof="WebPage">
+<span property="name">Links</span>
+</a>
+<meta content="6" property="position"/>
+</li>
+<li property="itemListElement" typeof="ListItem">
+<a class="menu-item" data-target="#mkdocs_search_modal" data-toggle="modal" href="#" property="item" typeof="SearchAction">
+<i aria-hidden="true" class="fa fa-search"></i> <span property="name">Search</span>
+</a>
+<meta content="7" property="position"/>
+</li>
+</ul>
+</nav>
+</div>
+</div>
+<div class="container">
+<div class="terminal-mkdocs-main-grid"><aside id="terminal-mkdocs-side-panel"><nav>
+<ul class="terminal-mkdocs-side-nav-items">
+<li class="terminal-mkdocs-side-nav-li">
+<a class="terminal-mkdocs-side-nav-item" href="..">Home</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li">
+<a class="terminal-mkdocs-side-nav-item" href="../introduction/">Introduction</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li">
+<a class="terminal-mkdocs-side-nav-item" href="../installation/">Installation</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li">
+<a class="terminal-mkdocs-side-nav-item" href="../usage/">Usage</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li">
+<span class="terminal-mkdocs-side-nav-item--active">Workflow</span>
+</li>
+<li class="terminal-mkdocs-side-nav-li">
+<a class="terminal-mkdocs-side-nav-item" href="../contributing/">Contributing</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li">
+<a class="terminal-mkdocs-side-nav-item" href="../links/">Links</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li">
+<span class="terminal-mkdocs-side-nav-item terminal-mkdocs-side-nav-section-no-index">API</span>
+<ul class="terminal-mkdocs-side-nav-li-ul">
+<li class="terminal-mkdocs-side-nav-li-ul-li">
+<a class="terminal-mkdocs-side-nav-item" href="../api/asd/">ASD</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li-ul-li">
+<a class="terminal-mkdocs-side-nav-item" href="../api/gwy/">GWY</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li-ul-li">
+<a class="terminal-mkdocs-side-nav-item" href="../api/ibw/">IBW</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li-ul-li">
+<a class="terminal-mkdocs-side-nav-item" href="../api/io/">IO</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li-ul-li">
+<a class="terminal-mkdocs-side-nav-item" href="../api/jpk/">JPK</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li-ul-li">
+<a class="terminal-mkdocs-side-nav-item" href="../api/logging/">Logging</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li-ul-li">
+<a class="terminal-mkdocs-side-nav-item" href="../api/spm/">SPM</a>
+</li>
+<li class="terminal-mkdocs-side-nav-li-ul-li">
+<a class="terminal-mkdocs-side-nav-item" href="../api/topostats/">TopoStats</a>
+</li>
+</ul>
+</li>
+</ul>
+</nav><hr/>
+<nav>
+<ul>
+<li><a href="#workflow">Workflow</a></li>
+</ul>
+</nav>
+</aside>
+<main id="terminal-mkdocs-main-content">
+<section id="mkdocs-terminal-content">
+<h1 id="workflow">Workflow</h1>
+<div class="mermaid">flowchart TB
+    %% Styles
+    classDef input fill:#b3d9ff,stroke:#333,stroke-width:2px
+    classDef core fill:#90EE90,stroke:#333,stroke-width:2px
+    classDef output fill:#FFB366,stroke:#333,stroke-width:2px
+    classDef test fill:#E6E6FA,stroke:#333,stroke-width:2px
+    classDef tools fill:#FFE4B5,stroke:#333,stroke-width:2px
+
+    %% Input Layer
+    subgraph InputFormats
+        ASD[".asd Files"]:::input
+        IBW[".ibw Files"]:::input
+        SPM[".spm Files"]:::input
+        JPK[".jpk Files"]:::input
+        TOPO[".topostats Files"]:::input
+        GWY[".gwy Files"]:::input
+    end
+
+    %% Core Processing Layer
+    subgraph CoreProcessing
+        IO["IO Module\n(Base Reader)"]:::core
+        LOG["Logging Module"]:::core
+
+        subgraph FormatHandlers
+            ASDHandler["ASD Handler"]:::core
+            IBWHandler["IBW Handler"]:::core
+            SPMHandler["SPM Handler"]:::core
+            JPKHandler["JPK Handler"]:::core
+            TOPOHandler["TopoStats Handler"]:::core
+            GWYHandler["GWY Handler"]:::core
+        end
+    end
+
+    %% Testing Layer
+    subgraph Testing
+        IOTest["IO Tests"]:::test
+        ASDTest["ASD Tests"]:::test
+        IBWTest["IBW Tests"]:::test
+        SPMTest["SPM Tests"]:::test
+        JPKTest["JPK Tests"]:::test
+        TOPOTest["TopoStats Tests"]:::test
+        GWYTest["GWY Tests"]:::test
+    end
+
+    %% Development Tools
+    subgraph DevTools
+        PreCommit["Pre-commit Config"]:::tools
+        Pylint["Pylint Config"]:::tools
+    end
+
+    %% Output Layer
+    Output["Standardized Data Format\n- Image Data\n- Scaling Factor\n- Metadata"]:::output
+
+    %% Relationships
+    ASD --&gt; ASDHandler
+    IBW --&gt; IBWHandler
+    SPM --&gt; SPMHandler
+    JPK --&gt; JPKHandler
+    TOPO --&gt; TOPOHandler
+    GWY --&gt; GWYHandler
+
+    ASDHandler --&gt; IO
+    IBWHandler --&gt; IO
+    SPMHandler --&gt; IO
+    JPKHandler --&gt; IO
+    TOPOHandler --&gt; IO
+    GWYHandler --&gt; IO
+
+    IO &lt;--&gt; LOG
+    IO --&gt; Output
+
+    ASDHandler --- ASDTest
+    IBWHandler --- IBWTest
+    SPMHandler --- SPMTest
+    JPKHandler --- JPKTest
+    TOPOHandler --- TOPOTest
+    GWYHandler --- GWYTest
+    IO --- IOTest
+
+    %% Click Events
+    click IO "https://github.com/AFM-SPM/AFMReader/blob/main/AFMReader/io.py"
+    click LOG "https://github.com/AFM-SPM/AFMReader/blob/main/AFMReader/logging.py"
+    click ASDHandler "https://github.com/AFM-SPM/AFMReader/blob/main/AFMReader/asd.py"
+    click IBWHandler "https://github.com/AFM-SPM/AFMReader/blob/main/AFMReader/ibw.py"
+    click SPMHandler "https://github.com/AFM-SPM/AFMReader/blob/main/AFMReader/spm.py"
+    click JPKHandler "https://github.com/AFM-SPM/AFMReader/blob/main/AFMReader/jpk.py"
+    click TOPOHandler "https://github.com/AFM-SPM/AFMReader/blob/main/AFMReader/topostats.py"
+    click GWYHandler "https://github.com/AFM-SPM/AFMReader/blob/main/AFMReader/gwy.py"
+    click ASDTest "https://github.com/AFM-SPM/AFMReader/blob/main/tests/test_asd.py"
+    click IBWTest "https://github.com/AFM-SPM/AFMReader/blob/main/tests/test_ibw.py"
+    click SPMTest "https://github.com/AFM-SPM/AFMReader/blob/main/tests/test_spm.py"
+    click JPKTest "https://github.com/AFM-SPM/AFMReader/blob/main/tests/test_jpk.py"
+    click TOPOTest "https://github.com/AFM-SPM/AFMReader/blob/main/tests/test_topostats.py"
+    click GWYTest "https://github.com/AFM-SPM/AFMReader/blob/main/tests/test_gwy.py"
+    click IOTest "https://github.com/AFM-SPM/AFMReader/blob/main/tests/test_io.py"
+    click PreCommit "https://github.com/AFM-SPM/AFMReader/blob/main/.pre-commit-config.yaml"
+    click Pylint "https://github.com/AFM-SPM/AFMReader/blob/main/.pylintrc"
+</div>
+<p>Generated using <a href="https://gitdiagram.com/AFM-SPM/AFMReader">GitDiagram</a></p>
+</section>
+</main>
+</div>
+<hr/><footer>
+<div class="terminal-mkdocs-footer-grid">
+<div id="terminal-mkdocs-footer-copyright-info">
+             Site built with <a href="http://www.mkdocs.org">MkDocs</a> and <a href="https://github.com/ntno/mkdocs-terminal">Terminal for MkDocs</a>.
+        </div>
+</div>
+</footer>
+</div>
+<div aria-labelledby="searchModalLabel" aria-modal="true" class="modal" id="mkdocs_search_modal" role="alertdialog" tabindex="-1">
+<div class="modal-dialog modal-lg" role="search">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title" id="searchModalLabel">Search</h5>
+<button class="close btn btn-default btn-ghost" data-dismiss="modal" type="button"><span aria-hidden="true">x</span><span class="sr-only">Close</span></button>
+</div>
+<div class="modal-body">
+<p id="searchInputLabel">Type to start searching</p>
+<form>
+<div class="form-group">
+<input aria-labelledby="searchInputLabel" class="form-control" id="mkdocs-search-query" placeholder="" title="Please enter search terms here" type="search"/>
+</div>
+</form>
+<div data-no-results-text="No document matches found" id="mkdocs-search-results"></div>
+</div>
+<div class="modal-footer">
+</div>
+</div>
+</div>
+</div>
+<script type="module">import mermaid from "https://unpkg.com/mermaid@10.4.0/dist/mermaid.esm.min.mjs";
+mermaid.initialize({});</script></body>
+</html>
