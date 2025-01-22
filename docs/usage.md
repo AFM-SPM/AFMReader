@@ -1,7 +1,7 @@
 # Usage
 
 AFMReader currently obtains the **raw image data** from your selected channel, and the
-**pixel-to-nanometre scaling value** (pixels are assumed to be square) to for the physical dimensions of the image for
+**pixel-to-nanometre scaling value** (pixels are assumed to be square) for the physical dimensions of the image for
 all formats except the `.topostats` format. The `.topostats` metadata will contain that from the processing steps from
 [TopoStats](https://afm-spm.github.io/TopoStats/main/index.html).
 

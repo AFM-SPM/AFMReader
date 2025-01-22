@@ -29,6 +29,8 @@ plugins:
   - mermaid2:
   - search
   - mkdocstrings
+  - mike:
+      version: true
 
 markdown_extensions:
   - pymdownx.highlight:

@@ -54,6 +54,7 @@ dev = [
   "wheel"
 ]
 docs = [
+  "mike",
   "mkdocs",
   "mkdocs-material",
   "mkdocs-mermaid2-plugin",
