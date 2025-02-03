@@ -5,7 +5,7 @@ import pytest
 
 import numpy as np
 
-from AFMReader.jpk import load_jpk
+from AFMReader import jpk
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
@@ -32,10 +32,16 @@ def test_load_jpk(
     result_pixel_to_nm_scaling = float
 
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling = load_jpk(file_path, channel)  # type: ignore
+    result_image, result_pixel_to_nm_scaling = jpk.load_jpk(file_path, channel)  # type: ignore
 
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
     assert isinstance(result_image, np.ndarray)
     assert result_image.shape == image_shape
     assert result_image.dtype == image_dtype
     assert result_image.sum() == image_sum
+
+
+def test_load_jpk_file_not_found() -> None:
+    """Ensure FileNotFound error is raised."""
+    with pytest.raises(FileNotFoundError):
+        jpk.load_jpk("nonexistant_file.jpk", channel="TP")

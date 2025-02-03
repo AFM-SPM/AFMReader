@@ -111,3 +111,9 @@ def test_read_gwy_component_dtype() -> None:
         value = gwy.read_gwy_component_dtype(open_binary_file)
         assert isinstance(value, str)
         assert value == "D"
+
+
+def test_load_gwy_file_not_found() -> None:
+    """Ensure FileNotFound error is raised."""
+    with pytest.raises(FileNotFoundError):
+        gwy.load_gwy("nonexistant_file.gwy", channel="TP")
