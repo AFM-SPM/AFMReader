@@ -3,7 +3,7 @@
 from pathlib import Path
 import pytest
 
-from AFMReader.asd import load_asd
+from AFMReader import asd
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
@@ -23,8 +23,14 @@ def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_
     result_metadata = dict
 
     file_path = RESOURCES / file_name
-    result_frames, result_pixel_to_nm_scaling, result_metadata = load_asd(file_path, channel)
+    result_frames, result_pixel_to_nm_scaling, result_metadata = asd.load_asd(file_path, channel)
 
     assert len(result_frames) == number_of_frames  # type: ignore
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
     assert isinstance(result_metadata, dict)
+
+
+def test_load_asd_file_not_found() -> None:
+    """Ensure FileNotFound error is raised."""
+    with pytest.raises(FileNotFoundError):
+        asd.load_asd("nonexistant_file.asd", channel="TP")

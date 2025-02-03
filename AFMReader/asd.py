@@ -1,14 +1,10 @@
 """For decoding and loading .asd AFM file format into Python Numpy arrays."""
 
 from __future__ import annotations
+import errno
+import os
 from pathlib import Path
 import sys
-
-if sys.version_info.minor < 11:
-    from typing import Any, BinaryIO
-    from typing_extensions import Self
-else:
-    from typing import Any, BinaryIO, Self
 
 
 import numpy as np
@@ -31,6 +27,14 @@ from AFMReader.io import (
     read_double,
     skip_bytes,
 )
+
+
+if sys.version_info.minor < 11:
+    from typing import Any, BinaryIO
+    from typing_extensions import Self
+else:
+    from typing import Any, BinaryIO, Self
+
 
 logger.enable(__package__)
 
@@ -181,7 +185,7 @@ def calculate_scaling_factor(
     raise ValueError(f"channel {channel} not known for .asd file type.")
 
 
-def load_asd(file_path: Path, channel: str):
+def load_asd(file_path: str | Path, channel: str):
     """
     Load a .asd file.
 
@@ -209,6 +213,11 @@ def load_asd(file_path: Path, channel: str):
     """
     # Ensure the file path is a Path object
     file_path = Path(file_path)
+    filename = file_path.stem
+    # Check the file exists and raise an error if not
+    if not file_path.is_file():
+        logger.error(f"[{filename}] File not found : {file_path}")
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
     # Open the file in binary mode
     with Path.open(file_path, "rb", encoding=None) as open_file:  # pylint: disable=unspecified-encoding
         file_version = read_file_version(open_file)

@@ -70,3 +70,9 @@ def test__spm_pixel_to_nm_scaling(
     mock_pxs.return_value = [(x, unit), (y, unit)]  # issue is that pxs is a func that returns the data
     result = spm.spm_pixel_to_nm_scaling(filename, spm_channel_data)
     assert result == expected_px2nm
+
+
+def test_load_spm_file_not_found() -> None:
+    """Ensure FileNotFound error is raised."""
+    with pytest.raises(FileNotFoundError):
+        spm.load_spm("nonexistant_file.spm", channel="TP")

@@ -5,7 +5,7 @@ import pytest
 
 import numpy as np
 
-from AFMReader.topostats import load_topostats
+from AFMReader import topostats
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
@@ -66,7 +66,7 @@ def test_load_topostats(
     result_data = dict
 
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling, result_data = load_topostats(file_path)
+    result_image, result_pixel_to_nm_scaling, result_data = topostats.load_topostats(file_path)
 
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
     assert isinstance(result_image, np.ndarray)
@@ -76,3 +76,9 @@ def test_load_topostats(
     assert result_image.sum() == image_sum
     if topostats_file_version >= 0.2:
         assert isinstance(result_data["img_path"], Path)
+
+
+def test_load_topostats_file_not_found() -> None:
+    """Ensure FileNotFound error is raised."""
+    with pytest.raises(FileNotFoundError):
+        topostats.load_topostats("nonexistant_file.topostats")

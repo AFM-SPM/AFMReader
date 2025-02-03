@@ -1,6 +1,8 @@
 """For decoding and loading .ibw AFM file format into Python Numpy arrays."""
 
 from __future__ import annotations
+import errno
+import os
 from pathlib import Path
 
 import numpy as np
@@ -72,6 +74,10 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
     filename = file_path.stem
+    # Check the file exists and raise an error if not
+    if not file_path.is_file():
+        logger.error(f"[{filename}] File not found : {file_path}")
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
     try:
         scan = binarywave.load(file_path)
         logger.info(f"[{filename}] : Loaded image from : {file_path}")
@@ -86,6 +92,7 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
         logger.info(f"[{filename}] : Extracted channel {channel}")
     except FileNotFoundError:
         logger.error(f"[{filename}] File not found : {file_path}")
+        raise
     except ValueError:
         logger.error(f"[{filename}] : {channel} not in {file_path.suffix} channel list: {labels}")
         raise
