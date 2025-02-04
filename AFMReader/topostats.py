@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from pathlib import Path
+from typing import Any
 
 import h5py
 
@@ -11,7 +12,7 @@ from AFMReader.io import unpack_hdf5
 logger.enable(__package__)
 
 
-def load_topostats(file_path: Path | str) -> tuple:
+def load_topostats(file_path: Path | str) -> dict[str, Any]:
     """
     Extract image and pixel to nm scaling from the .topostats (HDF5 format) file.
 
@@ -22,9 +23,9 @@ def load_topostats(file_path: Path | str) -> tuple:
 
     Returns
     -------
-    tuple(np.ndarray, float)
-        A tuple containing the image, its pixel to nm scaling factor and the data dictionary
-        containing all the extra image data and metadata in dictionary format.
+    dict[str, Any]
+        A dictionary containing the image, its pixel to nm scaling factor and nested Numpy arrays representing the
+        analyses performed on the data.
 
     Raises
     ------
@@ -45,12 +46,10 @@ def load_topostats(file_path: Path | str) -> tuple:
                 data["img_path"] = Path(data["img_path"])
             file_version = data["topostats_file_version"]
             logger.info(f"[{filename}] TopoStats file version : {file_version}")
-            image = data["image"]
-            pixel_to_nm_scaling = data["pixel_to_nm_scaling"]
 
     except OSError as e:
         if "Unable to open file" in str(e):
             logger.error(f"[{filename}] File not found : {file_path}")
         raise e
 
-    return (image, pixel_to_nm_scaling, data)
+    return data

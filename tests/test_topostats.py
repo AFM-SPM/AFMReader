@@ -3,7 +3,6 @@
 from pathlib import Path
 import pytest
 
-import numpy as np
 
 from AFMReader import topostats
 
@@ -55,27 +54,22 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 def test_load_topostats(
     file_name: str,
     topostats_file_version: float,
-    image_shape: tuple[int, int],
+    image_shape: tuple,
     pixel_to_nm_scaling: float,
     data_keys: set[str],
     image_sum: float,
 ) -> None:
     """Test the normal operation of loading a .topostats (HDF5 format) file."""
-    result_image = np.ndarray
-    result_pixel_to_nm_scaling = float
-    result_data = dict
-
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling, result_data = topostats.load_topostats(file_path)
+    topostats_data = topostats.load_topostats(file_path)
 
-    assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
-    assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == image_shape
-    assert set(result_data.keys()) == data_keys  # type: ignore
-    assert result_data["topostats_file_version"] == topostats_file_version
-    assert result_image.sum() == image_sum
+    assert set(topostats_data.keys()) == data_keys  # type: ignore
+    assert topostats_data["topostats_file_version"] == topostats_file_version
+    assert topostats_data["pixel_to_nm_scaling"] == pixel_to_nm_scaling
+    assert topostats_data["image"].shape == image_shape
+    assert topostats_data["image"].sum() == image_sum
     if topostats_file_version >= 0.2:
-        assert isinstance(result_data["img_path"], Path)
+        assert isinstance(topostats_data["img_path"], Path)
 
 
 def test_load_topostats_file_not_found() -> None:
