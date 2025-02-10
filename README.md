@@ -35,6 +35,7 @@ Supported file formats
 | `.jpk`      | [Bruker](https://www.bruker.com/) |
 | `.topostats`| [TopoStats](https://github.com/AFM-SPM/TopoStats)  |
 | `.gwy`      | [Gwydion](<http://gwyddion.net>) |
+| `.stp`      | [WSXM AFM software files](http://www.wsxm.eu) |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into AFMReader these are denoted in bold below.
@@ -121,6 +122,17 @@ to the file and the channel name you want to use. (If in doubt, use `height_trac
 from AFMReader.jpk import load_jpk
 
 image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
+```
+
+### .stp
+
+You can open `.stp` files using the `load_stp` function. Just pass in the path
+to the file you want to use.
+
+```python
+from AFMReader.jpk import load_stp
+
+image, pixel_to_nanometre_scaling_factor = load_stp(file_path="./my_stp_file.stp")
 ```
 
 ## Contributing
