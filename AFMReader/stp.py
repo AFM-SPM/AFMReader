@@ -13,7 +13,9 @@ logger.enable(__package__)
 
 
 # pylint: disable=too-many-locals
-def load_stp(file_path: Path | str) -> tuple[np.ndarray, float]:  # noqa: C901 (ignore too complex)
+def load_stp(  # noqa: C901 (ignore too complex)
+    file_path: Path | str, header_encoding: str = "latin-1"
+) -> tuple[np.ndarray, float]:
     """
     Load image from STP files.
 
@@ -21,6 +23,8 @@ def load_stp(file_path: Path | str) -> tuple[np.ndarray, float]:  # noqa: C901 (
     ----------
     file_path : Path | str
         Path to the .stp file.
+    header_encoding : str
+        Encoding to use for the header of the file. Default is latin-1.
 
     Returns
     -------
@@ -55,7 +59,7 @@ def load_stp(file_path: Path | str) -> tuple[np.ndarray, float]:  # noqa: C901 (
             header = open_file.read(header_size)
 
             # decode the header bytes
-            header_decoded = header.decode("latin-1")
+            header_decoded = header.decode(header_encoding)
 
             # find num rows
             rows_match = re.search(r"Number of rows: (\d+)", header_decoded)
