@@ -130,7 +130,7 @@ You can open `.stp` files using the `load_stp` function. Just pass in the path
 to the file you want to use.
 
 ```python
-from AFMReader.jpk import load_stp
+from AFMReader.stp import load_stp
 
 image, pixel_to_nanometre_scaling_factor = load_stp(file_path="./my_stp_file.stp")
 ```
