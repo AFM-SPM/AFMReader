@@ -24,7 +24,7 @@ def load_stp(  # noqa: C901 (ignore too complex)
     file_path : Path | str
         Path to the .stp file.
     header_encoding : str
-        Encoding to use for the header of the file. Default is latin-1.
+        Encoding to use for the header of the file. Default is ''latin-1''.
 
     Returns
     -------
