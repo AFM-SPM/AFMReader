@@ -10,6 +10,14 @@ from AFMReader.logging import logger
 
 logger.enable(__package__)
 
+JPK_TAGS = {
+  "n_slots": "32896",
+  "default": "32897",
+  "tag_name": "32912",
+  "first_scaling_type": "32931",
+  "first_scaling_name": "32932",
+  "first_offset_name": "32933",
+}
 
 def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage) -> float:
     """
@@ -57,7 +65,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
     default_slot = tif.pages[channel_idx].tags["32897"]
 
     # Create a dictionary of list for the differnt slots
-    slots dict[int, list[str]] = {slot: [] for slot in range(n_slots)}
+    slots: dict[int, list[str]] = {slot: [] for slot in range(n_slots)}
 
     # Extract the tags with numerical names in each slot
     while n_slots >= 0:
