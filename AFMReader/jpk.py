@@ -64,8 +64,8 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
         for tag in tif.pages[channel_idx].tags:
             try:
                 tag_name_float = float(tag.name)
-                if tag_name_float >= (32912 + ((n_slots - 1) * 48)) and tag_name_float < (32912 + (n_slots * 48)):
-                    slots[n_slots].append(tag.name)
+                if tag_name_float >= (32912 + (n_slots * 48)) and tag_name_float < (32912 + ((n_slots + 1) * 48)):
+                    slots[(n_slots)].append(tag.name)
             except ValueError:
                 continue
         n_slots -= 1
