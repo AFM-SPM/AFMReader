@@ -55,31 +55,29 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
     default_slot = tif.pages[channel_idx].tags["32897"]
 
     # Create a dictionary of list for the differnt slots
-    slots = {}
-    for slot in range(NrOfSlots):
-        slots[slot + 1] = []
+    slots = {slot: [] for slot in range(n_slots)}
 
     # Extract the tags with numerical names in each slot
-    while NrOfSlots >= 1:
+    while n_slots >= 0:
         for tag in tif.pages[channel_idx].tags:
             try:
                 tag_name_float = float(tag.name)
-                if tag_name_float >= (32912 + ((NrOfSlots - 1) * 48)) and tag_name_float < (32912 + (NrOfSlots * 48)):
-                    slots[NrOfSlots].append(tag.name)
+                if tag_name_float >= (32912 + ((n_slots - 1) * 48)) and tag_name_float < (32912 + (n_slots * 48)):
+                    slots[n_slots].append(tag.name)
             except ValueError:
                 continue
-        NrOfSlots -= 1
+        n_slots -= 1
 
     # Find the number of the default slot (selected in the instrument GUI)
-    for slot_name, values in slots.items():
+    for slot, values in slots.items():
         for value in values:
             if tif.pages[channel_idx].tags[str(value)].value == default_slot.value:
-                default_slot_number = slot_name
+                default_slot_number = slot
 
     # Determine if the default slot requires scaling and find scaling and offset values
-    scaling_type = tif.pages[channel_idx].tags[str(32931 + (48 * (default_slot_number - 1)))].value
-    scaling_name = tif.pages[channel_idx].tags[str(32932 + (48 * (default_slot_number - 1)))].name
-    offset_name = tif.pages[channel_idx].tags[str(32933 + (48 * (default_slot_number - 1)))].name
+    scaling_type = tif.pages[channel_idx].tags[str(32931 + (48 * (default_slot_number)))].value
+    scaling_name = tif.pages[channel_idx].tags[str(32932 + (48 * (default_slot_number)))].name
+    offset_name = tif.pages[channel_idx].tags[str(32933 + (48 * (default_slot_number)))].name
     if scaling_type == "LinearScaling":
         scaling = tif.pages[channel_idx].tags[scaling_name].value
         offset = tif.pages[channel_idx].tags[offset_name].value
