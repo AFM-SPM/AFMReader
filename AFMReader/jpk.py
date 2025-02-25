@@ -11,14 +11,14 @@ from AFMReader.logging import logger
 logger.enable(__package__)
 
 JPK_TAGS = {
-  "n_slots": "32896",
-  "default_slot": "32897",
-  "first_slot_tag": "32912",
-  "first_scaling_type": "32931",
-  "first_scaling_name": "32932",
-  "first_offset_name": "32933",
-  "channel_name": "32848",
-  "trace_retrace": "32849"
+    "n_slots": "32896",
+    "default_slot": "32897",
+    "first_slot_tag": "32912",
+    "first_scaling_type": "32931",
+    "first_scaling_name": "32932",
+    "first_offset_name": "32933",
+    "channel_name": "32848",
+    "trace_retrace": "32849",
 }
 
 
@@ -75,7 +75,9 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
         for tag in tif.pages[channel_idx].tags:
             try:
                 tag_name_float = float(tag.name)
-                if tag_name_float >= (int(JPK_TAGS["first_slot_tag"]) + (n_slots * 48)) and tag_name_float < (int(JPK_TAGS["first_slot_tag"]) + ((n_slots + 1) * 48)):
+                if tag_name_float >= (int(JPK_TAGS["first_slot_tag"]) + (n_slots * 48)) and tag_name_float < (
+                    int(JPK_TAGS["first_slot_tag"]) + ((n_slots + 1) * 48)
+                ):
                     slots[(n_slots)].append(tag.name)
             except ValueError:
                 continue
@@ -88,10 +90,16 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
                 default_slot_number = slot
 
     # Determine if the default slot requires scaling and find scaling and offset values
-    scaling_type = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_type"]) + (48 * (default_slot_number)))].value
+    scaling_type = (
+        tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_type"]) + (48 * (default_slot_number)))].value
+    )
     if scaling_type == "LinearScaling":
-        scaling_name = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_name"]) + (48 * (default_slot_number)))].name
-        offset_name = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_offset_name"]) + (48 * (default_slot_number)))].name
+        scaling_name = (
+            tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_name"]) + (48 * (default_slot_number)))].name
+        )
+        offset_name = (
+            tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_offset_name"]) + (48 * (default_slot_number)))].name
+        )
         scaling = tif.pages[channel_idx].tags[scaling_name].value
         offset = tif.pages[channel_idx].tags[offset_name].value
     elif scaling_type == "NullScaling":
