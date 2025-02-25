@@ -11,13 +11,14 @@ from AFMReader.logging import logger
 logger.enable(__package__)
 
 JPK_TAGS = {
-  "n_slots": "32896",
-  "default": "32897",
-  "tag_name": "32912",
-  "first_scaling_type": "32931",
-  "first_scaling_name": "32932",
-  "first_offset_name": "32933",
+    "n_slots": "32896",
+    "default": "32897",
+    "tag_name": "32912",
+    "first_scaling_type": "32931",
+    "first_scaling_name": "32932",
+    "first_offset_name": "32933",
 }
+
 
 def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage) -> float:
     """
