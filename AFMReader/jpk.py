@@ -57,7 +57,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
     default_slot = tif.pages[channel_idx].tags["32897"]
 
     # Create a dictionary of list for the differnt slots
-    slots: Dict[int, List] = {slot: [] for slot in range(n_slots)}
+    slots = {slot: [] for slot in range(n_slots)}
 
     # Extract the tags with numerical names in each slot
     while n_slots >= 0:
