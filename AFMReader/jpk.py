@@ -45,6 +45,8 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
     ----------
     tif : tifffile.tifffile
         A tiff file of .jpk images.
+    channel_idx : int
+        Numerical channel identifier used to navigate the tifffile pages.
 
     Returns
     -------
