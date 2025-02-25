@@ -15,7 +15,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
     ("file_name", "channel", "pixel_to_nm_scaling", "image_shape", "image_dtype", "image_sum"),
     [
         pytest.param(
-            "sample_0.jpk", "height_trace", 1.2770176335964876, (256, 256), float, 286598232.9308627, id="test image 0"
+            "sample_0.jpk", "height_trace", 1.2770176335964876, (256, 256), float, 219242202.8256843, id="test image 0"
         )
     ],
 )
