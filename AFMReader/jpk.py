@@ -21,6 +21,7 @@ JPK_TAGS = {
   "trace_retrace": "32849"
 }
 
+
 def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage) -> float:
     """
     Extract pixel to nm scaling from the JPK image metadata.
