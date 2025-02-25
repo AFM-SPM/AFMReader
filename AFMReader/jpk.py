@@ -51,7 +51,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
     tuple
         A tuple contains values used to scale and offset raw data.
     """
-    NrOfSlots = tif.pages[channel_idx].tags["32896"].value
+    n_slots = tif.pages[channel_idx].tags["32896"].value
     default_slot = tif.pages[channel_idx].tags["32897"]
 
     # Create a dictionary of list for the differnt slots
