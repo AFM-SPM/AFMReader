@@ -85,13 +85,13 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
     for slot, values in slots.items():
         for value in values:
             if tif.pages[channel_idx].tags[str(value)].value == default_slot.value:
-                default_slot_number = slot
+                _default_slot = slot
 
     # Determine if the default slot requires scaling and find scaling and offset values
-    scaling_type = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_type"]) + (48 * (default_slot_number)))].value
+    scaling_type = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_type"]) + (48 * (_default_slot)))].value
     if scaling_type == "LinearScaling":
-        scaling_name = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_name"]) + (48 * (default_slot_number)))].name
-        offset_name = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_offset_name"]) + (48 * (default_slot_number)))].name
+        scaling_name = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_name"]) + (48 * (_default_slot)))].name
+        offset_name = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_offset_name"]) + (48 * (_default_slot)))].name
         scaling = tif.pages[channel_idx].tags[scaling_name].value
         offset = tif.pages[channel_idx].tags[offset_name].value
     elif scaling_type == "NullScaling":
