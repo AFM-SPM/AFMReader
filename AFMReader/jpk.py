@@ -19,6 +19,10 @@ JPK_TAGS = {
     "first_offset_name": "32933",
     "channel_name": "32848",
     "trace_retrace": "32849",
+    "grid_ulength" : "32834",
+    "grid_vlength" : "32835",
+    "grid_ilength" : "32838",
+    "grid_jlength" : "32839"
 }
 
 
@@ -36,10 +40,10 @@ def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage) -> float:
     float
         A value corresponding to the real length of a single pixel.
     """
-    length = tiff_page.tags["32834"].value  # Grid-uLength (fast)
-    width = tiff_page.tags["32835"].value  # Grid-vLength (slow)
-    length_px = tiff_page.tags["32838"].value  # Grid-iLength (fast)
-    width_px = tiff_page.tags["32839"].value  # Grid-jLength (slow)
+    length = tiff_page.tags[JPK_TAGS["grid_ulength"]].value  # Grid-uLength (fast)
+    width = tiff_page.tags[JPK_TAGS["grid_vlength"]].value  # Grid-vLength (slow)
+    length_px = tiff_page.tags[JPK_TAGS["grid_ilength"]].value  # Grid-iLength (fast)
+    width_px = tiff_page.tags[JPK_TAGS["grid_jlength"]].value  # Grid-jLength (slow)
 
     px_to_nm = (length / length_px, width / width_px)[0]
 
