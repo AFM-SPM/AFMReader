@@ -19,10 +19,10 @@ JPK_TAGS = {
     "first_offset_name": "32933",
     "channel_name": "32848",
     "trace_retrace": "32849",
-    "grid_ulength" : "32834",
-    "grid_vlength" : "32835",
-    "grid_ilength" : "32838",
-    "grid_jlength" : "32839"
+    "grid_ulength": "32834",
+    "grid_vlength": "32835",
+    "grid_ilength": "32838",
+    "grid_jlength": "32839",
 }
 
 
