@@ -10,6 +10,21 @@ from AFMReader.logging import logger
 
 logger.enable(__package__)
 
+JPK_TAGS = {
+    "n_slots": "32896",
+    "default_slot": "32897",
+    "first_slot_tag": "32912",
+    "first_scaling_type": "32931",
+    "first_scaling_name": "32932",
+    "first_offset_name": "32933",
+    "channel_name": "32848",
+    "trace_retrace": "32849",
+    "grid_ulength": "32834",
+    "grid_vlength": "32835",
+    "grid_ilength": "32838",
+    "grid_jlength": "32839",
+}
+
 
 def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage) -> float:
     """
@@ -25,17 +40,78 @@ def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage) -> float:
     float
         A value corresponding to the real length of a single pixel.
     """
-    length = tiff_page.tags["32834"].value  # Grid-uLength (fast)
-    width = tiff_page.tags["32835"].value  # Grid-vLength (slow)
-    length_px = tiff_page.tags["32838"].value  # Grid-iLength (fast)
-    width_px = tiff_page.tags["32839"].value  # Grid-jLength (slow)
+    length = tiff_page.tags[JPK_TAGS["grid_ulength"]].value  # Grid-uLength (fast)
+    width = tiff_page.tags[JPK_TAGS["grid_vlength"]].value  # Grid-vLength (slow)
+    length_px = tiff_page.tags[JPK_TAGS["grid_ilength"]].value  # Grid-iLength (fast)
+    width_px = tiff_page.tags[JPK_TAGS["grid_jlength"]].value  # Grid-jLength (slow)
 
     px_to_nm = (length / length_px, width / width_px)[0]
 
     return px_to_nm * 1e9
 
 
-# pylint: disable=too-many-locals
+def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, float]:
+    """
+    Extract the z scaling factor and offset for a JPK image channel.
+
+    Determined using JPKImageSpec.txt Version: 2.0:3fffffffffff supplied with JPK instrument.
+
+    Parameters
+    ----------
+    tif : tifffile.tifffile
+        A tiff file of .jpk images.
+    channel_idx : int
+        Numerical channel identifier used to navigate the tifffile pages.
+
+    Returns
+    -------
+    tuple[float, float]
+        A tuple contains values used to scale and offset raw data.
+    """
+    n_slots = tif.pages[channel_idx].tags[JPK_TAGS["n_slots"]].value
+    default_slot = tif.pages[channel_idx].tags[JPK_TAGS["default_slot"]]
+
+    # Create a dictionary of list for the differnt slots
+    slots: dict[int, list[str]] = {slot: [] for slot in range(n_slots)}
+
+    # Extract the tags with numerical names in each slot
+    while n_slots >= 0:
+        for tag in tif.pages[channel_idx].tags:
+            try:
+                tag_name_float = float(tag.name)
+                if tag_name_float >= (int(JPK_TAGS["first_slot_tag"]) + (n_slots * 48)) and tag_name_float < (
+                    int(JPK_TAGS["first_slot_tag"]) + ((n_slots + 1) * 48)
+                ):
+                    slots[(n_slots)].append(tag.name)
+            except ValueError:
+                continue
+        n_slots -= 1
+
+    # Find the number of the default slot (selected in the instrument GUI)
+    for slot, values in slots.items():
+        for value in values:
+            if tif.pages[channel_idx].tags[str(value)].value == default_slot.value:
+                _default_slot = slot
+
+    # Determine if the default slot requires scaling and find scaling and offset values
+
+    scaling_type = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_type"]) + (48 * (_default_slot)))].value
+    if scaling_type == "LinearScaling":
+        scaling_name = (
+            tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_name"]) + (48 * (_default_slot)))].name
+        )
+        offset_name = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_offset_name"]) + (48 * (_default_slot)))].name
+
+        scaling = tif.pages[channel_idx].tags[scaling_name].value
+        offset = tif.pages[channel_idx].tags[offset_name].value
+    elif scaling_type == "NullScaling":
+        scaling = 1
+        offset = 0
+    else:
+        raise ValueError(f"Scaling type {scaling_type} is not 'NullScaling' or 'LinearScaling'")
+    return scaling, offset
+
+
 def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     """
     Load image from JPK Instruments .jpk files.
@@ -77,8 +153,8 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     # Obtain channel list for all channels in file
     channel_list = {}
     for i, page in enumerate(tif.pages[1:]):  # [0] is thumbnail
-        available_channel = page.tags["32848"].value  # keys are hexadecimal values
-        if page.tags["32849"].value == 0:  # whether img is trace or retrace
+        available_channel = page.tags[JPK_TAGS["channel_name"]].value  # keys are hexadecimal values
+        if page.tags[JPK_TAGS["trace_retrace"]].value == 0:  # whether img is trace or retrace
             tr_rt = "trace"
         else:
             tr_rt = "retrace"
@@ -92,15 +168,12 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     # Get image and if applicable, scale it
     channel_page = tif.pages[channel_idx]
     image = channel_page.asarray()
-    scaling_type = channel_page.tags["33027"].value
-    if scaling_type == "LinearScaling":
-        scaling = channel_page.tags["33028"].value
-        offset = channel_page.tags["33029"].value
-        image = (image * scaling) + offset
-    elif scaling_type == "NullScaling":
-        pass
-    else:
-        raise ValueError(f"Scaling type {scaling_type} is not 'NullScaling' or 'LinearScaling'")
+    scaling, offset = _get_z_scaling(tif, channel_idx)
+    image = (image * scaling) + offset
+
+    if channel_page.tags[JPK_TAGS["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
+        image = image * 1e9
+
     # Get page for common metadata between scans
     metadata_page = tif.pages[0]
-    return (image * 1e9, _jpk_pixel_to_nm_scaling(metadata_page))
+    return (image, _jpk_pixel_to_nm_scaling(metadata_page))
