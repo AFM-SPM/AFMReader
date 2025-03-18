@@ -23,6 +23,7 @@ JPK_TAGS = {
     "grid_vlength": "32835",
     "grid_ilength": "32838",
     "grid_jlength": "32839",
+    "grid_reflect": "32837"
 }
 
 
@@ -170,6 +171,8 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     image = channel_page.asarray()
     scaling, offset = _get_z_scaling(tif, channel_idx)
     image = (image * scaling) + offset
+    if tif.pages[0].tags[JPK_TAGS["grid_reflect"]].value == 0:
+        image = np.flipud(image)
 
     if channel_page.tags[JPK_TAGS["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
         image = image * 1e9
