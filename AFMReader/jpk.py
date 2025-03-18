@@ -1,32 +1,22 @@
 """For decoding and loading .jpk AFM file format into Python Numpy arrays."""
 
 from __future__ import annotations
+from importlib import resources
 from pathlib import Path
 
 import numpy as np
 import tifffile
 
+from AFMReader.io import read_yaml
 from AFMReader.logging import logger
 
 logger.enable(__package__)
 
-JPK_TAGS = {
-    "n_slots": "32896",
-    "default_slot": "32897",
-    "first_slot_tag": "32912",
-    "first_scaling_type": "32931",
-    "first_scaling_name": "32932",
-    "first_offset_name": "32933",
-    "channel_name": "32848",
-    "trace_retrace": "32849",
-    "grid_ulength": "32834",
-    "grid_vlength": "32835",
-    "grid_ilength": "32838",
-    "grid_jlength": "32839",
-}
+# pylint: disable=possibly-used-before-assignment
+# pylint: disable=too-many-locals
 
 
-def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage) -> float:
+def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: dict[str, int]) -> float:
     """
     Extract pixel to nm scaling from the JPK image metadata.
 
@@ -34,23 +24,25 @@ def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage) -> float:
     ----------
     tiff_page : tifffile.tifffile.TiffPage
         An image file directory (IFD) of .jpk files.
+    jpk_tags : dict[str, int]
+        Dictionary of JPK tags.
 
     Returns
     -------
     float
         A value corresponding to the real length of a single pixel.
     """
-    length = tiff_page.tags[JPK_TAGS["grid_ulength"]].value  # Grid-uLength (fast)
-    width = tiff_page.tags[JPK_TAGS["grid_vlength"]].value  # Grid-vLength (slow)
-    length_px = tiff_page.tags[JPK_TAGS["grid_ilength"]].value  # Grid-iLength (fast)
-    width_px = tiff_page.tags[JPK_TAGS["grid_jlength"]].value  # Grid-jLength (slow)
+    length = tiff_page.tags[jpk_tags["grid_ulength"]].value  # Grid-uLength (fast)
+    width = tiff_page.tags[jpk_tags["grid_vlength"]].value  # Grid-vLength (slow)
+    length_px = tiff_page.tags[jpk_tags["grid_ilength"]].value  # Grid-iLength (fast)
+    width_px = tiff_page.tags[jpk_tags["grid_jlength"]].value  # Grid-jLength (slow)
 
     px_to_nm = (length / length_px, width / width_px)[0]
 
     return px_to_nm * 1e9
 
 
-def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, float]:
+def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> tuple[float, float]:
     """
     Extract the z scaling factor and offset for a JPK image channel.
 
@@ -62,14 +54,16 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
         A tiff file of .jpk images.
     channel_idx : int
         Numerical channel identifier used to navigate the tifffile pages.
+    jpk_tags : dict[str, int]
+        Dictionary of JPK tags.
 
     Returns
     -------
     tuple[float, float]
         A tuple contains values used to scale and offset raw data.
     """
-    n_slots = tif.pages[channel_idx].tags[JPK_TAGS["n_slots"]].value
-    default_slot = tif.pages[channel_idx].tags[JPK_TAGS["default_slot"]]
+    n_slots = tif.pages[channel_idx].tags[jpk_tags["n_slots"]].value
+    default_slot = tif.pages[channel_idx].tags[jpk_tags["default_slot"]]
 
     # Create a dictionary of list for the differnt slots
     slots: dict[int, list[str]] = {slot: [] for slot in range(n_slots)}
@@ -79,9 +73,9 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
         for tag in tif.pages[channel_idx].tags:
             try:
                 tag_name_float = float(tag.name)
-                if tag_name_float >= (int(JPK_TAGS["first_slot_tag"]) + (n_slots * 48)) and tag_name_float < (
-                    int(JPK_TAGS["first_slot_tag"]) + ((n_slots + 1) * 48)
-                ):
+                if tag_name_float >= (  # pylint: disable=chained-comparison
+                    int(jpk_tags["first_slot_tag"]) + (n_slots * 48)
+                ) and tag_name_float < (int(jpk_tags["first_slot_tag"]) + ((n_slots + 1) * 48)):
                     slots[(n_slots)].append(tag.name)
             except ValueError:
                 continue
@@ -94,13 +88,12 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
                 _default_slot = slot
 
     # Determine if the default slot requires scaling and find scaling and offset values
-
-    scaling_type = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_type"]) + (48 * (_default_slot)))].value
+    scaling_type = tif.pages[channel_idx].tags[str(int(jpk_tags["first_scaling_type"]) + (48 * (_default_slot)))].value
     if scaling_type == "LinearScaling":
         scaling_name = (
-            tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_scaling_name"]) + (48 * (_default_slot)))].name
+            tif.pages[channel_idx].tags[str(int(jpk_tags["first_scaling_name"]) + (48 * (_default_slot)))].name
         )
-        offset_name = tif.pages[channel_idx].tags[str(int(JPK_TAGS["first_offset_name"]) + (48 * (_default_slot)))].name
+        offset_name = tif.pages[channel_idx].tags[str(int(jpk_tags["first_offset_name"]) + (48 * (_default_slot)))].name
 
         scaling = tif.pages[channel_idx].tags[scaling_name].value
         offset = tif.pages[channel_idx].tags[offset_name].value
@@ -112,7 +105,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int) -> tuple[float, flo
     return scaling, offset
 
 
-def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
+def load_jpk(file_path: Path | str, channel: str, config_path: Path | str | None = None) -> tuple[np.ndarray, float]:
     """
     Load image from JPK Instruments .jpk files.
 
@@ -122,6 +115,9 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
         Path to the .jpk file.
     channel : str
         The channel to extract from the .jpk file.
+    config_path : Path | str | None
+        Path to a configuration file. If ''None'' (default) then the packages default configuration is loaded from
+        ''default_config.yaml''.
 
     Returns
     -------
@@ -145,6 +141,7 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
     filename = file_path.stem
+    jpk_tags = _load_jpk_tags(config_path)
     try:
         tif = tifffile.TiffFile(file_path)
     except FileNotFoundError:
@@ -153,8 +150,8 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     # Obtain channel list for all channels in file
     channel_list = {}
     for i, page in enumerate(tif.pages[1:]):  # [0] is thumbnail
-        available_channel = page.tags[JPK_TAGS["channel_name"]].value  # keys are hexadecimal values
-        if page.tags[JPK_TAGS["trace_retrace"]].value == 0:  # whether img is trace or retrace
+        available_channel = page.tags[jpk_tags["channel_name"]].value  # keys are hexadecimal values
+        if page.tags[jpk_tags["trace_retrace"]].value == 0:  # whether img is trace or retrace
             tr_rt = "trace"
         else:
             tr_rt = "retrace"
@@ -168,12 +165,35 @@ def load_jpk(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     # Get image and if applicable, scale it
     channel_page = tif.pages[channel_idx]
     image = channel_page.asarray()
-    scaling, offset = _get_z_scaling(tif, channel_idx)
+    scaling, offset = _get_z_scaling(tif, channel_idx, jpk_tags)
     image = (image * scaling) + offset
 
-    if channel_page.tags[JPK_TAGS["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
+    if channel_page.tags[jpk_tags["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
         image = image * 1e9
 
     # Get page for common metadata between scans
     metadata_page = tif.pages[0]
-    return (image, _jpk_pixel_to_nm_scaling(metadata_page))
+    return (image, _jpk_pixel_to_nm_scaling(metadata_page, jpk_tags))
+
+
+def _load_jpk_tags(config_path: str | Path | None = None) -> dict[str, int]:
+    """
+    Load the configuration file and extract JPK options.
+
+    If no ''config_path'' is provided the ''default_config.yaml'' is loaded.
+
+    Parameters
+    ----------
+    config_path : str | Path | None
+        Path to a YAML configuration file.
+
+    Returns
+    -------
+    dict[str, Any]
+        Dictionary of JPK configuration options.
+    """
+    if config_path is None:
+        config_path = resources.files(__package__) / "default_config.yaml"  # type:ignore[assignment]
+    config = read_yaml(Path(config_path))  # type:ignore[arg-type]
+    logger.info(f"Configuration loaded from : {config_path}")
+    return config["jpk"]

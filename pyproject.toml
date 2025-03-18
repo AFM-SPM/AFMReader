@@ -35,12 +35,13 @@ keywords = [
 ]
 
 dependencies = [
-  "matplotlib",
-  "igor2",
-  "tifffile",
-  "pySPM",
-  "loguru",
   "h5py",
+  "igor2",
+  "loguru",
+  "matplotlib",
+  "pySPM",
+  "tifffile",
+  "ruamel.yaml",
 ]
 
 [project.optional-dependencies]
