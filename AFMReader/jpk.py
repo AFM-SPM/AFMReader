@@ -23,7 +23,7 @@ JPK_TAGS = {
     "grid_vlength": "32835",
     "grid_ilength": "32838",
     "grid_jlength": "32839",
-    "grid_reflect": "32837"
+    "grid_reflect": "32837",
 }
 
 
