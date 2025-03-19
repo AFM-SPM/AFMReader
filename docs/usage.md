@@ -50,6 +50,7 @@ can be specified with the `config_path` parameter which should point to the loca
 |             | `grid_vlength`       | `32835`       |
 |             | `grid_ilength`       | `32838`       |
 |             | `grid_jlength`       | `32839`       |
+|             | `slot_size`          | `48`          |
 
 ## .topostats
 

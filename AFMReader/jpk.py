@@ -74,8 +74,8 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
             try:
                 tag_name_float = float(tag.name)
                 if tag_name_float >= (  # pylint: disable=chained-comparison
-                    int(jpk_tags["first_slot_tag"]) + (n_slots * 48)
-                ) and tag_name_float < (int(jpk_tags["first_slot_tag"]) + ((n_slots + 1) * 48)):
+                    int(jpk_tags["first_slot_tag"]) + (n_slots * jpk_tags["slot_size"])
+                ) and tag_name_float < (int(jpk_tags["first_slot_tag"]) + ((n_slots + 1) * jpk_tags["slot_size"])):
                     slots[(n_slots)].append(tag.name)
             except ValueError:
                 continue
@@ -88,12 +88,22 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
                 _default_slot = slot
 
     # Determine if the default slot requires scaling and find scaling and offset values
-    scaling_type = tif.pages[channel_idx].tags[str(int(jpk_tags["first_scaling_type"]) + (48 * (_default_slot)))].value
+    scaling_type = (
+        tif.pages[channel_idx]
+        .tags[str(int(jpk_tags["first_scaling_type"]) + (jpk_tags["slot_size"] * (_default_slot)))]
+        .value
+    )
     if scaling_type == "LinearScaling":
         scaling_name = (
-            tif.pages[channel_idx].tags[str(int(jpk_tags["first_scaling_name"]) + (48 * (_default_slot)))].name
+            tif.pages[channel_idx]
+            .tags[str(int(jpk_tags["first_scaling_name"]) + (jpk_tags["slot_size"] * (_default_slot)))]
+            .name
         )
-        offset_name = tif.pages[channel_idx].tags[str(int(jpk_tags["first_offset_name"]) + (48 * (_default_slot)))].name
+        offset_name = (
+            tif.pages[channel_idx]
+            .tags[str(int(jpk_tags["first_offset_name"]) + (jpk_tags["slot_size"] * (_default_slot)))]
+            .name
+        )
 
         scaling = tif.pages[channel_idx].tags[scaling_name].value
         offset = tif.pages[channel_idx].tags[offset_name].value
