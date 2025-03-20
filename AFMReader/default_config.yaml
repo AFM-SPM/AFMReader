@@ -1,0 +1,14 @@
+jpk:
+  n_slots: 32896
+  default_slot: 32897
+  first_slot_tag: 32912
+  first_scaling_type: 32931
+  first_scaling_name: 32932
+  first_offset_name: 32933
+  channel_name: 32848
+  trace_retrace: 32849
+  grid_ulength: 32834
+  grid_vlength: 32835
+  grid_ilength: 32838
+  grid_jlength: 32839
+  slot_size: 48

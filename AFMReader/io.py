@@ -1,9 +1,13 @@
 """For reading and writing data from / to files."""
 
+from __future__ import annotations
+from pathlib import Path
+
 import struct
 from typing import BinaryIO
 import h5py
 from loguru import logger
+from ruamel.yaml import YAML, YAMLError
 
 
 def read_uint8(open_file: BinaryIO) -> int:
@@ -315,3 +319,26 @@ def read_char(open_file: BinaryIO) -> str:
         A string type cast from the decoded character.
     """
     return open_file.read(1).decode("ascii")
+
+
+def read_yaml(filename: str | Path) -> dict:
+    """
+    Read a YAML file.
+
+    Parameters
+    ----------
+    filename : Union[str, Path]
+        YAML file to read.
+
+    Returns
+    -------
+    Dict
+        Dictionary of the file.
+    """
+    with Path(filename).open(encoding="utf-8") as f:
+        try:
+            yaml_file = YAML(typ="safe")
+            return yaml_file.load(f)
+        except YAMLError as exception:
+            logger.error(exception)
+            return {}
