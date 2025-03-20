@@ -471,7 +471,7 @@
 <nav>
     <ul>
         <li><a href="#usage">Usage</a></li>
-        <li><a href="#supported-file-formats">Supported file formats</a></li><li><a href="#topostats">.topostats</a></li><li><a href="#spm">.spm</a></li><li><a href="#gwy">.gwy</a></li><li><a href="#asd">.asd</a></li><li><a href="#ibw">.ibw</a></li><li><a href="#jpk">.jpk</a></li>
+        <li><a href="#supported-file-formats">Supported file formats</a></li><li><a href="#configuration">Configuration</a></li><li><a href="#topostats">.topostats</a></li><li><a href="#spm">.spm</a></li><li><a href="#gwy">.gwy</a></li><li><a href="#asd">.asd</a></li><li><a href="#ibw">.ibw</a></li><li><a href="#jpk">.jpk</a></li>
     </ul>
 </nav>
 </aside>
@@ -545,6 +545,87 @@ awaiting refactoring to move their functionality into AFMReader these are denote
 <td><code>.tiff</code></td>
 <td><a href="https://www.parksystems.com/">Park Systems</a></td>
 <td>To Be Implemented.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="configuration">Configuration</h2>
+<p>A default configuration is included in the package which contains options for loading different file formats. This is a
+<a href="https://yaml.org">YAML</a> file with keys for each file type and the relevant key/value pair nested within. The table
+below details the current configuration options. If loading a file format supports a custom configuration file then it
+can be specified with the <code>config_path</code> parameter which should point to the location of the file.</p>
+<table>
+<thead>
+<tr>
+<th>File format</th>
+<th>Keys</th>
+<th>Default value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>jpk</code></td>
+<td><code>n_slots</code></td>
+<td><code>32896</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>default_slot</code></td>
+<td><code>32897</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>first_slot_tag</code></td>
+<td><code>32912</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>first_scaling_type</code></td>
+<td><code>32931</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>first_scaling_name</code></td>
+<td><code>32932</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>first_offset_name</code></td>
+<td><code>32933</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>channel_name</code></td>
+<td><code>32848</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>trace_retrace</code></td>
+<td><code>32849</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>grid_ulength</code></td>
+<td><code>32834</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>grid_vlength</code></td>
+<td><code>32835</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>grid_ilength</code></td>
+<td><code>32838</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>grid_jlength</code></td>
+<td><code>32839</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>slot_size</code></td>
+<td><code>48</code></td>
 </tr>
 </tbody>
 </table>
