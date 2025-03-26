@@ -6,9 +6,22 @@ import numpy as np
 import h5py
 
 
-from AFMReader.io import unpack_hdf5
+from AFMReader.io import unpack_hdf5, read_yaml
 
 # mypy: disable-error-code="index"
+
+BASE_DIR = Path.cwd()
+RESOURCES = BASE_DIR / "tests" / "resources"
+
+CONFIG = {
+    "this": "is",
+    "a": "test",
+    "yaml": "file",
+    "numbers": 123,
+    "logical": True,
+    "nested": {"something": "else"},
+    "a_list": [1, 2, 3],
+}
 
 
 def test_unpack_hdf5_all_together_group_path_default(tmp_path: Path) -> None:
@@ -187,3 +200,10 @@ def test_unpack_hdf5_nested_dict_group_path(tmp_path: Path) -> None:
         result = unpack_hdf5(open_hdf5_file=f, group_path=group_path)
 
     np.testing.assert_equal(result, expected)
+
+
+def test_read_yaml() -> None:
+    """Test reading of YAML file."""
+    sample_config = read_yaml(RESOURCES / "test.yaml")
+
+    assert sample_config == CONFIG

@@ -11,23 +11,46 @@ integrate it into your workflow.
 
 ## Supported file formats
 
-| File format | Description    |
-|-------------|----------------|
-| `.asd`      | High-speed AFM |
-| `.ibw`      | [WaveMetrics](https://www.wavemetrics.com/)  |
-| `.spm`      | [Bruker's Format](https://www.bruker.com/)  |
-| `.jpk`      | [Bruker](https://www.bruker.com/) |
-| `.topostats`| [TopoStats](https://github.com/AFM-SPM/TopoStats)  |
-| `.gwy`      | [Gwydion](<http://gwyddion.net>) |
+| File format  | Description                                       |
+|--------------|---------------------------------------------------|
+| `.asd`       | High-speed AFM                                    |
+| `.ibw`       | [WaveMetrics](https://www.wavemetrics.com/)       |
+| `.spm`       | [Bruker's Format](https://www.bruker.com/)        |
+| `.jpk`       | [Bruker](https://www.bruker.com/)                 |
+| `.topostats` | [TopoStats](https://github.com/AFM-SPM/TopoStats) |
+| `.gwy`       | [Gwydion](<http://gwyddion.net>)                  |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into AFMReader these are denoted in bold below.
 
-| File format | Description                                             | Status                                     |
-|-------------|---------------------------------------------------------|--------------------------------------------|
-| `.nhf`      | [Nanosurf](https://www.nanosurf.com/en/)                | To Be Implemented.                         |
-| `.aris`     | [Imaris Oxford Instruments](https://imaris.oxinst.com/) | To Be Implemented.                         |
-| `.tiff`     | [Park Systems](https://www.parksystems.com/)            | To Be Implemented.                         |
+| File format | Description                                             | Status             |
+|-------------|---------------------------------------------------------|--------------------|
+| `.nhf`      | [Nanosurf](https://www.nanosurf.com/en/)                | To Be Implemented. |
+| `.aris`     | [Imaris Oxford Instruments](https://imaris.oxinst.com/) | To Be Implemented. |
+| `.tiff`     | [Park Systems](https://www.parksystems.com/)            | To Be Implemented. |
+
+## Configuration
+
+A default configuration is included in the package which contains options for loading different file formats. This is a
+[YAML](https://yaml.org) file with keys for each file type and the relevant key/value pair nested within. The table
+below details the current configuration options. If loading a file format supports a custom configuration file then it
+can be specified with the `config_path` parameter which should point to the location of the file.
+
+| File format | Keys                 | Default value |
+|-------------|----------------------|---------------|
+| `jpk`       | `n_slots`            | `32896`       |
+|             | `default_slot`       | `32897`       |
+|             | `first_slot_tag`     | `32912`       |
+|             | `first_scaling_type` | `32931`       |
+|             | `first_scaling_name` | `32932`       |
+|             | `first_offset_name`  | `32933`       |
+|             | `channel_name`       | `32848`       |
+|             | `trace_retrace`      | `32849`       |
+|             | `grid_ulength`       | `32834`       |
+|             | `grid_vlength`       | `32835`       |
+|             | `grid_ilength`       | `32838`       |
+|             | `grid_jlength`       | `32839`       |
+|             | `slot_size`          | `48`          |
 
 ## .topostats
 
