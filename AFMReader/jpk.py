@@ -12,6 +12,7 @@ from AFMReader.logging import logger
 
 logger.enable(__package__)
 
+
 def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: dict[str, int]) -> float:
     """
     Extract pixel to nm scaling from the JPK image metadata.
