@@ -3,6 +3,7 @@
 from __future__ import annotations
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import tifffile
