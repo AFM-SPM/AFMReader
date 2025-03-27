@@ -66,6 +66,7 @@ def _get_tag_value(page: tifffile.TiffPage, tag_name: str) -> str | int | float:
         logger.error(f"Missing tag in JPK file: {tag_name}")
         raise
 
+
 def _get_number_of_slots(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> int:
     """
     Retrieve the number of slots from a JPK image channel.
