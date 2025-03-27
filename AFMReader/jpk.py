@@ -91,7 +91,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
         n_slots = int(_get_tag_value(tif.pages[channel_idx], str(jpk_tags["n_slots"])))
     except ValueError as e:
         logger.error(f"n_slots is not a number: {e}")
-        raise    
+        raise
     default_slot = tif.pages[channel_idx].tags[jpk_tags["default_slot"]]
 
     # Create a dictionary of list for the differnt slots
