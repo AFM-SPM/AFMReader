@@ -66,6 +66,36 @@ def _get_tag_value(page: tifffile.TiffPage, tag_name: str) -> str | int | float:
         logger.error(f"Missing tag in JPK file: {tag_name}")
         raise
 
+def _get_number_of_slots(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> int:
+    """
+    Retrieve the number of slots from a JPK image channel.
+
+    Parameters
+    ----------
+    tif : tifffile.TiffFile
+        A TIFF file containing JPK images.
+    channel_idx : int
+        Numerical channel identifier used to navigate the TIFF file pages.
+    jpk_tags : dict[str, int]
+        Dictionary of JPK tags.
+
+    Returns
+    -------
+    int
+        The number of slots in the specified JPK image channel.
+
+    Raises
+    ------
+    ValueError
+        If the slot count cannot be converted to an integer.
+    """
+    try:
+        n_slots = int(_get_tag_value(tif.pages[channel_idx], str(jpk_tags["n_slots"])))
+    except ValueError as e:
+        logger.error(f"n_slots is not a number: {e}")
+        raise
+    return n_slots
+
 
 def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> tuple[float, float]:
     """
@@ -87,14 +117,8 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
     tuple[float, float]
         A tuple contains values used to scale and offset raw data.
     """
-    try:
-        n_slots = int(_get_tag_value(tif.pages[channel_idx], str(jpk_tags["n_slots"])))
-    except ValueError as e:
-        logger.error(f"n_slots is not a number: {e}")
-        raise
-    default_slot = tif.pages[channel_idx].tags[jpk_tags["default_slot"]]
-
     # Create a dictionary of list for the differnt slots
+    n_slots = _get_number_of_slots(tif, channel_idx, jpk_tags)
     slots: dict[int, list[str]] = {slot: [] for slot in range(n_slots)}
 
     # Extract the tags with numerical names in each slot
@@ -111,6 +135,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
         n_slots -= 1
 
     # Find the number of the default slot (selected in the instrument GUI)
+    default_slot = tif.pages[channel_idx].tags[jpk_tags["default_slot"]]
     for slot, values in slots.items():
         for value in values:
             if tif.pages[channel_idx].tags[str(value)].value == default_slot.value:
