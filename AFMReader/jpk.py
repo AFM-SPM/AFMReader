@@ -38,12 +38,33 @@ def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: di
 
     return px_to_nm * 1e9
 
-def get_tag_value(page, tag_name):
-        try:
-            return page.tags[tag_name].value
-        except KeyError:
-            logger.error(f"Missing tag in JPK file: {tag_name}")
-            raise
+def get_tag_value(page, tag_name) -> Any:
+    """
+    Retrieve the value of a specified tag from a TIFF page of a JPK file.
+
+    Parameters
+    ----------
+    page : tifffile.TiffPage
+        The TIFF page from which to retrieve the tag value.
+    tag_name : str
+        The name of the tag to retrieve.
+
+    Returns
+    -------
+    Any
+        The value of the specified tag.
+
+    Raises
+    ------
+    KeyError
+        If the tag is not found in the TIFF page.
+    """
+    try:
+        print(page.tags[tag_name].value)
+        return page.tags[tag_name].value
+    except KeyError:
+        logger.error(f"Missing tag in JPK file: {tag_name}")
+        raise
 
 def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> tuple[float, float]:
     """
@@ -106,8 +127,8 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
             .name
         )
 
-        scaling = tif.pages[channel_idx].tags[scaling_name].value
-        offset = tif.pages[channel_idx].tags[offset_name].value
+        scaling = get_tag_value(tif.pages[channel_idx], scaling_name)
+        offset = get_tag_value(tif.pages[channel_idx], offset_name)
     elif scaling_type == "NullScaling":
         scaling = 1
         offset = 0
