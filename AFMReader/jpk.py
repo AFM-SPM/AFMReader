@@ -38,6 +38,7 @@ def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: di
 
     return px_to_nm * 1e9
 
+
 def get_tag_value(page, tag_name) -> Any:
     """
     Retrieve the value of a specified tag from a TIFF page of a JPK file.
@@ -65,6 +66,7 @@ def get_tag_value(page, tag_name) -> Any:
     except KeyError:
         logger.error(f"Missing tag in JPK file: {tag_name}")
         raise
+
 
 def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> tuple[float, float]:
     """
