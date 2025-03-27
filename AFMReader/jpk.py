@@ -154,7 +154,7 @@ def load_jpk(
         Path to a configuration file. If ''None'' (default) then the packages default configuration is loaded from
         ''default_config.yaml''.
     flip_image : bool, optional
-        Whether to flip the image vertically. Default is True.
+        Whether to flip the image vertically. Default is ``True``.
 
     Returns
     -------
