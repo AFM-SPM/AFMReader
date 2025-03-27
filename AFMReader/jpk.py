@@ -40,7 +40,7 @@ def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: di
     return px_to_nm * 1e9
 
 
-def get_tag_value(page, tag_name) -> Any:
+def get_tag_value(page: tifffile.TiffPage, tag_name: str) -> str | int | float:
     """
     Retrieve the value of a specified tag from a TIFF page of a JPK file.
 
