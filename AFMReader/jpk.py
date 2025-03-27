@@ -112,7 +112,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
     return scaling, offset
 
 
-def load_jpk(file_path: Path | str, channel: str, config_path: Path | str | None = None) -> tuple[np.ndarray, float]:
+def load_jpk(file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True) -> tuple[np.ndarray, float]:
     """
     Load image from JPK Instruments .jpk files.
 
@@ -125,6 +125,8 @@ def load_jpk(file_path: Path | str, channel: str, config_path: Path | str | None
     config_path : Path | str | None
         Path to a configuration file. If ''None'' (default) then the packages default configuration is loaded from
         ''default_config.yaml''.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
 
     Returns
     -------
@@ -143,7 +145,7 @@ def load_jpk(file_path: Path | str, channel: str, config_path: Path | str | None
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_jpk
-    >>> image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
+    >>> image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
@@ -174,7 +176,7 @@ def load_jpk(file_path: Path | str, channel: str, config_path: Path | str | None
     image = channel_page.asarray()
     scaling, offset = _get_z_scaling(tif, channel_idx, jpk_tags)
     image = (image * scaling) + offset
-    if tif.pages[0].tags[jpk_tags["grid_reflect"]].value == 0:
+    if flip_image is True:
         image = np.flipud(image)
 
     if channel_page.tags[jpk_tags["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
