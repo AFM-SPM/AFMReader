@@ -62,7 +62,6 @@ def get_tag_value(page, tag_name) -> Any:
         If the tag is not found in the TIFF page.
     """
     try:
-        print(page.tags[tag_name].value)
         return page.tags[tag_name].value
     except KeyError:
         logger.error(f"Missing tag in JPK file: {tag_name}")
