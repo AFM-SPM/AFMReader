@@ -112,7 +112,9 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
     return scaling, offset
 
 
-def load_jpk(file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True) -> tuple[np.ndarray, float]:
+def load_jpk(
+    file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True
+) -> tuple[np.ndarray, float]:
     """
     Load image from JPK Instruments .jpk files.
 
