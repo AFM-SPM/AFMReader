@@ -87,11 +87,15 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
     tuple[float, float]
         A tuple contains values used to scale and offset raw data.
     """
+<<<<<<< HEAD
     try:
         n_slots = int(_get_tag_value(tif.pages[channel_idx], str(jpk_tags["n_slots"])))
     except ValueError as e:
         logger.error(f"n_slots is not a number: {e}")
         raise    
+=======
+    n_slots = int(_get_tag_value(tif.pages[channel_idx], str(jpk_tags["n_slots"])))
+>>>>>>> b8f79f310332d2ba9db19dd8e62da22a3b837a00
     default_slot = tif.pages[channel_idx].tags[jpk_tags["default_slot"]]
 
     # Create a dictionary of list for the differnt slots
