@@ -59,8 +59,12 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
     tuple[float, float]
         A tuple contains values used to scale and offset raw data.
     """
-    n_slots = tif.pages[channel_idx].tags[jpk_tags["n_slots"]].value
-    default_slot = tif.pages[channel_idx].tags[jpk_tags["default_slot"]]
+    try:
+        n_slots = tif.pages[channel_idx].tags[jpk_tags["n_slots"]].value
+        default_slot = tif.pages[channel_idx].tags[jpk_tags["default_slot"]]
+    except KeyError as e:
+        logger.error(f"Missing tag in JPK file: {e}")
+        raise
 
     # Create a dictionary of list for the differnt slots
     slots: dict[int, list[str]] = {slot: [] for slot in range(n_slots)}
