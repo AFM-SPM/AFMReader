@@ -38,12 +38,14 @@ def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: di
 
     return px_to_nm * 1e9
 
+
 def get_tag_value(page, tag_name):
-        try:
-            return page.tags[tag_name].value
-        except KeyError:
-            logger.error(f"Missing tag in JPK file: {tag_name}")
-            raise
+    try:
+        return page.tags[tag_name].value
+    except KeyError:
+        logger.error(f"Missing tag in JPK file: {tag_name}")
+        raise
+
 
 def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> tuple[float, float]:
     """
@@ -92,8 +94,8 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
 
     # Determine if the default slot requires scaling and find scaling and offset values
     scaling_type = get_tag_value(
-        tif.pages[channel_idx],str(int(jpk_tags["first_scaling_type"]) + (jpk_tags["slot_size"] * (_default_slot)))
-        )
+        tif.pages[channel_idx], str(int(jpk_tags["first_scaling_type"]) + (jpk_tags["slot_size"] * (_default_slot)))
+    )
     if scaling_type == "LinearScaling":
         scaling_name = (
             tif.pages[channel_idx]
