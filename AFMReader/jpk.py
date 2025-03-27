@@ -113,8 +113,8 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
 
     # Determine if the default slot requires scaling and find scaling and offset values
     scaling_type = get_tag_value(
-        tif.pages[channel_idx],str(int(jpk_tags["first_scaling_type"]) + (jpk_tags["slot_size"] * (_default_slot)))
-        )
+        tif.pages[channel_idx], str(int(jpk_tags["first_scaling_type"]) + (jpk_tags["slot_size"] * (_default_slot)))
+    )
     if scaling_type == "LinearScaling":
         scaling_name = (
             tif.pages[channel_idx]
