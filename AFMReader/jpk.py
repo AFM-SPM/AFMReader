@@ -174,7 +174,7 @@ def load_jpk(file_path: Path | str, channel: str, config_path: Path | str | None
     image = channel_page.asarray()
     scaling, offset = _get_z_scaling(tif, channel_idx, jpk_tags)
     image = (image * scaling) + offset
-    if tif.pages[0].tags[JPK_TAGS["grid_reflect"]].value == 0:
+    if tif.pages[0].tags[jpk_tags["grid_reflect"]].value == 0:
         image = np.flipud(image)
 
     if channel_page.tags[jpk_tags["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
