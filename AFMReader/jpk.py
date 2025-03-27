@@ -39,7 +39,7 @@ def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: di
     return px_to_nm * 1e9
 
 
-def get_tag_value(page: tifffile.TiffPage, tag_name: str) -> str | int | float:
+def _get_tag_value(page: tifffile.TiffPage, tag_name: str) -> str | int | float:
     """
     Retrieve the value of a specified tag from a TIFF page of a JPK file.
 
@@ -87,7 +87,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
     tuple[float, float]
         A tuple contains values used to scale and offset raw data.
     """
-    n_slots = get_tag_value(tif.pages[channel_idx], jpk_tags["n_slots"])
+    n_slots = int(_get_tag_value(tif.pages[channel_idx], str(jpk_tags["n_slots"])))
     default_slot = tif.pages[channel_idx].tags[jpk_tags["default_slot"]]
 
     # Create a dictionary of list for the differnt slots
@@ -97,11 +97,11 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
     while n_slots >= 0:
         for tag in tif.pages[channel_idx].tags:
             try:
-                tag_name_float = float(tag.name)
-                if tag_name_float >= (  # pylint: disable=chained-comparison
-                    int(jpk_tags["first_slot_tag"]) + (n_slots * jpk_tags["slot_size"])
-                ) and tag_name_float < (int(jpk_tags["first_slot_tag"]) + ((n_slots + 1) * jpk_tags["slot_size"])):
-                    slots[(n_slots)].append(tag.name)
+                tag_name_int = int(tag.name)
+                if tag_name_int >= (  # pylint: disable=chained-comparison
+                    int(jpk_tags["first_slot_tag"]) + (n_slots * int(jpk_tags["slot_size"]))
+                ) and tag_name_int < (int(jpk_tags["first_slot_tag"]) + ((n_slots + 1) * jpk_tags["slot_size"])):
+                    slots[int(n_slots)].append(tag.name)
             except ValueError:
                 continue
         n_slots -= 1
@@ -113,7 +113,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
                 _default_slot = slot
 
     # Determine if the default slot requires scaling and find scaling and offset values
-    scaling_type = get_tag_value(
+    scaling_type = _get_tag_value(
         tif.pages[channel_idx], str(int(jpk_tags["first_scaling_type"]) + (jpk_tags["slot_size"] * (_default_slot)))
     )
     if scaling_type == "LinearScaling":
@@ -128,11 +128,11 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
             .name
         )
 
-        scaling = get_tag_value(tif.pages[channel_idx], scaling_name)
-        offset = get_tag_value(tif.pages[channel_idx], offset_name)
+        scaling = float(_get_tag_value(tif.pages[channel_idx], scaling_name))
+        offset = float(_get_tag_value(tif.pages[channel_idx], offset_name))
     elif scaling_type == "NullScaling":
-        scaling = 1
-        offset = 0
+        scaling = 1.0
+        offset = 0.0
     else:
         raise ValueError(f"Scaling type {scaling_type} is not 'NullScaling' or 'LinearScaling'")
     return scaling, offset
