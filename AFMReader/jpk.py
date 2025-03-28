@@ -93,7 +93,7 @@ def _get_number_of_slots(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dic
     try:
         n_slots = int(_get_tag_value(tif.pages[channel_idx], str(jpk_tags["n_slots"])))
     except ValueError as e:
-        logger.error(f"n_slots is not a number: {e}")
+        logger.error(f"n_slots is not a integer: {e}")
         raise
     return n_slots
 
@@ -130,7 +130,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
                 if tag_name_int >= (  # pylint: disable=chained-comparison
                     int(jpk_tags["first_slot_tag"]) + (n_slots * int(jpk_tags["slot_size"]))
                 ) and tag_name_int < (int(jpk_tags["first_slot_tag"]) + ((n_slots + 1) * jpk_tags["slot_size"])):
-                    slots[int(n_slots)].append(tag.name)
+                    slots[n_slots].append(tag.name)
             except ValueError:
                 continue
         n_slots -= 1
