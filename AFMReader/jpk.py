@@ -3,7 +3,6 @@
 from __future__ import annotations
 from importlib import resources
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import tifffile
@@ -40,7 +39,7 @@ def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: di
     return px_to_nm * 1e9
 
 
-def get_tag_value(page, tag_name) -> Any:
+def _get_tag_value(page: tifffile.TiffPage, tag_name: str) -> str | int | float:
     """
     Retrieve the value of a specified tag from a TIFF page of a JPK file.
 
@@ -62,11 +61,41 @@ def get_tag_value(page, tag_name) -> Any:
         If the tag is not found in the TIFF page.
     """
     try:
-        print(page.tags[tag_name].value)
         return page.tags[tag_name].value
     except KeyError:
         logger.error(f"Missing tag in JPK file: {tag_name}")
         raise
+
+
+def _get_number_of_slots(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> int:
+    """
+    Retrieve the number of slots from a JPK image channel.
+
+    Parameters
+    ----------
+    tif : tifffile.TiffFile
+        A TIFF file containing JPK images.
+    channel_idx : int
+        Numerical channel identifier used to navigate the TIFF file pages.
+    jpk_tags : dict[str, int]
+        Dictionary of JPK tags.
+
+    Returns
+    -------
+    int
+        The number of slots in the specified JPK image channel.
+
+    Raises
+    ------
+    ValueError
+        If the slot count cannot be converted to an integer.
+    """
+    try:
+        n_slots = int(_get_tag_value(tif.pages[channel_idx], str(jpk_tags["n_slots"])))
+    except ValueError as e:
+        logger.error(f"n_slots is not a integer: {e}")
+        raise
+    return n_slots
 
 
 def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> tuple[float, float]:
@@ -89,33 +118,32 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
     tuple[float, float]
         A tuple contains values used to scale and offset raw data.
     """
-    n_slots = get_tag_value(tif.pages[channel_idx], jpk_tags["n_slots"])
-    default_slot = tif.pages[channel_idx].tags[jpk_tags["default_slot"]]
-
     # Create a dictionary of list for the differnt slots
+    n_slots = _get_number_of_slots(tif, channel_idx, jpk_tags)
     slots: dict[int, list[str]] = {slot: [] for slot in range(n_slots)}
 
     # Extract the tags with numerical names in each slot
     while n_slots >= 0:
         for tag in tif.pages[channel_idx].tags:
             try:
-                tag_name_float = float(tag.name)
-                if tag_name_float >= (  # pylint: disable=chained-comparison
-                    int(jpk_tags["first_slot_tag"]) + (n_slots * jpk_tags["slot_size"])
-                ) and tag_name_float < (int(jpk_tags["first_slot_tag"]) + ((n_slots + 1) * jpk_tags["slot_size"])):
-                    slots[(n_slots)].append(tag.name)
+                tag_name_int = int(tag.name)
+                if tag_name_int >= (  # pylint: disable=chained-comparison
+                    int(jpk_tags["first_slot_tag"]) + (n_slots * int(jpk_tags["slot_size"]))
+                ) and tag_name_int < (int(jpk_tags["first_slot_tag"]) + ((n_slots + 1) * jpk_tags["slot_size"])):
+                    slots[n_slots].append(tag.name)
             except ValueError:
                 continue
         n_slots -= 1
 
     # Find the number of the default slot (selected in the instrument GUI)
+    default_slot = tif.pages[channel_idx].tags[jpk_tags["default_slot"]]
     for slot, values in slots.items():
         for value in values:
             if tif.pages[channel_idx].tags[str(value)].value == default_slot.value:
                 _default_slot = slot
 
     # Determine if the default slot requires scaling and find scaling and offset values
-    scaling_type = get_tag_value(
+    scaling_type = _get_tag_value(
         tif.pages[channel_idx], str(int(jpk_tags["first_scaling_type"]) + (jpk_tags["slot_size"] * (_default_slot)))
     )
     if scaling_type == "LinearScaling":
@@ -130,18 +158,18 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
             .name
         )
 
-        scaling = get_tag_value(tif.pages[channel_idx], scaling_name)
-        offset = get_tag_value(tif.pages[channel_idx], offset_name)
+        scaling = float(_get_tag_value(tif.pages[channel_idx], scaling_name))
+        offset = float(_get_tag_value(tif.pages[channel_idx], offset_name))
     elif scaling_type == "NullScaling":
-        scaling = 1
-        offset = 0
+        scaling = 1.0
+        offset = 0.0
     else:
         raise ValueError(f"Scaling type {scaling_type} is not 'NullScaling' or 'LinearScaling'")
     return scaling, offset
 
 
 def load_jpk(
-    file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True
+    file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool | None = True
 ) -> tuple[np.ndarray, float]:
     """
     Load image from JPK Instruments .jpk files.
@@ -156,7 +184,7 @@ def load_jpk(
         Path to a configuration file. If ''None'' (default) then the packages default configuration is loaded from
         ''default_config.yaml''.
     flip_image : bool, optional
-        Whether to flip the image vertically. Default is True.
+        Whether to flip the image vertically. Default is ``True``.
 
     Returns
     -------
