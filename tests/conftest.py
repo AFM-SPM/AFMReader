@@ -15,6 +15,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 
 @pytest.fixture()
 def caplog(_caplog):
+    """Ensure the caplog works with loguru."""
     class PropogateHandler(logging.Handler):
         def emit(self, record):
             logging.getLogger(record.name).handle(record)
