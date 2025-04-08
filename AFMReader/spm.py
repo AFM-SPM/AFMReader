@@ -95,7 +95,7 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
             # trying to return the error with options of possible channel values
             labels = []
             for channel_option in [layer[b"@2:Image Data"][0] for layer in scan.layers]:
-                channel_name = channel_option.decode("latin1").split('"')[1][1:-1]
+                channel_name = channel_option.decode("latin1").split('"')[1]
                 labels.append(channel_name)
             logger.error(f"[{filename}] : {channel} not in {file_path.suffix} channel list: {labels}")
             raise ValueError(f"{channel} not in {file_path.suffix} channel list: {labels}") from e
