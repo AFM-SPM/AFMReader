@@ -52,7 +52,8 @@ dev = [
   "pytest-testmon",
   "ruff",
   "setuptools_scm[toml]",
-  "wheel"
+  "wheel",
+  "regex",
 ]
 docs = [
   "mike",
