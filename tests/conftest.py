@@ -13,7 +13,8 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 
 
 @pytest.fixture()
-def caplog(caplog: LogCaptureFixture):
+def caplog(caplog: LogCaptureFixture):  # pylint: disable=redefined-outer-name
+    """Instantiate the logging capture for loguru."""
     handler_id = logger.add(
         caplog.handler,
         format="{message}",

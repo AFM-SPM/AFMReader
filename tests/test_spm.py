@@ -1,12 +1,12 @@
 """Test the loading of spm files."""
 
+import re
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import numpy as np
 import pySPM
 import pytest
-import re
 
 from AFMReader import spm
 
@@ -92,7 +92,8 @@ def test_load_spm_file_not_found() -> None:
         pytest.param("Dissipation", "Extracted channel Dissipation", False, id="Dissipation found"),
         pytest.param(
             "Might",
-            "'Might' not in .spm channel list: ['Height Sensor', 'Peak Force Error', 'DMTModulus', 'LogDMTModulus', 'Adhesion', 'Deformation', 'Dissipation', 'Height']",
+            "'Might' not in .spm channel list: ['Height Sensor', 'Peak Force Error', 'DMTModulus', 'LogDMTModulus', "
+            + "'Adhesion', 'Deformation', 'Dissipation', 'Height']",
             True,
             id="Might not found",
         ),
