@@ -98,7 +98,7 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
                 channel_name = channel_option.decode("latin1").split('"')[1]
                 labels.append(channel_name)
             logger.error(f"[{filename}] : '{channel}' not in {file_path.suffix} channel list: {labels}")
-            raise ValueError(f"{channel} not in {file_path.suffix} channel list: {labels}") from e
+            raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {labels}") from e
         raise e
 
     return (image, spm_pixel_to_nm_scaling(filename, channel_data))
