@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pySPM
 import pytest
-import regex as re
+import re
 
 from AFMReader import spm
 
