@@ -70,11 +70,11 @@ def load_stp(  # noqa: C901 (ignore too complex)
             if cols_match is None:
                 raise ValueError(f"[{filename}] : 'cols' not found in file header.")
             cols = int(cols_match.group(1))
-            x_real_size_match = re.search(r"X Amplitude: (\d+) nm", header_decoded)
+            x_real_size_match = re.search(r"X Amplitude: (\d+\.?\d*) nm", header_decoded)
             if x_real_size_match is None:
                 raise ValueError(f"[{filename}] : 'X Amplitude' not found in file header.")
             x_real_size = float(x_real_size_match.group(1))
-            y_real_size_match = re.search(r"Y Amplitude: (\d+) nm", header_decoded)
+            y_real_size_match = re.search(r"Y Amplitude: (\d+\.?\d*) nm", header_decoded)
             if y_real_size_match is None:
                 raise ValueError(f"[{filename}] : 'Y Amplitude' not found in file header.")
             y_real_size = float(y_real_size_match.group(1))
