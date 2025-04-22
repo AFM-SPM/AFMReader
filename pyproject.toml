@@ -52,7 +52,7 @@ dev = [
   "pytest-testmon",
   "ruff",
   "setuptools_scm[toml]",
-  "wheel"
+  "wheel",
 ]
 docs = [
   "mike",
