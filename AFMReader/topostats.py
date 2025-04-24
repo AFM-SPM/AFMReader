@@ -42,7 +42,7 @@ def load_topostats(file_path: Path | str) -> dict[str, Any]:
     try:
         with h5py.File(file_path, "r") as f:
             data = unpack_hdf5(open_hdf5_file=f, group_path="/")
-            if data["topostats_file_version"] >= 0.2:
+            if str(data["topostats_file_version"]) >= "0.2":
                 data["img_path"] = Path(data["img_path"])
             file_version = data["topostats_file_version"]
             logger.info(f"[{filename}] TopoStats file version : {file_version}")
