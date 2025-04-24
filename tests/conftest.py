@@ -4,26 +4,10 @@ from pathlib import Path
 
 import pySPM
 import pytest
-from _pytest.logging import LogCaptureFixture
 
-from AFMReader.logging import logger
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
-
-
-@pytest.fixture()
-def caplog(caplog: LogCaptureFixture):  # pylint: disable=redefined-outer-name
-    """Instantiate the logging capture for loguru."""
-    handler_id = logger.add(
-        caplog.handler,
-        format="{message}",
-        level=0,
-        filter=lambda record: record["level"].no >= caplog.handler.level,
-        enqueue=False,  # Set to 'True' if your test is spawning child processes.
-    )
-    yield caplog
-    logger.remove(handler_id)
 
 
 @pytest.fixture()
