@@ -70,6 +70,7 @@ pypi = [
 tests = [
   "pytest",
   "pytest-cov",
+  "pytest-loguru",
 ]
 
 [project.urls]
