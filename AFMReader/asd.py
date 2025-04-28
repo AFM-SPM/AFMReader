@@ -33,7 +33,8 @@ if sys.version_info.minor < 11:
     from typing import Any, BinaryIO
     from typing_extensions import Self
 else:
-    from typing import Any, BinaryIO, Self
+    from typing import Any, BinaryIO
+    from typing_extensions import Self
 
 
 logger.enable(__package__)
@@ -262,7 +263,7 @@ def load_asd(file_path: str | Path, channel: str):
             _ = open_file.read(length_of_all_first_channel_frames)
         else:
             raise ValueError(
-                f"Channel {channel} not found in this file's available channels: "
+                f"'{channel}' not found {file_path.suffix} channel list: "
                 f"{header_dict['channel1']}, {header_dict['channel2']}"
             )
 
