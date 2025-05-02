@@ -52,4 +52,5 @@ def load_topostats(file_path: Path | str) -> dict[str, Any]:
             logger.error(f"[{filename}] File not found : {file_path}")
         raise e
 
+    logger.info(f"[{filename}] : Extracted image.")
     return data

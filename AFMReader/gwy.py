@@ -89,6 +89,7 @@ def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.dt
         logger.error(f"[{filename}] : '{channel}' not found in {file_path.suffix} channel list: {channel_ids}")
         raise ValueError(f"'{channel}' not found in {file_path.suffix} channel list: {channel_ids}") from e
 
+    logger.info(f"[{filename}] : Extracted image.")
     return (image, px_to_nm)
 
 

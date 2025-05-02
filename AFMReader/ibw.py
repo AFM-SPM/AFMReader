@@ -99,5 +99,6 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     except Exception as e:
         logger.error(f"[{filename}] : {e}")
         raise e
-
+    
+    logger.info(f"[{filename}] : Extracted image.")
     return (image, _ibw_pixel_to_nm_scaling(scan))
