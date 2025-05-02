@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import numpy.typing as npt
+
 from AFMReader import asd, gwy, ibw, jpk, spm, stp, top, topostats
 from AFMReader.logging import logger
 
@@ -75,7 +77,8 @@ class LoadFile:
                     image_keys = ["image", "image_original"]
                     topostats_keys = list(ts_dict.keys())
                     raise ValueError(
-                        f"'{self.channel}' not in available image keys: {[im for im in image_keys if im in topostats_keys]}"
+                        f"'{self.channel}' not in available image keys: "
+                        f"{[im for im in image_keys if im in topostats_keys]}"
                     ) from exc
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
