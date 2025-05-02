@@ -102,10 +102,17 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         ),
         pytest.param(
             RESOURCES / "sample_0_1.topostats",
-            "",
+            "image",
             False,
-            "Extracted image",
+            "Extracted .topostats dictionary.",
             id="'.topostats' success.",
+        ),
+        pytest.param(
+            RESOURCES / "sample_0_1.topostats",
+            "hgjswbweongp",
+            True,
+            "'hgjswbweongp' not in available image keys: ['image']",
+            id="'.topostats' channel not found.",
         ),
         pytest.param(
             RESOURCES / "sample_0.xxx",

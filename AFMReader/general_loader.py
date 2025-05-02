@@ -69,10 +69,12 @@ class LoadFile:
             elif self.suffix == ".topostats":
                 ts_dict = topostats.load_topostats(self.filepath)
                 try:
-                    image = ts_dict["image"]
-                except KeyError:
-                    image = ts_dict["image_original"]
-                pixel_to_nanometre_scaling_factor = ts_dict["pixel_to_nm_scaling"]
+                    image = ts_dict[self.channel]
+                    pixel_to_nanometre_scaling_factor = ts_dict["pixel_to_nm_scaling"]
+                except KeyError as exc:
+                    image_keys = ["image", "image_original"]
+                    topostats_keys = list(ts_dict.keys())
+                    raise ValueError(f"'{self.channel}' not in available image keys: {[im for im in image_keys if im in topostats_keys]}") from exc
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
 
