@@ -154,7 +154,7 @@ def test_load(caplog: pytest.LogCaptureFixture, filepath: Path, channel: str, er
         ),
     ],
 )
-def test_load_filenotfounderror(filepath: Path):
+def test_load_filenotfounderror(filepath: Path) -> None:
     """Test that a file not found error is raise when filepath is wrong."""
     loader = general_loader.LoadFile(filepath, "channel")
 
