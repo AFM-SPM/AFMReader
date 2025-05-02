@@ -33,8 +33,7 @@ if sys.version_info.minor < 11:
     from typing import Any, BinaryIO
     from typing_extensions import Self
 else:
-    from typing import Any, BinaryIO
-    from typing_extensions import Self
+    from typing import Any, BinaryIO, Self
 
 
 logger.enable(__package__)
