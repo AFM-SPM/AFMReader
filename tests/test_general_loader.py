@@ -1,11 +1,9 @@
 """Test the general loader module."""
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 import numpy as np
-import numpy.typing as npt
 from AFMReader import general_loader
 
 
@@ -28,7 +26,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             "notherelol",
             True,
             "'notherelol' not found .asd channel list: TP, PH",
-            id="'asd' channel not found."
+            id="'asd' channel not found.",
         ),
         pytest.param(
             RESOURCES / "sample_0.gwy",
@@ -121,8 +119,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             "File type '.xxx' is not currently handled by AFMReader.",
             id="'.xxx' unsupported filetype.",
         ),
-    ]
-
+    ],
 )
 def test_load(caplog: pytest.LogCaptureFixture, filepath: Path, channel: str, error: bool, message: str):
     """Test loading of all (asd, gwy, ibw, jpk, spm, stp, top, topostats) filetypes."""
@@ -142,6 +139,7 @@ def test_load(caplog: pytest.LogCaptureFixture, filepath: Path, channel: str, er
     # check output logs
     assert message in caplog.text
 
+
 @pytest.mark.parametrize(
     ("filepath"),
     [
@@ -149,7 +147,7 @@ def test_load(caplog: pytest.LogCaptureFixture, filepath: Path, channel: str, er
             RESOURCES / "not_a_real_file.spm",
             id="File not found error raised.",
         ),
-    ]
+    ],
 )
 def test_load_filenotfounderror(filepath: Path):
     """Test that a file not found error is raise when filepath is wrong."""

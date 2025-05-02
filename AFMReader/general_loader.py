@@ -74,7 +74,9 @@ class LoadFile:
                 except KeyError as exc:
                     image_keys = ["image", "image_original"]
                     topostats_keys = list(ts_dict.keys())
-                    raise ValueError(f"'{self.channel}' not in available image keys: {[im for im in image_keys if im in topostats_keys]}") from exc
+                    raise ValueError(
+                        f"'{self.channel}' not in available image keys: {[im for im in image_keys if im in topostats_keys]}"
+                    ) from exc
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
 
