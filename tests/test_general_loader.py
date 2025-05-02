@@ -126,7 +126,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         ),
     ],
 )
-def test_load(caplog: pytest.LogCaptureFixture, filepath: Path, channel: str, error: bool, message: str):
+def test_load(caplog: pytest.LogCaptureFixture, filepath: Path, channel: str, error: bool, message: str) -> None:
     """Test loading of all (asd, gwy, ibw, jpk, spm, stp, top, topostats) filetypes."""
     loader = general_loader.LoadFile(filepath, channel)
 
