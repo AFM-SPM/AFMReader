@@ -1,6 +1,5 @@
 """For decoding and loading .gwy AFM file format into Python Numpy arrays."""
 
-from __future__ import annotations
 from pathlib import Path
 import re
 from typing import Any, BinaryIO
