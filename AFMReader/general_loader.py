@@ -1,5 +1,6 @@
 """Switchboard for input files."""
 
+from __future__ import annotations
 from pathlib import Path
 
 import numpy.typing as npt
@@ -23,20 +24,20 @@ class LoadFile:
             Channel to extract from the AFM image.
     """
 
-    def __init__(self, filepath: Path, channel: str):
+    def __init__(self, filepath: str | Path, channel: str):
         """
         Initialise the general LoadFile class with a filepath and channel.
 
         Parameters
         ----------
-        filepath : Path
+        filepath : str | Path
             Path to the AFM image.
         channel : str
             Channel to extract from the AFM image.
         """
-        self.filepath = filepath
+        self.filepath = Path(filepath)
         self.channel = channel
-        self.suffix = filepath.suffix
+        self.suffix = self.filepath.suffix
 
     def load(self) -> tuple[npt.NDArray | str, float | None]:  # noqa: C901
         """
@@ -45,7 +46,7 @@ class LoadFile:
         Returns
         -------
         tuple
-            The image data (stack if .asd) and the pixel to nanometre scaling ratio.
+            The image data (stack if ''.asd'') and the pixel to nanometre scaling ratio.
 
         Raises
         ------
