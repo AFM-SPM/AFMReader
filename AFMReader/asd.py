@@ -262,7 +262,7 @@ def load_asd(file_path: str | Path, channel: str):
             _ = open_file.read(length_of_all_first_channel_frames)
         else:
             raise ValueError(
-                f"Channel {channel} not found in this file's available channels: "
+                f"'{channel}' not found {file_path.suffix} channel list: "
                 f"{header_dict['channel1']}, {header_dict['channel2']}"
             )
 
@@ -288,6 +288,7 @@ def load_asd(file_path: str | Path, channel: str):
 
         frames = np.array(frames)
 
+        logger.info(f"[{filename}] : Extracted image.")
         return frames, pixel_to_nanometre_scaling_factor, header_dict
 
 

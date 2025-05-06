@@ -225,9 +225,9 @@ def load_jpk(
         channel_list[f"{available_channel}_{tr_rt}"] = i + 1
     try:
         channel_idx = channel_list[channel]
-    except KeyError:
-        logger.error(f"{channel} not in channel list: {channel_list}")
-        raise
+    except KeyError as e:
+        logger.error(f"'{channel}' not in {file_path.suffix} channel list: {channel_list}")
+        raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {channel_list}") from e
 
     # Get image and if applicable, scale it
     channel_page = tif.pages[channel_idx]
@@ -242,6 +242,8 @@ def load_jpk(
 
     # Get page for common metadata between scans
     metadata_page = tif.pages[0]
+
+    logger.info(f"[{filename}] : Extracted image.")
     return (image, _jpk_pixel_to_nm_scaling(metadata_page, jpk_tags))
 
 

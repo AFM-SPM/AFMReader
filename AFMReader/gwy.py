@@ -63,7 +63,7 @@ def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.dt
         channel_ids = gwy_get_channels(gwy_file_structure=image_data_dict)
 
         if channel not in channel_ids:
-            raise KeyError(f"Channel {channel} not found in {file_path.suffix} channel list: {channel_ids}")
+            raise KeyError(f"Channel '{channel}' not found in {file_path.suffix} channel list: {channel_ids}")
 
         # Get the image data
         image = image_data_dict[f"/{channel_ids[channel]}/data"]["data"]
@@ -85,7 +85,11 @@ def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.dt
     except FileNotFoundError:
         logger.info(f"[{filename}] File not found : {file_path}")
         raise
+    except KeyError as e:
+        logger.error(f"[{filename}] : '{channel}' not found in {file_path.suffix} channel list: {channel_ids}")
+        raise ValueError(f"'{channel}' not found in {file_path.suffix} channel list: {channel_ids}") from e
 
+    logger.info(f"[{filename}] : Extracted image.")
     return (image, px_to_nm)
 
 

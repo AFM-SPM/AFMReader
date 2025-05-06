@@ -93,11 +93,12 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     except FileNotFoundError:
         logger.error(f"[{filename}] File not found : {file_path}")
         raise
-    except ValueError:
-        logger.error(f"[{filename}] : {channel} not in {file_path.suffix} channel list: {labels}")
-        raise
+    except ValueError as e:
+        logger.error(f"[{filename}] : '{channel}' not in {file_path.suffix} channel list: {labels}")
+        raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {labels}") from e
     except Exception as e:
         logger.error(f"[{filename}] : {e}")
         raise e
 
+    logger.info(f"[{filename}] : Extracted image.")
     return (image, _ibw_pixel_to_nm_scaling(scan))
