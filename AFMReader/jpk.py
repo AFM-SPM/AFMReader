@@ -11,6 +11,8 @@ from AFMReader.logging import logger
 
 logger.enable(__package__)
 
+# pylint: disable=too-many-locals
+
 
 def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: dict[str, int]) -> float:
     """
@@ -140,11 +142,13 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
         for value in values:
             if tif.pages[channel_idx].tags[str(value)].value == default_slot.value:
                 _default_slot = slot
-
+    # pylint: disable=possibly-used-before-assignment
     # Determine if the default slot requires scaling and find scaling and offset values
     scaling_type = _get_tag_value(
-        tif.pages[channel_idx], str(int(jpk_tags["first_scaling_type"]) + (jpk_tags["slot_size"] * (_default_slot)))
+        tif.pages[channel_idx],
+        str(int(jpk_tags["first_scaling_type"]) + (jpk_tags["slot_size"] * (_default_slot))),
     )
+    # pylint: enable=possibly-used-before-assignment
     if scaling_type == "LinearScaling":
         scaling_name = (
             tif.pages[channel_idx]
@@ -202,7 +206,9 @@ def load_jpk(
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_jpk
-    >>> image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
+    >>> image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk",
+    >>>                                                     channel="height_trace",
+    >>>                                                     flip_image=True)
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
