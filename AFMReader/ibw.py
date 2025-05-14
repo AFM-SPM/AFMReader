@@ -1,6 +1,5 @@
 """For decoding and loading .ibw AFM file format into Python Numpy arrays."""
 
-from __future__ import annotations
 import errno
 import os
 from pathlib import Path

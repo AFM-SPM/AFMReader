@@ -1,6 +1,5 @@
 """For decoding and loading .gwy AFM file format into Python Numpy arrays."""
 
-from __future__ import annotations
 from pathlib import Path
 import re
 from typing import Any, BinaryIO
@@ -11,7 +10,7 @@ import numpy as np
 from AFMReader.io import read_uint32, read_null_terminated_string, read_char, read_double
 
 
-def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.dtypes.Float64DType], float]:
+def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.float64], float]:
     """
     Extract image and pixel to nm scaling from the .gwy file.
 

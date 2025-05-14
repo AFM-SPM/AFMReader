@@ -1,6 +1,5 @@
 """For decoding and loading .topostats (HDF5 format) AFM file format into Python Nympy arrays."""
 
-from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
