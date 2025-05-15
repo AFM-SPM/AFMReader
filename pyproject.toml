@@ -38,7 +38,7 @@ dependencies = [
   "igor2",
   "loguru",
   "matplotlib",
-  "pySPM",
+  "pySPM~=0.6.2",
   "tifffile",
   "ruamel.yaml",
 ]
