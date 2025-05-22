@@ -3,7 +3,6 @@ Module to decode and load .h5-jpk AFM file format into Python NumPy arrays.
 
 These files can contain multiple images that make up a video; here, single frames are read.
 """
-
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +11,100 @@ import h5py
 from AFMReader.logging import logger
 
 logger.enable(__package__)
+
+
+def _parse_channel_name(channel: str) -> tuple[str, str]:
+    """
+    Validate and split a channel name into its type and trace direction.
+
+    Parameters
+    ----------
+    channel : str
+        The name of the channel, expected in the form 'name_trace' or 'name_retrace'.
+
+    Returns
+    -------
+    tuple[str, str]
+        A tuple containing the channel type and trace type.
+
+    Raises
+    ------
+    ValueError
+        If the format is invalid or the trace type is not 'trace' or 'retrace'.
+    """
+    if "_" not in channel:
+        raise ValueError(f"Invalid channel format '{channel}'. Expected 'name_trace' or 'name_retrace'.")
+    
+    channel_type, trace_type = channel.rsplit("_", 1)
+    trace_type = trace_type.lower()
+    
+    if trace_type not in ("trace", "retrace"):
+        raise ValueError(f"Invalid trace type '{trace_type}'. Must be 'trace' or 'retrace'.")
+    
+    return channel_type, trace_type
+
+
+def _get_channel_info(f: h5py.File, channel: str):
+    """
+    Retrieve channel-related HDF5 groups and dataset name.
+
+    Parameters
+    ----------
+    f : h5py.File
+        The open HDF5 file object.
+    channel : str
+        The name of the channel to retrieve.
+
+    Returns
+    -------
+    tuple[h5py.Group, h5py.Group, str]
+        The channel group, measurement group, and dataset name.
+
+    Raises
+    ------
+    ValueError
+        If the channel is not found.
+    """
+    _parse_channel_name(channel)  # just for validation
+
+    channel_map = _discover_available_channels(f)
+    if channel not in channel_map:
+        raise ValueError(f"'{channel}' not found. Available channels: {list(channel_map)}")
+
+    channel_path = channel_map[channel]
+    channel_group = f[channel_path]
+    measurement_group = f[channel_path.split("/")[0]]
+    dataset_name = channel.split("_")[0].capitalize()
+
+    return channel_group, measurement_group, dataset_name
+
+
+def _extract_frame(images: np.ndarray, frame: int, image_size: int) -> np.ndarray:
+    """
+    Extract a single frame from a flattened stack of image data.
+
+    Parameters
+    ----------
+    images : np.ndarray
+        2D array where each column is a flattened image frame.
+    frame : int
+        The index of the frame to extract.
+    image_size : int
+        The height/width of the square image.
+
+    Returns
+    -------
+    np.ndarray
+        The reshaped 2D image frame.
+
+    Raises
+    ------
+    IndexError
+        If the requested frame index is out of range.
+    """
+    if frame < 0 or frame >= images.shape[1]:
+        raise IndexError(f"Frame index {frame} out of range. Must be between 0 and {images.shape[1]-1}.")
+    return images[:, frame].reshape((image_size, image_size))
 
 
 def _jpk_pixel_to_nm_scaling_h5(measurement_group: h5py.Group) -> float:
@@ -76,17 +169,77 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
 
 
 def _decode_attr(attr: bytes | str) -> str:
-    """Decode an HDF5 attribute that might be bytes or str."""
+    """
+    Decode an attribute that may be bytes or a string.
+
+    Parameters
+    ----------
+    attr : bytes or str
+        The attribute to decode.
+
+    Returns
+    -------
+    str
+        The decoded string.
+    """
     if isinstance(attr, bytes):
         return attr.decode("utf-8")
     return str(attr)
 
 
 def _attr_to_bool(attr: bytes | str | bool | int | float) -> bool:
-    """Convert an HDF5 attribute to bool, handling bytes, str, bool, int, float types."""
+    """
+    Convert an attribute to a boolean value.
+
+    Parameters
+    ----------
+    attr : bytes, str, bool, int, or float
+        The attribute to convert.
+
+    Returns
+    -------
+    bool
+        The boolean interpretation of the value.
+    """
     if isinstance(attr, bytes | str):
         return _decode_attr(attr).strip().lower() == "true"
     return bool(attr)
+
+
+def _discover_available_channels(f: h5py.File) -> dict[str, str]:
+    """
+    Discover all available scan channels in the HDF5 file.
+
+    Parameters
+    ----------
+    f : h5py.File
+        The open HDF5 file.
+
+    Returns
+    -------
+    dict[str, str]
+        Mapping of channel names (e.g. 'height_trace') to their full HDF5 path.
+    """
+    channel_map = {}
+    for m_key, m_group in f.items():
+        if not m_key.startswith("Measurement_"):
+            continue
+        for c_key in m_group.keys():
+            if not c_key.startswith("Channel_"):
+                continue
+
+            c_group = m_group[c_key]
+            name = c_group.attrs.get("channel.name")
+            if name is None:
+                continue
+
+            retrace = _attr_to_bool(c_group.attrs.get("retrace", False))
+            tr_rt = "retrace" if retrace else "trace"
+            full_key = f"{_decode_attr(name).strip().lower()}_{tr_rt}"
+            full_path = f"{m_key}/{c_key}"
+            if full_key not in channel_map:
+                channel_map[full_key] = full_path
+    return channel_map
 
 
 def load_h5jpk(
@@ -133,60 +286,11 @@ def load_h5jpk(
     file_path = Path(file_path)
     filename = file_path.stem
 
-    # Validate and process channel input
-    if "_" not in channel:
-        raise ValueError(f"Invalid channel format '{channel}'. Expected format: 'channel_trace' or 'channel_retrace'.")
-
-    channel_type, trace_type = channel.rsplit("_", 1)
-    trace_type = trace_type.lower()
-
-    if trace_type not in ("trace", "retrace"):
-        raise ValueError(f"Invalid trace type '{trace_type}'. Must be 'trace' or 'retrace'.")
-
     # Load HDF5 file
     with h5py.File(file_path, "r") as f:
         logger.debug(f"Opened HDF5 file structure: {list(f.keys())}")
 
-        # Search for measurement groups and identify channels
-        channel_list = {}
-        for measurement_key, measurement_group in f.items():
-            if not measurement_key.startswith("Measurement_"):
-                continue
-            for channel_key in measurement_group.keys():
-                if not channel_key.startswith("Channel_"):
-                    continue
-                current_group = measurement_group[channel_key]
-
-                # Check for required attributes
-                if "channel.name" in current_group.attrs:
-                    available_channel = _decode_attr(current_group.attrs["channel.name"])
-                else:
-                    continue  # skip channels with no name
-
-                # Get retrace attribute safely
-                retrace = _attr_to_bool(current_group.attrs.get("retrace", False))
-
-                # Determine trace/retrace
-                if retrace is True:
-                    tr_rt = "retrace"
-                else:
-                    tr_rt = "trace"
-
-                # Build channel key
-                available_channel = available_channel.strip().lower()
-                full_key = f"{available_channel}_{tr_rt}"
-                full_path = f"{measurement_key}/{channel_key}"
-                if full_key not in channel_list:
-                    channel_list[full_key] = full_path
-
-        if channel not in channel_list:
-            logger.error(f"'{channel}' not in available channels: {channel_list}")
-            raise ValueError(f"'{channel}' not found. Available channels: {list(channel_list)}")
-
-        channel_path = channel_list[channel]
-        channel_group = f[channel_path]
-        measurement_group = f[channel_path.split("/")[0]]
-        dataset_name = channel.split("_")[0].capitalize()  # "height_trace" -> "Height"
+        channel_group, measurement_group, dataset_name = _get_channel_info(f, channel)
 
         # Load images and scaling factors from channel dataset
         images = channel_group[dataset_name][:]
@@ -195,10 +299,7 @@ def load_h5jpk(
 
         # Select and reshape a flattened frame
         image_size = measurement_group.attrs["position-pattern.grid.ilength"]   # number of pixels
-        if frame < 0 or frame >= images.shape[1]:
-            raise IndexError(f"Frame index {frame} out of range. Must be between 0 and {images.shape[1]-1}.")
-
-        image = images[:, frame].reshape((image_size, image_size))
+        image = _extract_frame(images, frame, image_size)
 
         # Flip image
         if flip_image:
