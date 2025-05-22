@@ -305,7 +305,7 @@ def load_h5jpk(
         if flip_image:
             image = np.flipud(image)
 
-        #Convert to nm
+        # Convert to nm
         if dataset_name.lower() in ("height", "measuredheight", "amplitude"):
             image = image * 1e9
 
