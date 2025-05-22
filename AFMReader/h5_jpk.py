@@ -259,7 +259,6 @@ def load_h5jpk(
     frame : int, optional
         Which frame of the video to open. Default is 0 (first frame).
 
-
     Returns
     -------
     tuple[np.ndarray, float]
