@@ -13,6 +13,7 @@ from AFMReader.logging import logger
 
 logger.enable(__package__)
 
+
 def _jpk_pixel_to_nm_scaling_h5(measurement_group: h5py.Group) -> float:
     """
     Extract pixel-to-nanometre scaling from an HDF5 JPK measurement group.
@@ -36,8 +37,8 @@ def _jpk_pixel_to_nm_scaling_h5(measurement_group: h5py.Group) -> float:
         If required attributes are missing in the measurement group.
     """
     try:
-        ulength = measurement_group.attrs["position-pattern.grid.ulength"]    # physical length in meters
-        ilength = measurement_group.attrs["position-pattern.grid.ilength"]    # number of pixels
+        ulength = measurement_group.attrs["position-pattern.grid.ulength"]  # physical length in meters
+        ilength = measurement_group.attrs["position-pattern.grid.ilength"]  # number of pixels
 
         if ilength == 0:
             raise ValueError("Pixel count (ilength) is zero; cannot compute scaling.")
@@ -47,7 +48,6 @@ def _jpk_pixel_to_nm_scaling_h5(measurement_group: h5py.Group) -> float:
     except KeyError as e:
         missing = e.args[0]
         raise KeyError(f"Missing required attribute '{missing}' in HDF5 measurement group.") from e
-
 
 
 def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
@@ -74,11 +74,13 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
     logger.debug(f"Z-scaling: multiplier = {multiplier}, offset = {offset}")
     return multiplier, offset
 
+
 def _decode_attr(attr: bytes | str) -> str:
     """Decode an HDF5 attribute that might be bytes or str."""
     if isinstance(attr, bytes):
         return attr.decode("utf-8")
     return str(attr)
+
 
 def _attr_to_bool(attr: bytes | str | bool | int | float) -> bool:
     """Convert an HDF5 attribute to bool, handling bytes, str, bool, int, float types."""
@@ -141,7 +143,7 @@ def load_h5jpk(
     if trace_type not in ("trace", "retrace"):
         raise ValueError(f"Invalid trace type '{trace_type}'. Must be 'trace' or 'retrace'.")
 
-    #Load HDF5 file
+    # Load HDF5 file
     with h5py.File(file_path, "r") as f:
         logger.debug(f"Opened HDF5 file structure: {list(f.keys())}")
 
@@ -160,10 +162,10 @@ def load_h5jpk(
                     available_channel = _decode_attr(current_group.attrs["channel.name"])
                 else:
                     continue  # skip channels with no name
-                
+
                 # Get retrace attribute safely
                 retrace = _attr_to_bool(current_group.attrs.get("retrace", False))
-                
+
                 # Determine trace/retrace
                 if retrace is True:
                     tr_rt = "retrace"
@@ -178,12 +180,12 @@ def load_h5jpk(
                     channel_list[full_key] = full_path
 
         if channel not in channel_list:
-                logger.error(f"'{channel}' not in available channels: {channel_list}")
-                raise ValueError(f"'{channel}' not found. Available channels: {list(channel_list)}")
+            logger.error(f"'{channel}' not in available channels: {channel_list}")
+            raise ValueError(f"'{channel}' not found. Available channels: {list(channel_list)}")
 
         channel_path = channel_list[channel]
         channel_group = f[channel_path]
-        measurement_group = f[channel_path.split('/')[0]]
+        measurement_group = f[channel_path.split("/")[0]]
         dataset_name = channel.split("_")[0].capitalize()  # "height_trace" -> "Height"
 
         # Load images and scaling factors from channel dataset
@@ -192,20 +194,19 @@ def load_h5jpk(
         images = (images * scaling) + offset
 
         # Select and reshape a flattened frame
-        image_size = measurement_group.attrs["position-pattern.grid.ilength"]    # number of pixels
+        image_size = measurement_group.attrs["position-pattern.grid.ilength"]   # number of pixels
         if frame < 0 or frame >= images.shape[1]:
             raise IndexError(f"Frame index {frame} out of range. Must be between 0 and {images.shape[1]-1}.")
 
         image = images[:, frame].reshape((image_size, image_size))
 
-        # Flip image 
+        # Flip image
         if flip_image:
             image = np.flipud(image)
 
-        #Convert to nm     
+        #Convert to nm
         if dataset_name.lower() in ("height", "measuredheight", "amplitude"):
             image = image * 1e9
-
 
         logger.info(f"[{filename}] : Extracted image.")
         return (image, _jpk_pixel_to_nm_scaling_h5(measurement_group))
