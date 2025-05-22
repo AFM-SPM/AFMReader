@@ -74,7 +74,7 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
     logger.debug(f"Z-scaling: multiplier = {multiplier}, offset = {offset}")
     return multiplier, offset
 
-  
+
 def _decode_attr(attr: bytes | str) -> str:
     """Decode an HDF5 attribute that might be bytes or str."""
     if isinstance(attr, bytes):
@@ -204,7 +204,7 @@ def load_h5jpk(
         if flip_image:
             image = np.flipud(image)
 
-        #Convert to nm
+        # Convert to nm
         if dataset_name.lower() in ("height", "measuredheight", "amplitude"):
             image = image * 1e9
 
