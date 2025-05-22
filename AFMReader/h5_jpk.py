@@ -42,8 +42,7 @@ def _jpk_pixel_to_nm_scaling_h5(measurement_group: h5py.Group) -> float:
         if ilength == 0:
             raise ValueError("Pixel count (ilength) is zero; cannot compute scaling.")
 
-        px_to_nm = (ulength / ilength) * 1e9  # convert from meters to nanometres
-        return px_to_nm
+        return (ulength / ilength) * 1e9
 
     except KeyError as e:
         missing = e.args[0]
@@ -75,15 +74,15 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
     logger.debug(f"Z-scaling: multiplier = {multiplier}, offset = {offset}")
     return multiplier, offset
 
-def _decode_attr(attr: Any) -> str:
+def _decode_attr(attr: bytes | str) -> str:
     """Decode an HDF5 attribute that might be bytes or str."""
     if isinstance(attr, bytes):
         return attr.decode("utf-8")
     return str(attr)
 
-def _attr_to_bool(attr: Any) -> bool:
+def _attr_to_bool(attr: bytes | str | bool | int | float) -> bool:
     """Convert an HDF5 attribute to bool, handling bytes, str, bool, int, float types."""
-    if isinstance(attr, (bytes, str)):
+    if isinstance(attr, bytes | str):
         return _decode_attr(attr).strip().lower() == "true"
     return bool(attr)
 
