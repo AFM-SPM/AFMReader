@@ -74,7 +74,7 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
     logger.debug(f"Z-scaling: multiplier = {multiplier}, offset = {offset}")
     return multiplier, offset
 
-
+  
 def _decode_attr(attr: bytes | str) -> str:
     """Decode an HDF5 attribute that might be bytes or str."""
     if isinstance(attr, bytes):
@@ -194,7 +194,7 @@ def load_h5jpk(
         images = (images * scaling) + offset
 
         # Select and reshape a flattened frame
-        image_size = measurement_group.attrs["position-pattern.grid.ilength"]   # number of pixels
+        image_size = measurement_group.attrs["position-pattern.grid.ilength"]  # number of pixels
         if frame < 0 or frame >= images.shape[1]:
             raise IndexError(f"Frame index {frame} out of range. Must be between 0 and {images.shape[1]-1}.")
 
