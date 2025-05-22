@@ -149,3 +149,6 @@ AFMReader/_version.py
 
 # Ignore tmp/ directory
 tmp/
+
+# MacOS
+*.DS_Store

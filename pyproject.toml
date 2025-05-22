@@ -16,14 +16,13 @@ authors = [
 ]
 description = "Read and retrieve data from various AFM file formats."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -39,7 +38,7 @@ dependencies = [
   "igor2",
   "loguru",
   "matplotlib",
-  "pySPM",
+  "pySPM @ git+https://github.com/AFM-SPM/pySPM@master",
   "tifffile",
   "ruamel.yaml",
 ]
@@ -52,7 +51,7 @@ dev = [
   "pytest-testmon",
   "ruff",
   "setuptools_scm[toml]",
-  "wheel"
+  "wheel",
 ]
 docs = [
   "mike",
@@ -70,6 +69,7 @@ pypi = [
 tests = [
   "pytest",
   "pytest-cov",
+  "pytest-loguru",
 ]
 
 [project.urls]

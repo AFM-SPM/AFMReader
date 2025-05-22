@@ -1,6 +1,5 @@
 """For decoding and loading .asd AFM file format into Python Numpy arrays."""
 
-from __future__ import annotations
 import errno
 import os
 from pathlib import Path
@@ -232,8 +231,7 @@ def load_asd(file_path: str | Path, channel: str):
             header_dict = read_header_file_version_2(open_file)
         else:
             raise ValueError(
-                f"File version {file_version} unknown. Please add support if you "
-                "know how to decode this file version."
+                f"File version {file_version} unknown. Please add support if you know how to decode this file version."
             )
         logger.debug(f"header dict: \n{header_dict}")
 
@@ -250,7 +248,7 @@ def load_asd(file_path: str | Path, channel: str):
         if channel == header_dict["channel1"]:
             logger.info(f"Requested channel {channel} matches first channel in file: {header_dict['channel1']}")
         elif channel == header_dict["channel2"]:
-            logger.info(f"Requested channel {channel} matches second channel in file: " f"{header_dict['channel2']}")
+            logger.info(f"Requested channel {channel} matches second channel in file: {header_dict['channel2']}")
 
             # Skip first channel data
             _size_of_frame_header = header_dict["frame_header_length"]
@@ -262,7 +260,7 @@ def load_asd(file_path: str | Path, channel: str):
             _ = open_file.read(length_of_all_first_channel_frames)
         else:
             raise ValueError(
-                f"Channel {channel} not found in this file's available channels: "
+                f"'{channel}' not found {file_path.suffix} channel list: "
                 f"{header_dict['channel1']}, {header_dict['channel2']}"
             )
 
@@ -288,6 +286,7 @@ def load_asd(file_path: str | Path, channel: str):
 
         frames = np.array(frames)
 
+        logger.info(f"[{filename}] : Extracted image.")
         return frames, pixel_to_nanometre_scaling_factor, header_dict
 
 
@@ -817,7 +816,7 @@ def create_analogue_digital_converter(
         )
     else:
         raise ValueError(
-            f"Analogue to digital range hex value {analogue_digital_range} has no known " "analogue-digital mapping."
+            f"Analogue to digital range hex value {analogue_digital_range} has no known analogue-digital mapping."
         )
     logger.info(f"Analogue to digital mapping | Range: {analogue_digital_range} -> {mapping}")
     logger.info(f"Converter: {converter}")

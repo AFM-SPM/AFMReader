@@ -36,6 +36,7 @@ Supported file formats
 | `.topostats`| [TopoStats](https://github.com/AFM-SPM/TopoStats)  |
 | `.gwy`      | [Gwydion](<http://gwyddion.net>) |
 | `.stp`      | [WSXM AFM software files](http://www.wsxm.eu) |
+| `.top`      | `.stp` variant  |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into AFMReader these are denoted in bold below.
@@ -133,6 +134,17 @@ to the file you want to use.
 from AFMReader.stp import load_stp
 
 image, pixel_to_nanometre_scaling_factor = load_stp(file_path="./my_stp_file.stp")
+```
+
+### .top
+
+You can open `.top` files using the `load_top` function. Just pass in the path
+to the file you want to use.
+
+```python
+from AFMReader.top import load_top
+
+image, pixel_to_nanometre_scaling_factor = load_top(file_path="./my_top_file.top")
 ```
 
 ## Contributing

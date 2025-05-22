@@ -1,6 +1,5 @@
 """For decoding and loading .topostats (HDF5 format) AFM file format into Python Nympy arrays."""
 
-from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +41,7 @@ def load_topostats(file_path: Path | str) -> dict[str, Any]:
     try:
         with h5py.File(file_path, "r") as f:
             data = unpack_hdf5(open_hdf5_file=f, group_path="/")
-            if data["topostats_file_version"] >= 0.2:
+            if str(data["topostats_file_version"]) >= "0.2":
                 data["img_path"] = Path(data["img_path"])
             file_version = data["topostats_file_version"]
             logger.info(f"[{filename}] TopoStats file version : {file_version}")
@@ -52,4 +51,5 @@ def load_topostats(file_path: Path | str) -> dict[str, Any]:
             logger.error(f"[{filename}] File not found : {file_path}")
         raise e
 
+    logger.info(f"[{filename}] : Extracted .topostats dictionary.")
     return data
