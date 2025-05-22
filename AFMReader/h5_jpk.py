@@ -3,6 +3,7 @@ Module to decode and load .h5-jpk AFM file format into Python NumPy arrays.
 
 These files can contain multiple images that make up a video; here, single frames are read.
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -34,13 +35,13 @@ def _parse_channel_name(channel: str) -> tuple[str, str]:
     """
     if "_" not in channel:
         raise ValueError(f"Invalid channel format '{channel}'. Expected 'name_trace' or 'name_retrace'.")
-    
+
     channel_type, trace_type = channel.rsplit("_", 1)
     trace_type = trace_type.lower()
-    
+
     if trace_type not in ("trace", "retrace"):
         raise ValueError(f"Invalid trace type '{trace_type}'. Must be 'trace' or 'retrace'.")
-    
+
     return channel_type, trace_type
 
 
@@ -298,7 +299,7 @@ def load_h5jpk(
         images = (images * scaling) + offset
 
         # Select and reshape a flattened frame
-        image_size = measurement_group.attrs["position-pattern.grid.ilength"]   # number of pixels
+        image_size = measurement_group.attrs["position-pattern.grid.ilength"]  # number of pixels
         image = _extract_frame(images, frame, image_size)
 
         # Flip image
