@@ -129,7 +129,7 @@ image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk
 ### .h5-jpk
 
 You can open `.h5-jpk` files using the `load_h5jpk` function. Just pass in the path
-to the file, the channel name you want to use and the frame number to access. 
+to the file, the channel name you want to use and the frame number to access.
 (If in doubt, use `height_trace` or `measuredHeight_trace`).
 
 ```python

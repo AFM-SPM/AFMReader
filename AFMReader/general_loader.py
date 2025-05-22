@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy.typing as npt
 
-from AFMReader import asd, gwy, ibw, jpk, spm, stp, top, topostats, h5_jpk
+from AFMReader import asd, gwy, ibw, jpk, spm, stp, top, topostats
 from AFMReader.logging import logger
 
 logger.enable(__package__)
