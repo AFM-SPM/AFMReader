@@ -38,7 +38,7 @@ dependencies = [
   "igor2",
   "loguru",
   "matplotlib",
-  "pySPM @ git+https://github.com/AFM-SPM/pySPM@master",
+  "pySPM",
   "tifffile",
   "ruamel.yaml",
 ]
