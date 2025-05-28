@@ -38,9 +38,8 @@ def test_load_h5jpk(
     image_sum: float,
 ) -> None:
     """Test the normal operation of loading a .h5-jpk file."""
-    result_image, result_pixel_to_nm_scaling = h5_jpk.load_h5jpk(
-        RESOURCES / file_name, channel, flip_image, frame
-    )
+
+    result_image, result_pixel_to_nm_scaling = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image, frame)
 
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
     assert isinstance(result_image, np.ndarray)
