@@ -1,9 +1,9 @@
 """Test the loading of .stp files."""
 
 from pathlib import Path
-import pytest
 
 import numpy as np
+import pytest
 
 from AFMReader.stp import load_stp
 

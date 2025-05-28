@@ -6,8 +6,8 @@ These files can contain multiple images that make up a video; here, single frame
 
 from pathlib import Path
 
-import numpy as np
 import h5py
+import numpy as np
 
 from AFMReader.logging import logger
 
@@ -165,7 +165,6 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
     multiplier = float(channel_group.attrs.get("net-encoder.scaling.multiplier", 1.0))
     offset = float(channel_group.attrs.get("net-encoder.scaling.offset", 0.0))
 
-    logger.debug(f"Z-scaling: multiplier = {multiplier}, offset = {offset}")
     return multiplier, offset
 
 
@@ -202,7 +201,7 @@ def _attr_to_bool(attr: bytes | str | bool | int | float) -> bool:
     bool
         The boolean interpretation of the value.
     """
-    if isinstance(attr, bytes | str):
+    if isinstance(attr, (bytes | str)):
         return _decode_attr(attr).strip().lower() == "true"
     return bool(attr)
 
@@ -284,11 +283,10 @@ def load_h5jpk(
     """
     logger.info(f"Loading H5-JPK file from : {file_path}")
     file_path = Path(file_path)
-    filename = file_path.stem
 
     # Load HDF5 file
     with h5py.File(file_path, "r") as f:
-        logger.debug(f"Opened HDF5 file structure: {list(f.keys())}")
+        logger.info(f"Opened HDF5 file structure: {list(f.keys())}")
 
         channel_group, measurement_group, dataset_name = _get_channel_info(f, channel)
 
@@ -306,8 +304,8 @@ def load_h5jpk(
             image = np.flipud(image)
 
         # Convert to nm
-        if dataset_name.lower() in ("height", "measuredheight", "amplitude"):
+        if dataset_name.lower() in ("height", "error", "measuredheight", "amplitude"):
             image = image * 1e9
 
-        logger.info(f"[{filename}] : Extracted image.")
+        logger.info(f"[{file_path.stem}] : Extracted frame {frame}")
         return (image, _jpk_pixel_to_nm_scaling_h5(measurement_group))

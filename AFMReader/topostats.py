@@ -5,8 +5,8 @@ from typing import Any
 
 import h5py
 
-from AFMReader.logging import logger
 from AFMReader.io import unpack_hdf5
+from AFMReader.logging import logger
 
 logger.enable(__package__)
 

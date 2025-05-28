@@ -1,38 +1,57 @@
-"""Test the loading of jpk files."""
+"""Test the loading of 5h-jpk files."""
 
 from pathlib import Path
-
-import numpy as np
 import pytest
 
-from AFMReader import jpk
+import numpy as np
+
+from AFMReader import h5_jpk
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
 
 
 @pytest.mark.parametrize(
-    ("file_name", "channel", "pixel_to_nm_scaling", "image_shape", "image_dtype", "image_sum"),
+    (
+        "file_name",
+         "channel",
+         "frame",
+         "pixel_to_nm_scaling",
+         "image_shape",
+         "image_dtype",
+         "image_sum"
+    ),
     [
         pytest.param(
-            "sample_0.jpk", "height_trace", 1.2770176335964876, (256, 256), float, 219242202.8256843, id="test image 0"
+            "sample_0.h5-jpk",
+            "height_trace",
+            0, 1.171875,
+            (128, 128),
+            float, 
+            12014972.417998387,
+            id="test image 0"
         )
     ],
 )
-def test_load_jpk(
+def test_load_h5jpk(
     file_name: str,
     channel: str,
+    frame: int,
     pixel_to_nm_scaling: float,
     image_shape: tuple[int, int],
     image_dtype: type,
     image_sum: float,
 ) -> None:
-    """Test the normal operation of loading a .jpk file."""
+    """Test the normal operation of loading a .h5-jpk file."""
     result_image = np.ndarray
     result_pixel_to_nm_scaling = float
 
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling = jpk.load_jpk(file_path, channel)  # type: ignore
+    result_image, result_pixel_to_nm_scaling = h5_jpk.load_h5jpk(
+        file_path,
+        channel,
+        frame
+    ) 
 
     assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
     assert isinstance(result_image, np.ndarray)
@@ -41,7 +60,7 @@ def test_load_jpk(
     assert result_image.sum() == image_sum
 
 
-def test_load_jpk_file_not_found() -> None:
+def test_load_h5jpk_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
-        jpk.load_jpk("nonexistant_file.jpk", channel="TP")
+        h5_jpk.load_h5jpk("nonexistant_file.h5-jpk", channel="TP")

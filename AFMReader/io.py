@@ -1,9 +1,9 @@
 """For reading and writing data from / to files."""
 
-from pathlib import Path
-
 import struct
+from pathlib import Path
 from typing import BinaryIO
+
 import h5py
 from loguru import logger
 from ruamel.yaml import YAML, YAMLError

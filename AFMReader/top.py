@@ -1,12 +1,12 @@
 """For decoding and loading .top AFM file format into Python Numpy arrays."""
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 import numpy as np
 
-from AFMReader.logging import logger
 from AFMReader.io import read_int16
+from AFMReader.logging import logger
 
 logger.enable(__package__)
 

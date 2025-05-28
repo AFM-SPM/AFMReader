@@ -1,13 +1,13 @@
 """For decoding and loading .gwy AFM file format into Python Numpy arrays."""
 
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any, BinaryIO
 
-from loguru import logger
 import numpy as np
+from loguru import logger
 
-from AFMReader.io import read_uint32, read_null_terminated_string, read_char, read_double
+from AFMReader.io import read_char, read_double, read_null_terminated_string, read_uint32
 
 
 def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.float64], float]:
