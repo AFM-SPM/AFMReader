@@ -27,7 +27,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             "height_trace",
             0, 1.171875,
             (128, 128),
-            float, 
+            np.float64,
             12014972.417998387,
             id="test image 0"
         )
@@ -36,6 +36,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 def test_load_h5jpk(
     file_name: str,
     channel: str,
+    flip_image: bool,
     frame: int,
     pixel_to_nm_scaling: float,
     image_shape: tuple[int, int],
