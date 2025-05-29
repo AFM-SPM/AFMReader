@@ -292,7 +292,7 @@ def load_h5jpk(
         Scaling factor converting pixels to nanometers.
     timestamps : dict[str, float]
         Dictionary mapping frame labels (e.g., "frame 0") to timestamp values in seconds.
-    
+
     Raises
     ------
     FileNotFoundError
