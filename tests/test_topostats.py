@@ -1,8 +1,8 @@
 """Test the loading of topostats (HDF5 format) files."""
 
 from pathlib import Path
-import pytest
 
+import pytest
 
 from AFMReader import topostats
 

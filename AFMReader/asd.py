@@ -2,34 +2,32 @@
 
 import errno
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
-
+import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
-import matplotlib.pyplot as plt
 from matplotlib import animation
 
-
-from AFMReader.logging import logger
 from AFMReader.io import (
-    read_int32,
-    read_int16,
-    read_float,
-    read_bool,
-    read_hex_u32,
     read_ascii,
-    read_uint8,
-    read_null_separated_utf8,
-    read_int8,
+    read_bool,
     read_double,
+    read_float,
+    read_hex_u32,
+    read_int8,
+    read_int16,
+    read_int32,
+    read_null_separated_utf8,
+    read_uint8,
     skip_bytes,
 )
-
+from AFMReader.logging import logger
 
 if sys.version_info.minor < 11:
     from typing import Any, BinaryIO
+
     from typing_extensions import Self
 else:
     from typing import Any, BinaryIO, Self

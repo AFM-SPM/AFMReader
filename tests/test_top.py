@@ -1,9 +1,9 @@
 """Test the loading of .top files."""
 
 from pathlib import Path
-import pytest
 
 import numpy as np
+import pytest
 
 from AFMReader.top import load_top
 

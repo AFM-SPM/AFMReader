@@ -3,10 +3,10 @@
 from pathlib import Path
 from typing import Any
 
-import pytest
 import numpy as np
-from AFMReader import gwy
+import pytest
 
+from AFMReader import gwy
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
