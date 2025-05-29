@@ -61,8 +61,7 @@ def test_load_h5jpk(
     assert all(
         results_timestamps[f"frame {i}"] < results_timestamps[f"frame {i+1}"]
         for i in range(len(results_timestamps) - 1)
-)
-
+    )
 
 
 def test_load_h5jpk_file_not_found() -> None:
