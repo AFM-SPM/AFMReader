@@ -51,3 +51,10 @@ def test_load_h5jpk_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
         h5_jpk.load_h5jpk("nonexistant_file.h5-jpk", channel="TP")
+
+
+def test_load_h5jpk_frame_out_of_range():
+    """Ensure IndexError is raised when the frame index is out of range."""
+    file_path = RESOURCES / "sample_0.h5-jpk"
+    with pytest.raises(IndexError, match=r"Frame index \d+ out of range"):
+        h5_jpk.load_h5jpk(file_path, channel="height_trace", frame=99999)
