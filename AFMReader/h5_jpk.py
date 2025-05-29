@@ -1,7 +1,8 @@
 """
-Module to decode and load .h5-jpk AFM file format into Python NumPy arrays.
+Module to decode and load .h5-jpk AFM file format into 3D Python NumPy arrays.
 
-These files can contain multiple images that make up a video; here, single frames are read.
+It extracts scan channels, reshapes image frames, applies scaling, and generates
+timestamps based on scan metadata.
 """
 
 from pathlib import Path
@@ -78,34 +79,6 @@ def _get_channel_info(f: h5py.File, channel: str):
     dataset_name = channel.split("_")[0].capitalize()
 
     return channel_group, measurement_group, dataset_name
-
-
-def _extract_frame(images: np.ndarray, frame: int, image_size: int) -> np.ndarray:
-    """
-    Extract a single frame from a flattened stack of image data.
-
-    Parameters
-    ----------
-    images : np.ndarray
-        2D array where each column is a flattened image frame.
-    frame : int
-        The index of the frame to extract.
-    image_size : int
-        The height/width of the square image.
-
-    Returns
-    -------
-    np.ndarray
-        The reshaped 2D image frame.
-
-    Raises
-    ------
-    IndexError
-        If the requested frame index is out of range.
-    """
-    if frame < 0 or frame >= images.shape[1]:
-        raise IndexError(f"Frame index {frame} out of range. Must be between 0 and {images.shape[1]-1}.")
-    return images[:, frame].reshape((image_size, image_size))
 
 
 def _jpk_pixel_to_nm_scaling_h5(measurement_group: h5py.Group) -> float:
@@ -242,9 +215,63 @@ def _discover_available_channels(f: h5py.File) -> dict[str, str]:
     return channel_map
 
 
+def _get_line_rate(measurement_group: h5py.Group) -> float:
+    """
+    Extract image line rate from an HDF5 JPK measurement group.
+
+    The line rate is the scan speed in terms of lines per second,
+    i.e. the speed of imaging in fast scan lines / second.
+
+    Parameters
+    ----------
+    measurement_group : h5py.Group
+        HDF5 group corresponding to a Measurement (e.g. '/Measurement_000').
+
+    Returns
+    -------
+    float
+        The line rate of imaging in lines per second.
+
+    Raises
+    ------
+    KeyError
+        If required attributes are missing in the measurement group.
+    """
+    try:
+        return measurement_group.attrs["timing-settings.scanRate"]  # scan lines per second
+
+    except KeyError as e:
+        missing = e.args[0]
+        raise KeyError(f"Missing required attribute '{missing}' in HDF5 measurement group.") from e
+
+
+def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> dict:
+    """
+    Generate timestamps for a sequence of frames based on scan line rate and image size.
+
+    Parameters
+    ----------
+    num_frames : int
+        The total number of frames to generate timestamps for.
+    line_rate : float
+        The scan line rate in lines per second (Hz).
+    image_size : int
+        The number of horizontal lines per image (i.e., image height in pixels).
+
+    Returns
+    -------
+    dict
+        A dictionary mapping frame labels (e.g., "frame 0") to timestamps in seconds.
+    """
+    frame_interval = image_size / line_rate  # seconds per frame (height lines / lines per second)
+    timestamps = np.arange(num_frames) * frame_interval
+    # Compose a dictionary of timestamsps
+    return {f"frame {i}": timestamp for i, timestamp in enumerate(timestamps)}
+
+
 def load_h5jpk(
-    file_path: Path | str, channel: str, flip_image: bool = True, frame: int = 0
-) -> tuple[np.ndarray, float]:
+    file_path: Path | str, channel: str, flip_image: bool = True
+) -> tuple[np.ndarray, float, dict[str, float]]:
     """
     Load image from JPK Instruments .h5-jpk files.
 
@@ -255,14 +282,15 @@ def load_h5jpk(
     channel : str
         The channel to extract from the .h5-jpk file.
     flip_image : bool, optional
-        Whether to flip the image vertically. Default is ``True``.
-    frame : int, optional
-        Which frame of the video to open. Default is 0 (first frame).
+        Whether to flip the images vertically. Default is ``True``.
 
     Returns
     -------
-    tuple[np.ndarray, float]
-        A tuple containing the image and its pixel to nanometre scaling value.
+    tuple of (np.ndarray, float, dict of str: float)
+    A tuple containing:
+    - 3D image stack (num_frames, height, width) in nanometres (if applicable),
+    - Pixel-to-nanometre scaling factor (float),
+    - Dictionary mapping "frame N" to timestamp in seconds.
 
     Raises
     ------
@@ -276,10 +304,9 @@ def load_h5jpk(
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_h5jpk
-    >>> image, pixel_to_nanometre_scaling_factor = load_h5jpk(file_path="./my_jpk_file.jpk",
-    >>>                                                     channel="height_trace",
-    >>>                                                     frame = 5,
-    >>>                                                     flip_image=True)
+    >>> frames, pixel_to_nanometre_scaling_factor, timestamps = load_h5jpk(file_path="./my_jpk_file.jpk",
+    >>>                                                         channel="height_trace",
+    >>>                                                         flip_image=True)
     """
     logger.info(f"Loading H5-JPK file from : {file_path}")
     file_path = Path(file_path)
@@ -297,15 +324,25 @@ def load_h5jpk(
 
         # Select and reshape a flattened frame
         image_size = measurement_group.attrs["position-pattern.grid.ilength"]  # number of pixels
-        image = _extract_frame(images, frame, image_size)
 
-        # Flip image
-        if flip_image:
-            image = np.flipud(image)
+        # Reshape each column vector (height, width) to get (num_frames, height, width)
+        num_frames = images.shape[1]
+        image_stack = np.empty((num_frames, image_size, image_size), dtype=images.dtype)
+        for i in range(num_frames):
+            frame = images[:, i].reshape((image_size, image_size))
+
+            # Flip images
+            if flip_image:
+                frame = np.flipud(frame)
+            image_stack[i] = frame
 
         # Convert to nm
         if dataset_name.lower() in ("height", "error", "measuredheight", "amplitude"):
-            image = image * 1e9
+            image_stack = image_stack * 1e9
 
-        logger.info(f"[{file_path.stem}] : Extracted frame {frame}")
-        return (image, _jpk_pixel_to_nm_scaling_h5(measurement_group))
+        # Generate a dictionary of timestamps
+        line_rate = _get_line_rate(measurement_group)
+        timestamps = generate_timestamps(num_frames, line_rate, image_size)
+
+        logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
+        return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), timestamps)
