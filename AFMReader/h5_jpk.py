@@ -286,12 +286,13 @@ def load_h5jpk(
 
     Returns
     -------
-    tuple of (np.ndarray, float, dict of str: float)
-    A tuple containing:
-    - 3D image stack (num_frames, height, width) in nanometres (if applicable),
-    - Pixel-to-nanometre scaling factor (float),
-    - Dictionary mapping "frame N" to timestamp in seconds.
-
+    image : np.ndarray
+        3D array of shape (frames, height, width) with image data.
+    pixel_to_nm_scaling : float
+        Scaling factor converting pixels to nanometers.
+    timestamps : dict[str, float]
+        Dictionary mapping frame labels (e.g., "frame 0") to timestamp values in seconds.
+    
     Raises
     ------
     FileNotFoundError
