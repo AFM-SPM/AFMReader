@@ -46,7 +46,7 @@ def _parse_channel_name(channel: str) -> tuple[str, str]:
     return channel_type, trace_type
 
 
-def _get_channel_info(f: h5py.File, channel: str):
+def _get_channel_info(h5py_file: h5py.File, channel: str):
     """
     Retrieve channel-related HDF5 groups and dataset name.
 
@@ -69,13 +69,13 @@ def _get_channel_info(f: h5py.File, channel: str):
     """
     _parse_channel_name(channel)  # just for validation
 
-    channel_map = _discover_available_channels(f)
+    channel_map = _available_channels(h5py_file)
     if channel not in channel_map:
         raise ValueError(f"'{channel}' not found. Available channels: {list(channel_map)}")
 
     channel_path = channel_map[channel]
-    channel_group = f[channel_path]
-    measurement_group = f[channel_path.split("/")[0]]
+    channel_group = h5py_file[channel_path]
+    measurement_group = h5py_file[channel_path.split("/")[0]]
     dataset_name = channel.split("_")[0].capitalize()
 
     return channel_group, measurement_group, dataset_name
@@ -179,7 +179,7 @@ def _attr_to_bool(attr: bytes | str | bool | int | float) -> bool:
     return bool(attr)
 
 
-def _discover_available_channels(f: h5py.File) -> dict[str, str]:
+def _available_channels(f: h5py.File) -> dict[str, str]:
     """
     Discover all available scan channels in the HDF5 file.
 
@@ -263,8 +263,7 @@ def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> d
     dict
         A dictionary mapping frame labels (e.g., "frame 0") to timestamps in seconds.
     """
-    frame_interval = image_size / line_rate  # seconds per frame (height lines / lines per second)
-    timestamps = np.arange(num_frames) * frame_interval
+    timestamps = np.arange(num_frames) * (image_size / line_rate)
     # Compose a dictionary of timestamsps
     return {f"frame {i}": timestamp for i, timestamp in enumerate(timestamps)}
 

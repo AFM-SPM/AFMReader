@@ -45,7 +45,7 @@ class LoadFile:
         Returns
         -------
         tuple
-            The image data (stack if ''.asd'') and the pixel to nanometre scaling ratio.
+            The image data (stack if ''.asd'' or ''.h5-jpk'') and the pixel to nanometre scaling ratio.
 
         Raises
         ------
