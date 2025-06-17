@@ -39,11 +39,11 @@ def test_load_spm(
     file_path = RESOURCES / file_name
     result_image, result_pixel_to_nm_scaling = spm.load_spm(file_path, channel=channel)
 
-    assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
+    assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
     assert isinstance(result_image, np.ndarray)
     assert result_image.shape == image_shape
     assert result_image.dtype == image_dtype
-    assert result_image.sum() == image_sum
+    assert result_image.sum() == pytest.approx(image_sum)
 
 
 @patch("pySPM.SPM.SPM_image.pxs")

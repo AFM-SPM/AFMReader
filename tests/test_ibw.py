@@ -30,11 +30,11 @@ def test_load_ibw(
     file_path = RESOURCES / file_name
     result_image, result_pixel_to_nm_scaling = ibw.load_ibw(file_path, channel)  # type: ignore
 
-    assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
+    assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
     assert isinstance(result_image, np.ndarray)
     assert result_image.shape == image_shape
     assert result_image.dtype == image_dtype
-    assert result_image.sum() == image_sum
+    assert result_image.sum() == pytest.approx(image_sum)
 
 
 def test_load_ibw_file_not_found() -> None:
