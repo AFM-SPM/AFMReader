@@ -11,14 +11,18 @@ integrate it into your workflow.
 
 ## Supported file formats
 
-| File format  | Description                                       |
-|--------------|---------------------------------------------------|
-| `.asd`       | High-speed AFM                                    |
-| `.ibw`       | [WaveMetrics](https://www.wavemetrics.com/)       |
-| `.spm`       | [Bruker's Format](https://www.bruker.com/)        |
-| `.jpk`       | [Bruker](https://www.bruker.com/)                 |
-| `.topostats` | [TopoStats](https://github.com/AFM-SPM/TopoStats) |
-| `.gwy`       | [Gwydion](<http://gwyddion.net>)                  |
+| File format     | Description                                       |
+|-----------------|---------------------------------------------------|
+| `.asd`          | High-speed AFM                                    |
+| `.gwy`          | [Gwydion](<http://gwyddion.net>)                  |
+| `.h5-jpk`       | [Bruker](https://www.bruker.com/)                 |
+| `.ibw`          | [WaveMetrics](https://www.wavemetrics.com/)       |
+| `.jpk-qi-image` | [Bruker](https://www.bruker.com/)                |
+| `.jpk`          | [Bruker](https://www.bruker.com/)                |
+| `.spm`          | [Bruker's Format](https://www.bruker.com/)        |
+| `.stp`          | [WSXM AFM software files](http://www.wsxm.eu)     |
+| `.top`          | `.stp` variant                                    |
+| `.topostats`    | [TopoStats](https://github.com/AFM-SPM/TopoStats) |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into AFMReader these are denoted in bold below.
