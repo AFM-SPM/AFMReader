@@ -16,7 +16,52 @@ RESOURCES = BASE_DIR / "tests" / "resources"
     [
         pytest.param(
             "sample_0.jpk", "height_trace", 1.2770176335964876, (256, 256), float, 219242202.8256843, id="test image 0"
-        )
+        ),
+        pytest.param(
+            "sample_0.jpk-qi-image",
+            "height_trace",
+            4.999999999999986,
+            (100, 100),
+            float,
+            31593146.16051172,
+            id="qi-image 0; height_trace",
+        ),
+        pytest.param(
+            "sample_0.jpk-qi-image",
+            "slope_trace",
+            4.999999999999986,
+            (100, 100),
+            float,
+            626.3810326940231,
+            id="qi-image 0; slope_trace",
+        ),
+        pytest.param(
+            "sample_0.jpk-qi-image",
+            "adhesion_trace",
+            4.999999999999986,
+            (100, 100),
+            float,
+            1.579363986493833e-06,
+            id="qi-image 0; adhesion_trace",
+        ),
+        pytest.param(
+            "sample_0.jpk-qi-image",
+            "measuredHeight_trace",
+            4.999999999999986,
+            (100, 100),
+            float,
+            32181137.138706185,
+            id="qi-image 0; measuredHeight_trace",
+        ),
+        pytest.param(
+            "sample_0.jpk-qi-image",
+            "vDeflection_trace",
+            4.999999999999986,
+            (100, 100),
+            float,
+            -1.3615033224242345e-05,
+            id="qi-image 0; vDeflection_trace",
+        ),
     ],
 )
 def test_load_jpk(
@@ -30,7 +75,6 @@ def test_load_jpk(
     """Test the normal operation of loading a .jpk file."""
     result_image = np.ndarray
     result_pixel_to_nm_scaling = float
-
     file_path = RESOURCES / file_name
     result_image, result_pixel_to_nm_scaling = jpk.load_jpk(file_path, channel)  # type: ignore
 
