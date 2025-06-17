@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-import pySPM
 import numpy as np
+import pySPM
 
 from AFMReader.logging import logger
 

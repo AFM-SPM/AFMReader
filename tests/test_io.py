@@ -2,11 +2,10 @@
 
 from pathlib import Path
 
-import numpy as np
 import h5py
+import numpy as np
 
-
-from AFMReader.io import unpack_hdf5, read_yaml
+from AFMReader.io import read_yaml, unpack_hdf5
 
 # mypy: disable-error-code="index"
 

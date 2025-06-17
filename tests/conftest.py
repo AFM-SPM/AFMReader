@@ -5,7 +5,6 @@ from pathlib import Path
 import pySPM
 import pytest
 
-
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy.typing as npt
 
-from AFMReader import asd, gwy, ibw, jpk, spm, stp, top, topostats
+from AFMReader import asd, gwy, h5_jpk, ibw, jpk, spm, stp, top, topostats
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -45,7 +45,7 @@ class LoadFile:
         Returns
         -------
         tuple
-            The image data (stack if ''.asd'') and the pixel to nanometre scaling ratio.
+            The image data (stack if ''.asd'' or ''.h5-jpk'') and the pixel to nanometre scaling ratio.
 
         Raises
         ------
@@ -64,6 +64,8 @@ class LoadFile:
                 image, pixel_to_nanometre_scaling_factor = jpk.load_jpk(self.filepath, self.channel)
             elif self.suffix == ".spm":
                 image, pixel_to_nanometre_scaling_factor = spm.load_spm(self.filepath, self.channel)
+            elif self.suffix == ".h5-jpk":
+                image, pixel_to_nanometre_scaling_factor, _ = h5_jpk.load_h5jpk(self.filepath, self.channel)
             elif self.suffix == ".stp":
                 image, pixel_to_nanometre_scaling_factor = stp.load_stp(self.filepath)
             elif self.suffix == ".top":

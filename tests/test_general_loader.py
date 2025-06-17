@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
-import pytest
 import numpy as np
-from AFMReader import general_loader
+import pytest
 
+from AFMReader import general_loader
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"

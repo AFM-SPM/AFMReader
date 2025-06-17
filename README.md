@@ -33,6 +33,7 @@ Supported file formats
 | `.ibw`      | [WaveMetrics](https://www.wavemetrics.com/)  |
 | `.spm`      | [Bruker's Format](https://www.bruker.com/)  |
 | `.jpk`      | [Bruker](https://www.bruker.com/) |
+| `.h5-jpk`   | [Bruker](https://www.bruker.com/) |
 | `.topostats`| [TopoStats](https://github.com/AFM-SPM/TopoStats)  |
 | `.gwy`      | [Gwydion](<http://gwyddion.net>) |
 | `.stp`      | [WSXM AFM software files](http://www.wsxm.eu) |
@@ -123,6 +124,20 @@ to the file and the channel name you want to use. (If in doubt, use `height_trac
 from AFMReader.jpk import load_jpk
 
 image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
+```
+
+### .h5-jpk
+
+You can open `.h5-jpk` files using the `load_h5jpk` function. Just pass in the path
+to the file and the channel name you want to use.
+(If in doubt, use `height_trace` or `measuredHeight_trace`).
+
+Note: Since `.h5-jpk` stores timeseries AFM data a dictionary of timestamps for each frame is also returned.
+
+```python
+from AFMReader.h5_jpk import load_h5jpk
+
+frames, pixel_to_nanometre_scaling_factor, timestamp_dict = load_h5jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
 ```
 
 ### .stp
