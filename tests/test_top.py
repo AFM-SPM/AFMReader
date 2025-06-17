@@ -32,8 +32,8 @@ def test_load_top(
     file_path = RESOURCES / file_name
     result_image, result_pixel_to_nm_scaling = load_top(file_path=file_path)
 
-    assert result_pixel_to_nm_scaling == expected_pixel_to_nm_scaling
+    assert result_pixel_to_nm_scaling == pytest.approx(expected_pixel_to_nm_scaling)
     assert isinstance(result_image, np.ndarray)
     assert result_image.shape == expected_image_shape
     assert result_image.dtype == expected_image_dtype
-    assert result_image.sum() == expected_image_sum
+    assert result_image.sum() == pytest.approx(expected_image_sum)

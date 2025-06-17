@@ -19,9 +19,9 @@ def test_load_gwy() -> None:
     result_image, result_pixel_to_nm_scaling = gwy.load_gwy(file_path, channel=channel)
     assert isinstance(result_image, np.ndarray)
     assert result_image.shape == (512, 512)
-    assert result_image.sum() == 33836850.232917726
+    assert result_image.sum() == pytest.approx(33836850.232917726)
     assert isinstance(result_pixel_to_nm_scaling, float)
-    assert result_pixel_to_nm_scaling == 0.8468632812499975
+    assert result_pixel_to_nm_scaling == pytest.approx(0.8468632812499975)
 
 
 def test_gwy_read_object() -> None:

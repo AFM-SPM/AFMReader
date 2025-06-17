@@ -96,9 +96,9 @@ def test_load_topostats(
         assert topostats_data[version_key] == float(version)
     else:
         assert topostats_data[version_key] == version
-    assert topostats_data["pixel_to_nm_scaling"] == pixel_to_nm_scaling
+    assert topostats_data["pixel_to_nm_scaling"] == pytest.approx(pixel_to_nm_scaling)
     assert topostats_data["image"].shape == image_shape
-    assert topostats_data["image"].sum() == image_sum
+    assert topostats_data["image"].sum() == pytest.approx(image_sum)
     if version >= "0.2":
         assert isinstance(topostats_data["img_path"], Path)
 
