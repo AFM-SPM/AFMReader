@@ -52,7 +52,7 @@ def _get_channel_info(h5py_file: h5py.File, channel: str):
 
     Parameters
     ----------
-    f : h5py.File
+    h5py_file : h5py.File
         The open HDF5 file object.
     channel : str
         The name of the channel to retrieve.
