@@ -19,7 +19,10 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         "expected_image_dtype",
         "expected_image_sum",
     ),
-    [pytest.param("sample_0.stp", 0.9765625, (512, 512), float, -15070620.440757688)],
+    [
+        pytest.param("sample_0.stp", 0.9765625, (512, 512), float, -15070620.440757688),
+        pytest.param("sample_1_um_scale.stp", 3.90625, (512, 512), float, -14439959.0625),
+    ],
 )
 def test_load_stp(
     file_name: str,

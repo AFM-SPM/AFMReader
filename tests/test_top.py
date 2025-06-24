@@ -19,7 +19,10 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         "expected_image_dtype",
         "expected_image_sum",
     ),
-    [pytest.param("sample_0.top", 0.9765625, (512, 512), float, 6034386.429246264)],
+    [
+        pytest.param("sample_0.top", 0.9765625, (512, 512), float, 6034386.429246264),
+        pytest.param("sample_1_um_scale.top", 3.90625, (512, 512), float, 125175.99999999997),
+    ],
 )
 def test_load_top(
     file_name: str,
