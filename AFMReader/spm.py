@@ -39,8 +39,7 @@ def spm_pixel_to_nm_scaling(filename: str, channel_data: pySPM.SPM.SPM_image) ->
         px_to_real[1][0] * unit_dict[px_to_real[1][1]],
     )[0]
     if px_to_real[0][0] == 0 and px_to_real[1][0] == 0:
-        pixel_to_nm_scaling = 1
-        logger.info(f"[{filename}] : Pixel size not found in metadata, defaulting to 1nm")
+        raise ValueError(f"[{filename}] : Pixel to nm scaling could not be determined from metadata.")
     logger.info(f"[{filename}] : Pixel to nm scaling : {pixel_to_nm_scaling}")
     return pixel_to_nm_scaling
 
