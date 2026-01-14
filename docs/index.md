@@ -11,7 +11,7 @@ Lab](https://pyne-lab.uk/bio/) based at the [University of Sheffield](https://sh
 - [Contributing](contributing.md)
 - [Workflow](workflow.md)
 - [Links](links.md)
-- [API](api.md)
+- [API](api/index.md)
 
 ## Citing
 
