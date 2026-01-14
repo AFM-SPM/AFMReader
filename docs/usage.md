@@ -17,8 +17,8 @@ integrate it into your workflow.
 | `.gwy`          | [Gwydion](<http://gwyddion.net>)                  |
 | `.h5-jpk`       | [Bruker](https://www.bruker.com/)                 |
 | `.ibw`          | [WaveMetrics](https://www.wavemetrics.com/)       |
-| `.jpk-qi-image` | [Bruker](https://www.bruker.com/)                |
-| `.jpk`          | [Bruker](https://www.bruker.com/)                |
+| `.jpk-qi-image` | [Bruker](https://www.bruker.com/)                 |
+| `.jpk`          | [Bruker](https://www.bruker.com/)                 |
 | `.spm`          | [Bruker's Format](https://www.bruker.com/)        |
 | `.stp`          | [WSXM AFM software files](http://www.wsxm.eu)     |
 | `.top`          | `.stp` variant                                    |
