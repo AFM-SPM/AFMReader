@@ -28,7 +28,12 @@ extra:
 plugins:
   - mermaid2:
   - search
-  - mkdocstrings
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            show_signature_annotations: true
   - mike:
       version: true
 
@@ -44,3 +49,7 @@ markdown_extensions:
         - name: mermaid
           class: mermaid
           format: !!python/name:mermaid2.fence_mermaid
+
+watch:
+  - docs/
+  - AFMReader/
