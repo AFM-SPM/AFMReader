@@ -5,6 +5,7 @@ from typing import Any
 
 import h5py
 
+from packaging.version import parse as parse_version
 from AFMReader.io import unpack_hdf5
 from AFMReader.logging import logger
 
@@ -41,10 +42,15 @@ def load_topostats(file_path: Path | str) -> dict[str, Any]:
     try:
         with h5py.File(file_path, "r") as f:
             data = unpack_hdf5(open_hdf5_file=f, group_path="/")
-            if str(data["topostats_file_version"]) >= "0.2":
+            # Handle different names for variables holding the file version (<=0.3) or the newer topostats version
+            version = (
+                data["topostats_file_version"]
+                if "topostats_file_version" in data.keys()  # pylint: disable=consider-iterating-dictionary
+                else data["topostats_version"]
+            )
+            if parse_version(str(version)) > parse_version("0.2"):
                 data["img_path"] = Path(data["img_path"])
-            file_version = data["topostats_file_version"]
-            logger.info(f"[{filename}] TopoStats file version : {file_version}")
+            logger.info(f"[{filename}] TopoStats file version : {version}")
 
     except OSError as e:
         if "Unable to open file" in str(e):
