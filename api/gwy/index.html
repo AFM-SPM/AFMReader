@@ -493,7 +493,9 @@
 
 
 
-  <div class="doc doc-children">
+
+<div class="doc doc-children">
+
 
 
 
@@ -507,7 +509,7 @@
 
 
 <h2 id="AFMReader.gwy.gwy_get_channels" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">gwy_get_channels</span><span class="p">(</span><span class="n">gwy_file_structure</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">gwy_get_channels</span><span class="p">(</span><span class="n">gwy_file_structure</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span></code>
 
 </h2>
 
@@ -577,7 +579,7 @@ and the values are dictionaries of the object's components.</p>
 <p>LoadScans._gwy_get_channels(gwy_file_structure=loaded_gwy_file_dictionary)</p>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/gwy.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-176">176</a></span>
 <span class="normal"><a href="#__codelineno-0-177">177</a></span>
@@ -648,7 +650,7 @@ and the values are dictionaries of the object's components.</p>
 
 
 <h2 id="AFMReader.gwy.gwy_read_component" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">gwy_read_component</span><span class="p">(</span><span class="n">open_file</span><span class="p">,</span> <span class="n">initial_byte_pos</span><span class="p">,</span> <span class="n">data_dict</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">gwy_read_component</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">,</span> <span class="n">initial_byte_pos</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">data_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span></code>
 
 </h2>
 
@@ -744,7 +746,7 @@ and the values are dictionaries of the object's components.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/gwy.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-120">120</a></span>
 <span class="normal"><a href="#__codelineno-0-121">121</a></span>
@@ -863,7 +865,7 @@ and the values are dictionaries of the object's components.</p>
 
 
 <h2 id="AFMReader.gwy.gwy_read_object" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">gwy_read_object</span><span class="p">(</span><span class="n">open_file</span><span class="p">,</span> <span class="n">data_dict</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">gwy_read_object</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">,</span> <span class="n">data_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code>
 
 </h2>
 
@@ -920,7 +922,7 @@ and the values are dictionaries of the object's components.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/gwy.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-95"> 95</a></span>
 <span class="normal"><a href="#__codelineno-0-96"> 96</a></span>
@@ -977,7 +979,7 @@ and the values are dictionaries of the object's components.</p>
 
 
 <h2 id="AFMReader.gwy.load_gwy" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">load_gwy</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="n">channel</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">load_gwy</span><span class="p">(</span><span class="n">file_path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span> <span class="n">channel</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">],</span> <span class="nb">float</span><span class="p">]</span></code>
 
 </h2>
 
@@ -1099,7 +1101,7 @@ Sensor'.</p>
 </span></code></pre></div>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/gwy.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-13">13</a></span>
 <span class="normal"><a href="#__codelineno-0-14">14</a></span>
@@ -1270,7 +1272,7 @@ Sensor'.</p>
 
 
 <h2 id="AFMReader.gwy.read_gwy_component_dtype" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_gwy_component_dtype</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_gwy_component_dtype</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
 
 </h2>
 
@@ -1354,7 +1356,7 @@ an unsigned 32 bit integer, describing the size of the array, followed by the un
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/gwy.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-208">208</a></span>
 <span class="normal"><a href="#__codelineno-0-209">209</a></span>

@@ -493,7 +493,9 @@
 
 
 
-  <div class="doc doc-children">
+
+<div class="doc doc-children">
+
 
 
 
@@ -507,7 +509,7 @@
 
 
 <h2 id="AFMReader.io.read_ascii" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_ascii</span><span class="p">(</span><span class="n">open_file</span><span class="p">,</span> <span class="n">length_bytes</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_ascii</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">,</span> <span class="n">length_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
 
 </h2>
 
@@ -587,7 +589,7 @@
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-165">165</a></span>
 <span class="normal"><a href="#__codelineno-0-166">166</a></span>
@@ -632,7 +634,7 @@
 
 
 <h2 id="AFMReader.io.read_bool" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_bool</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_bool</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span></code>
 
 </h2>
 
@@ -696,7 +698,7 @@
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-131">131</a></span>
 <span class="normal"><a href="#__codelineno-0-132">132</a></span>
@@ -737,7 +739,7 @@
 
 
 <h2 id="AFMReader.io.read_char" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_char</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_char</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
 
 </h2>
 
@@ -801,7 +803,7 @@
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-306">306</a></span>
 <span class="normal"><a href="#__codelineno-0-307">307</a></span>
@@ -842,7 +844,7 @@
 
 
 <h2 id="AFMReader.io.read_double" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_double</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_double</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span></code>
 
 </h2>
 
@@ -906,7 +908,7 @@
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-148">148</a></span>
 <span class="normal"><a href="#__codelineno-0-149">149</a></span>
@@ -947,7 +949,7 @@
 
 
 <h2 id="AFMReader.io.read_float" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_float</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_float</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span></code>
 
 </h2>
 
@@ -1011,7 +1013,7 @@
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-114">114</a></span>
 <span class="normal"><a href="#__codelineno-0-115">115</a></span>
@@ -1052,7 +1054,7 @@
 
 
 <h2 id="AFMReader.io.read_hex_u32" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_hex_u32</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_hex_u32</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
 
 </h2>
 
@@ -1116,7 +1118,7 @@
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-97"> 97</a></span>
 <span class="normal"><a href="#__codelineno-0-98"> 98</a></span>
@@ -1157,7 +1159,7 @@
 
 
 <h2 id="AFMReader.io.read_int16" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_int16</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_int16</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span></code>
 
 </h2>
 
@@ -1221,7 +1223,7 @@
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-46">46</a></span>
 <span class="normal"><a href="#__codelineno-0-47">47</a></span>
@@ -1262,7 +1264,7 @@
 
 
 <h2 id="AFMReader.io.read_int32" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_int32</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_int32</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span></code>
 
 </h2>
 
@@ -1326,7 +1328,7 @@
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-63">63</a></span>
 <span class="normal"><a href="#__codelineno-0-64">64</a></span>
@@ -1367,7 +1369,7 @@
 
 
 <h2 id="AFMReader.io.read_int8" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_int8</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_int8</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span></code>
 
 </h2>
 
@@ -1431,7 +1433,7 @@
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-29">29</a></span>
 <span class="normal"><a href="#__codelineno-0-30">30</a></span>
@@ -1472,7 +1474,7 @@
 
 
 <h2 id="AFMReader.io.read_null_separated_utf8" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_null_separated_utf8</span><span class="p">(</span><span class="n">open_file</span><span class="p">,</span> <span class="n">length_bytes</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_null_separated_utf8</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">,</span> <span class="n">length_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
 
 </h2>
 
@@ -1554,7 +1556,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-184">184</a></span>
 <span class="normal"><a href="#__codelineno-0-185">185</a></span>
@@ -1605,7 +1607,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
 
 
 <h2 id="AFMReader.io.read_null_terminated_string" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_null_terminated_string</span><span class="p">(</span><span class="n">open_file</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_null_terminated_string</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">,</span> <span class="n">encoding</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;utf-8&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span></code>
 
 </h2>
 
@@ -1691,7 +1693,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
 </span></code></pre></div>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-265">265</a></span>
 <span class="normal"><a href="#__codelineno-0-266">266</a></span>
@@ -1780,7 +1782,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
 
 
 <h2 id="AFMReader.io.read_uint32" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_uint32</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_uint32</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span></code>
 
 </h2>
 
@@ -1844,7 +1846,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-80">80</a></span>
 <span class="normal"><a href="#__codelineno-0-81">81</a></span>
@@ -1885,7 +1887,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
 
 
 <h2 id="AFMReader.io.read_uint8" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_uint8</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_uint8</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span></code>
 
 </h2>
 
@@ -1949,7 +1951,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-12">12</a></span>
 <span class="normal"><a href="#__codelineno-0-13">13</a></span>
@@ -1990,7 +1992,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
 
 
 <h2 id="AFMReader.io.read_yaml" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_yaml</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_yaml</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span></code>
 
 </h2>
 
@@ -2054,7 +2056,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-323">323</a></span>
 <span class="normal"><a href="#__codelineno-0-324">324</a></span>
@@ -2107,7 +2109,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
 
 
 <h2 id="AFMReader.io.skip_bytes" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">skip_bytes</span><span class="p">(</span><span class="n">open_file</span><span class="p">,</span> <span class="n">length_bytes</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">skip_bytes</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">,</span> <span class="n">length_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span></code>
 
 </h2>
 
@@ -2187,7 +2189,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-206">206</a></span>
 <span class="normal"><a href="#__codelineno-0-207">207</a></span>
@@ -2232,7 +2234,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
 
 
 <h2 id="AFMReader.io.unpack_hdf5" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">unpack_hdf5</span><span class="p">(</span><span class="n">open_hdf5_file</span><span class="p">,</span> <span class="n">group_path</span><span class="o">=</span><span class="s1">&#39;/&#39;</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">unpack_hdf5</span><span class="p">(</span><span class="n">open_hdf5_file</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">,</span> <span class="n">group_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;/&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span></code>
 
 </h2>
 
@@ -2322,7 +2324,7 @@ Eg: b'\x74\x00\x6f\x00\x70\x00\x6f' would decode to 'topo' in this format.</p>
 </span></code></pre></div>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/io.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-225">225</a></span>
 <span class="normal"><a href="#__codelineno-0-226">226</a></span>

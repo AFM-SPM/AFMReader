@@ -493,7 +493,9 @@
 
 
 
-  <div class="doc doc-children">
+
+<div class="doc doc-children">
+
 
 
 
@@ -518,6 +520,7 @@
               Bases: <code><a class="autorefs autorefs-internal" title="VoltageLevelConverter (AFMReader.asd.VoltageLevelConverter)" href="#AFMReader.asd.VoltageLevelConverter">VoltageLevelConverter</a></code></p>
 
 
+
         <p>A VoltageLevelConverter for bipolar encodings. (-X to +X Volts).</p>
 
 
@@ -526,7 +529,8 @@
 
 
 
-              <details class="quote">
+
+              <details class="mkdocstrings-source">
                 <summary>Source code in <code>AFMReader/asd.py</code></summary>
                 <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-109">109</a></span>
 <span class="normal"><a href="#__codelineno-0-110">110</a></span>
@@ -570,7 +574,8 @@
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
+
 
 
 
@@ -584,7 +589,7 @@
 
 
 <h3 id="AFMReader.asd.BipolarConverter.level_to_voltage" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">level_to_voltage</span><span class="p">(</span><span class="n">level</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">level_to_voltage</span><span class="p">(</span><span class="n">level</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span></code>
 
 </h3>
 
@@ -649,7 +654,7 @@ length scale units.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-112">112</a></span>
 <span class="normal"><a href="#__codelineno-0-113">113</a></span>
@@ -712,6 +717,7 @@ length scale units.</p>
               Bases: <code><a class="autorefs autorefs-internal" title="VoltageLevelConverter (AFMReader.asd.VoltageLevelConverter)" href="#AFMReader.asd.VoltageLevelConverter">VoltageLevelConverter</a></code></p>
 
 
+
         <p>A VoltageLevelConverter for unipolar encodings. (0 to +X Volts).</p>
 
 
@@ -720,7 +726,8 @@ length scale units.</p>
 
 
 
-              <details class="quote">
+
+              <details class="mkdocstrings-source">
                 <summary>Source code in <code>AFMReader/asd.py</code></summary>
                 <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-86"> 86</a></span>
 <span class="normal"><a href="#__codelineno-0-87"> 87</a></span>
@@ -766,7 +773,8 @@ length scale units.</p>
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
+
 
 
 
@@ -780,7 +788,7 @@ length scale units.</p>
 
 
 <h3 id="AFMReader.asd.UnipolarConverter.level_to_voltage" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">level_to_voltage</span><span class="p">(</span><span class="n">level</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">level_to_voltage</span><span class="p">(</span><span class="n">level</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span></code>
 
 </h3>
 
@@ -845,7 +853,7 @@ length scale units.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-89"> 89</a></span>
 <span class="normal"><a href="#__codelineno-0-90"> 90</a></span>
@@ -906,6 +914,7 @@ length scale units.</p>
 
 
     <div class="doc doc-contents ">
+
 
 
         <p>A class for converting arbitrary height levels from the AFM into real world nanometre heights.</p>
@@ -983,7 +992,8 @@ values. Typically 12, hence 2^12 = 4096 sensitivity levels.</p>
 
 
 
-              <details class="quote">
+
+              <details class="mkdocstrings-source">
                 <summary>Source code in <code>AFMReader/asd.py</code></summary>
                 <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-42">42</a></span>
 <span class="normal"><a href="#__codelineno-0-43">43</a></span>
@@ -1071,7 +1081,8 @@ values. Typically 12, hence 2^12 = 4096 sensitivity levels.</p>
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
+
 
 
 
@@ -1085,7 +1096,7 @@ values. Typically 12, hence 2^12 = 4096 sensitivity levels.</p>
 
 
 <h3 id="AFMReader.asd.VoltageLevelConverter.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">analogue_digital_range</span><span class="p">,</span> <span class="n">scaling_factor</span><span class="p">,</span> <span class="n">resolution</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">analogue_digital_range</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">scaling_factor</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">resolution</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code>
 
 </h3>
 
@@ -1160,7 +1171,7 @@ values. Typically 12, hence 2^12 = 4096 sensitivity levels.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-61">61</a></span>
 <span class="normal"><a href="#__codelineno-0-62">62</a></span>
@@ -1224,7 +1235,7 @@ values. Typically 12, hence 2^12 = 4096 sensitivity levels.</p>
 
 
 <h2 id="AFMReader.asd.calculate_scaling_factor" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">calculate_scaling_factor</span><span class="p">(</span><span class="n">channel</span><span class="p">,</span> <span class="n">z_piezo_gain</span><span class="p">,</span> <span class="n">z_piezo_extension</span><span class="p">,</span> <span class="n">scanner_sensitivity</span><span class="p">,</span> <span class="n">phase_sensitivity</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">calculate_scaling_factor</span><span class="p">(</span><span class="n">channel</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">z_piezo_gain</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">z_piezo_extension</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">scanner_sensitivity</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">phase_sensitivity</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span></code>
 
 </h2>
 
@@ -1356,7 +1367,7 @@ in the .asd file.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-130">130</a></span>
 <span class="normal"><a href="#__codelineno-0-131">131</a></span>
@@ -1473,7 +1484,7 @@ in the .asd file.</p>
 
 
 <h2 id="AFMReader.asd.create_analogue_digital_converter" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">create_analogue_digital_converter</span><span class="p">(</span><span class="n">analogue_digital_range</span><span class="p">,</span> <span class="n">scaling_factor</span><span class="p">,</span> <span class="n">resolution</span><span class="o">=</span><span class="mi">4096</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">create_analogue_digital_converter</span><span class="p">(</span><span class="n">analogue_digital_range</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">scaling_factor</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">resolution</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4096</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VoltageLevelConverter</span></code>
 
 </h2>
 
@@ -1574,7 +1585,7 @@ file. Note that this is file specific since the parameters will change between f
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-723">723</a></span>
 <span class="normal"><a href="#__codelineno-0-724">724</a></span>
@@ -1783,7 +1794,7 @@ file. Note that this is file specific since the parameters will change between f
 
 
 <h2 id="AFMReader.asd.create_animation" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">create_animation</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span> <span class="n">frames</span><span class="p">,</span> <span class="n">file_format</span><span class="o">=</span><span class="s1">&#39;.gif&#39;</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">create_animation</span><span class="p">(</span><span class="n">file_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">frames</span><span class="p">:</span> <span class="n">npt</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">file_format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;.gif&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code>
 
 </h2>
 
@@ -1858,7 +1869,7 @@ W is the width of the frames and H is the height of the frames.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-824">824</a></span>
 <span class="normal"><a href="#__codelineno-0-825">825</a></span>
@@ -1957,7 +1968,7 @@ W is the width of the frames and H is the height of the frames.</p>
 
 
 <h2 id="AFMReader.asd.load_asd" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">load_asd</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="n">channel</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">load_asd</span><span class="p">(</span><span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span> <span class="n">channel</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span></code>
 
 </h2>
 
@@ -2063,7 +2074,7 @@ metadata is available.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-185">185</a></span>
 <span class="normal"><a href="#__codelineno-0-186">186</a></span>
@@ -2282,7 +2293,7 @@ metadata is available.</p>
 
 
 <h2 id="AFMReader.asd.read_channel_data" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_channel_data</span><span class="p">(</span><span class="n">open_file</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">,</span> <span class="n">x_pixels</span><span class="p">,</span> <span class="n">y_pixels</span><span class="p">,</span> <span class="n">analogue_digital_converter</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_channel_data</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">x_pixels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">y_pixels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">analogue_digital_converter</span><span class="p">:</span> <span class="n">VoltageLevelConverter</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">npt</span><span class="o">.</span><span class="n">NDArray</span></code>
 
 </h2>
 
@@ -2411,7 +2422,7 @@ metadata is available.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-658">658</a></span>
 <span class="normal"><a href="#__codelineno-0-659">659</a></span>
@@ -2548,7 +2559,7 @@ metadata is available.</p>
 
 
 <h2 id="AFMReader.asd.read_file_version" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_file_version</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_file_version</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span></code>
 
 </h2>
 
@@ -2613,7 +2624,7 @@ metadata is available.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-291">291</a></span>
 <span class="normal"><a href="#__codelineno-0-292">292</a></span>
@@ -2662,7 +2673,7 @@ metadata is available.</p>
 
 
 <h2 id="AFMReader.asd.read_header_file_version_0" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_header_file_version_0</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_header_file_version_0</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span></code>
 
 </h2>
 
@@ -2726,7 +2737,7 @@ metadata is available.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-313">313</a></span>
 <span class="normal"><a href="#__codelineno-0-314">314</a></span>
@@ -2933,7 +2944,7 @@ metadata is available.</p>
 
 
 <h2 id="AFMReader.asd.read_header_file_version_1" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_header_file_version_1</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_header_file_version_1</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span></code>
 
 </h2>
 
@@ -2997,7 +3008,7 @@ metadata is available.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-414">414</a></span>
 <span class="normal"><a href="#__codelineno-0-415">415</a></span>
@@ -3214,7 +3225,7 @@ metadata is available.</p>
 
 
 <h2 id="AFMReader.asd.read_header_file_version_2" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">read_header_file_version_2</span><span class="p">(</span><span class="n">open_file</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">read_header_file_version_2</span><span class="p">(</span><span class="n">open_file</span><span class="p">:</span> <span class="n">BinaryIO</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span></code>
 
 </h2>
 
@@ -3278,7 +3289,7 @@ metadata is available.</p>
     </table>
 
 
-            <details class="quote">
+            <details class="mkdocstrings-source">
               <summary>Source code in <code>AFMReader/asd.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-520">520</a></span>
 <span class="normal"><a href="#__codelineno-0-521">521</a></span>
