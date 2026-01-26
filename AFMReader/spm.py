@@ -38,9 +38,18 @@ def spm_pixel_to_nm_scaling(filename: str, channel_data: pySPM.SPM.SPM_image) ->
         px_to_real[0][0] * unit_dict[px_to_real[0][1]],
         px_to_real[1][0] * unit_dict[px_to_real[1][1]],
     )[0]
+    # ns-rse : Perhaps just switch to _always_ using the parameters from channel_data.size to calculate scaling?
     if px_to_real[0][0] == 0 and px_to_real[1][0] == 0:
-        pixel_to_nm_scaling = 1
-        logger.info(f"[{filename}] : Pixel size not found in metadata, defaulting to 1nm")
+        logger.info(
+            f"[{filename}] : Pixel to nm scaling not directly available, calculating from 'channel_data.size['real']' "
+            "and 'channel_data.size['pixels']'."
+        )
+        pixel_to_nm_scaling = (
+            (channel_data.size["real"]["x"] / channel_data.size["pixels"]["x"])
+            / unit_dict[channel_data.size["real"]["unit"]],
+            (channel_data.size["real"]["y"] / channel_data.size["pixels"]["y"])
+            / unit_dict[channel_data.size["real"]["unit"]],
+        )[0]
     logger.info(f"[{filename}] : Pixel to nm scaling : {pixel_to_nm_scaling}")
     return pixel_to_nm_scaling
 
