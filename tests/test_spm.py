@@ -46,6 +46,38 @@ def test_load_spm(
     assert result_image.sum() == pytest.approx(image_sum)
 
 
+@patch("pySPM.SPM.SPM_image")
+@pytest.mark.parametrize(
+    ("filename", "size", "expected_px2nm"),
+    [
+        pytest.param(
+            "square",
+            {"pixels": {"x": 1024, "y": 1024}, "real": {"x": 505.859, "y": 505.859, "unit": "nm"}},
+            0.4940029296875,
+            id="square 0.494",
+        ),
+        pytest.param(
+            "square",
+            {"pixels": {"x": 2048, "y": 2048}, "real": {"x": 505.859, "y": 505.859, "unit": "nm"}},
+            0.24700146484375,
+            id="square 0.247",
+        ),
+    ],
+)
+def test_spm_pixel_to_nm_scaling_(
+    mock_spm: "MagicMock",
+    filename: str,
+    size: dict[str, dict[str, int | str]],
+    expected_px2nm: float,
+) -> None:
+    """Test obtaining scaling directly when ``pixel_to_nm_scale`` attribute is zero."""
+    # Mock the pxs attribute to be zero which triggers derivation of sacling from the size attributes
+    mock_spm.pxs.return_value = [(0, "nm"), (0, "nm")]
+    mock_spm.size = size
+    result = spm.spm_pixel_to_nm_scaling(filename, mock_spm)
+    assert result == expected_px2nm
+
+
 @patch("pySPM.SPM.SPM_image.pxs")
 @pytest.mark.parametrize(
     ("filename", "unit", "x", "y", "expected_px2nm"),
