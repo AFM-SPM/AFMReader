@@ -201,6 +201,46 @@ def test_unpack_hdf5_nested_dict_group_path(tmp_path: Path) -> None:
     np.testing.assert_equal(result, expected)
 
 
+def test_unpack_hdf5_list_of_bytes(tmp_path: Path) -> None:
+    """Test loading a list of strings which are encoded to Numpy array on saving."""
+    to_save = {
+        "config": {
+            "grainstats": {
+                "class_names": np.asarray([b"DNA", b"Protein"], dtype="S7"),
+                "edge_detection_method": "binary_erosion",
+                "extract_height_profile": True,
+                "run": True,
+            }
+        }
+    }
+    group_path = "/config/grainstats/"
+    expected = {
+        "class_names": np.asarray([b"DNA", b"Protein"], dtype="S7"),
+        "edge_detection_method": "binary_erosion",
+        "extract_height_profile": True,
+        "run": True,
+    }
+    # Manually save the dictionary to HDF5 format
+    with h5py.File(tmp_path / "hdf5_file_list_of_strings", "w") as f:
+        # t_path = Path.cwd()
+        # with h5py.File(t_path / "tmp" / "something_else", "w") as f:
+        config = f.create_group("config")
+        grainstats = config.create_group("grainstats")
+        grainstats.create_dataset("class_names", data=to_save["config"]["grainstats"]["class_names"])
+        grainstats.create_dataset(
+            "edge_detection_method", data=to_save["config"]["grainstats"]["edge_detection_method"]
+        )
+        grainstats.create_dataset(
+            "extract_height_profile", data=to_save["config"]["grainstats"]["extract_height_profile"]
+        )
+        grainstats.create_dataset("run", data=to_save["config"]["grainstats"]["run"])
+
+    # Load it back in and check if the list is the same
+    with h5py.File(tmp_path / "hdf5_file_list_of_strings", "r") as f:
+        result = unpack_hdf5(open_hdf5_file=f, group_path=group_path)
+    np.testing.assert_equal(result, expected)
+
+
 def test_read_yaml() -> None:
     """Test reading of YAML file."""
     sample_config = read_yaml(RESOURCES / "test.yaml")

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 import h5py
+import numpy as np
 from loguru import logger
 from ruamel.yaml import YAML, YAMLError
 
@@ -255,7 +256,14 @@ def unpack_hdf5(open_hdf5_file: h5py.File, group_path: str = "/") -> dict:
         # Decode byte strings to utf-8. The data type "O" is a byte string.
         elif isinstance(item, h5py.Dataset) and item.dtype == "O":
             # Byte string
-            data[key] = item[()].decode("utf-8")
+            try:
+                data[key] = item[()].decode("utf-8")
+            # Numpy arrays of strings can not be directly decoded, have to iterate over each item
+            except AttributeError as e:
+                if isinstance(item[()], np.ndarray):
+                    data[key] = [_item.decode("utf-8") for _item in item[()]]  # type: ignore
+                else:
+                    raise e
         else:
             # Another type of dataset
             data[key] = item[()]
