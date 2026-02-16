@@ -38,6 +38,17 @@ def _ibw_pixel_to_nm_scaling(scan: dict) -> float:
         float(notes["FastScanSize"]) / scan["wave"]["wData"].shape[1] * 1e9,  # as in m
     )[0]
 
+def get_ibw_channels(file_path: Path | str):
+    filename = file_path.stem
+    scan = binarywave.load(file_path)
+    logger.info(f"[{filename}] : Loaded image from : {file_path}")
+    labels = []
+    for label_list in scan["wave"]["labels"]:
+        for label in label_list:
+            if label:
+                labels.append(label.decode())
+    return labels
+
 
 def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     """

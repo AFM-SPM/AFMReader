@@ -170,6 +170,30 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
         raise ValueError(f"Scaling type {scaling_type} is not 'NullScaling' or 'LinearScaling'")
     return scaling, offset
 
+def get_jpk_channels(
+    file_path: Path | str, config_path: Path | str | None = None
+) -> list[str]:
+
+    file_path = Path(file_path)
+    filename = file_path.stem
+    jpk_tags = _load_jpk_tags(config_path)
+    try:
+        tif = tifffile.TiffFile(file_path)
+    except FileNotFoundError:
+        logger.error(f"[{filename}] File not found : {file_path}")
+        raise
+    # Obtain channel list for all channels in file
+    channel_list = {}
+    for i, page in enumerate(tif.pages[1:]):  # [0] is thumbnail
+        available_channel = page.tags[jpk_tags["channel_name"]].value  # keys are hexadecimal values
+        if page.tags[jpk_tags["trace_retrace"]].value == 0:  # whether img is trace or retrace
+            tr_rt = "trace"
+        else:
+            tr_rt = "retrace"
+        channel_list[f"{available_channel}_{tr_rt}"] = i + 1
+    return channel_list
+
+
 
 def load_jpk(
     file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool | None = True

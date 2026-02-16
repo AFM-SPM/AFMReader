@@ -110,3 +110,16 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
         raise e
 
     return (image, spm_pixel_to_nm_scaling(filename, channel_data))
+
+def get_spm_channels(file_path):
+    labels = []
+    filename = file_path.stem
+    try:
+        scan = pySPM.Bruker(file_path)
+    except FileNotFoundError:
+        logger.error(f"[{filename}] File not found : {file_path}")
+        raise
+    for channel_option in [layer[b"@2:Image Data"][0] for layer in scan.layers]:
+        channel_name = channel_option.decode("latin1").split('"')[1]
+        labels.append(channel_name)
+    return labels

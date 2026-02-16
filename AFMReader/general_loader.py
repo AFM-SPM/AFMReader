@@ -60,7 +60,7 @@ class LoadFile:
                 image, pixel_to_nanometre_scaling_factor = gwy.load_gwy(self.filepath, self.channel)
             elif self.suffix == ".ibw":
                 image, pixel_to_nanometre_scaling_factor = ibw.load_ibw(self.filepath, self.channel)
-            elif self.suffix == ".jpk":
+            elif self.suffix in [".jpk", ".jpk-qi-image"]:
                 image, pixel_to_nanometre_scaling_factor = jpk.load_jpk(self.filepath, self.channel)
             elif self.suffix == ".spm":
                 image, pixel_to_nanometre_scaling_factor = spm.load_spm(self.filepath, self.channel)
@@ -93,4 +93,27 @@ class LoadFile:
             logger.error(f"{e}")
             return (e, None)  # cheeky return of an image, px2nm-like tuple object to propagate error message to Napari
 
+    def get_available_channels(self):
+        if self.suffix == ".asd":
+            available_channels = asd.get_asd_channels(self.filepath)
+        elif self.suffix == ".gwy":
+            available_channels = gwy.get_gwy_channels(self.filepath)
+        elif self.suffix == ".ibw":
+            available_channels = ibw.get_ibw_channels(self.filepath)
+        elif self.suffix in [".jpk", ".jpk-qi-image"]:
+            available_channels = jpk.get_jpk_channels(self.filepath)
+        elif self.suffix == ".spm":
+            available_channels = spm.get_spm_channels(self.filepath)
+        elif self.suffix == ".h5-jpk":
+            available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
+        elif self.suffix == ".jpk-qi-data":
+            # Implement this
+            available_channels = None
+        elif self.suffix in [".stp", ".top"]:
+            available_channels = stp.load_stp(self.filepath)
+        elif self.suffix == ".topostats":
+            available_channels = ["image", "image_original"]
+        else:
+            raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
+        return available_channels
     # scope for a "check what channels are available" function similar to above.

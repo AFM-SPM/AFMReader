@@ -267,6 +267,10 @@ def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> d
     # Compose a dictionary of timestamsps
     return {f"frame {i}": timestamp for i, timestamp in enumerate(timestamps)}
 
+def get_h5jpk_channels(file_path: Path | str):
+    with h5py.File(file_path, "r") as f:
+        available_channels = list(_available_channels(f))
+    return available_channels
 
 def load_h5jpk(
     file_path: Path | str, channel: str, flip_image: bool = True
