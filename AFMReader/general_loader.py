@@ -108,7 +108,7 @@ class LoadFile:
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
         elif self.suffix == ".jpk-qi-data":
             # Implement this
-            available_channels = None
+            available_channels = jpk_qi.get_jpk_qi_channels(self.filepath)
         elif self.suffix in [".stp", ".top"]:
             available_channels = stp.load_stp(self.filepath)
         elif self.suffix == ".topostats":
