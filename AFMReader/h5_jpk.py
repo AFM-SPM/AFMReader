@@ -327,13 +327,14 @@ def load_h5jpk(
         images = (images * scaling) + offset
 
         # Select and reshape a flattened frame
-        image_size = measurement_group.attrs["position-pattern.grid.ilength"]  # number of pixels
+        size_x = measurement_group.attrs["position-pattern.grid.ilength"]
+        size_y = measurement_group.attrs.get("position-pattern.grid.jlength", size_x)  # number of pixels
 
         # Reshape each column vector (height, width) to get (num_frames, height, width)
         num_frames = images.shape[1]
-        image_stack = np.empty((num_frames, image_size, image_size), dtype=images.dtype)
+        image_stack = np.empty((num_frames, size_y, size_x), dtype=images.dtype)
         for i in range(num_frames):
-            frame = images[:, i].reshape((image_size, image_size))
+            frame = images[:, i].reshape((size_y, size_x))
 
             # Flip images
             if flip_image:
@@ -346,7 +347,7 @@ def load_h5jpk(
 
         # Generate a dictionary of timestamps
         line_rate = _get_line_rate(measurement_group)
-        timestamps = generate_timestamps(num_frames, line_rate, image_size)
+        timestamps = generate_timestamps(num_frames, line_rate, size_y)
 
         logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
         return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), timestamps)
