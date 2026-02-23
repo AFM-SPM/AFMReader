@@ -146,8 +146,8 @@ def load_jpk_qi(
                             elif channel == "manual_trigger_point":
                                 if direction == 0:
                                     image[y, x] = _find_trigger_point(curve_data)
-
-
+            if channel in ["manual_trigger_point", "contact_point"]:
+                image = image * 1e9
 
         # Need to include flip image as _load_jpk flip image is set to false
         if flip_image:
@@ -156,72 +156,16 @@ def load_jpk_qi(
     return image, px2nm
 
 def get_jpk_qi_channels(file_path: Path | str):
-    jpk._get_jpk_channels()
-
-
-
-
-def _fetch_qi_data(file_path: Path | str):
-    qi_data = zipfile.ZipFile(file_path, "r")
-    return qi_data
-
-
-def _process_jpk_qi_data(curves_data: list, channel: str) -> tuple[np.ndarray, float]:
-    """
-    Process the curves data from a JPK QI file to extract the image and pixel to nanometre scaling factor.
-
-    """
-    # Calculate pixel to nanometre scaling factor
-    metadata = curves_data[0].metadata
-    shape_x = metadata.get("grid shape x", 0)
-    shape_y = metadata.get("grid shape y", 0)
-
-    size_x = metadata.get("grid size x", 0)
-    size_y = metadata.get("grid size y", 0)
-
-    pixel_to_nm_scaling_factor_x = size_x / shape_x if shape_x > 0 else 1.0
-    pixel_to_nm_scaling_factor_y = size_y / shape_y if shape_y > 0 else 1.0
-    avg_pixel_to_nm_scaling_factor = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
-
-    if channel == "Height (Trigger)":
-        z_heights = _find_trigger_points(curves_data)
-    elif channel == "Height (Contact)":
-        z_heights = [_find_contact_point(curve) for curve in curves_data]
-    else:
-        raise ValueError(f"Channel '{channel}' not recognized. Only 'Height (Trigger)' and 'Height (Contact)' are currently supported.")
-
-    print(f"Grid shape: {shape_x} x {shape_y}")
-    print(f"Z heights: {z_heights}")
-    image = np.array(z_heights).reshape(shape_y, shape_x)
-    return image, avg_pixel_to_nm_scaling_factor
-
-def _find_trigger_points(curves_data):
-    max_points = _max_points_buffer(curves_data)
-    n_curves = len(curves_data)
-
-    logger.info(f"Allocating arrays: {n_curves} curves x {max_points} max points.")
-    all_segments = np.full((n_curves, max_points), -1, dtype=np.int8)
-    all_heights = np.full((n_curves, max_points), np.nan, dtype=np.float32)
-
-    for i, curve in enumerate(curves_data):
-        segment = curve["segment"]
-        height = curve["height (measured)"]
-        length = len(segment)
-
-        all_segments[i, :length] = segment
-        all_heights[i, :length] = height
-
-    logger.info("Data stacked. Calculating trigger points...")
-    is_approach = (all_segments == 0)
-
-    transition_indices = np.sum(is_approach, axis=1) - 1
-
-    transition_indices = np.maximum(transition_indices, 0)
-
-    row_indices = np.arange(n_curves)
-    trigger_values = all_heights[row_indices, transition_indices]
-
-    return trigger_values
+    file_path = Path(file_path)
+    channels = []
+    with zipfile.ZipFile(file_path, "r") as qi_archive:
+        for file_name in qi_archive.namelist():
+            if file_name.endswith(".jpk-qi-image"):
+                path_to_image = file_name
+        with qi_archive.open(path_to_image, "r") as image_file:
+            channels += jpk._get_jpk_channels(file=image_file, filename=file_path.stem, file_path=file_path / Path(path_to_image))
+    channels += ADDITIONAL_CHANNELS
+    return channels
 
 def _find_contact_point(curve):
     # find contact point in vertical deflection by peak in first derivative
