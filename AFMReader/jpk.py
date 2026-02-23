@@ -2,6 +2,7 @@
 
 from importlib import resources
 from pathlib import Path
+from io import BytesIO
 
 import numpy as np
 import tifffile
@@ -170,15 +171,12 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
         raise ValueError(f"Scaling type {scaling_type} is not 'NullScaling' or 'LinearScaling'")
     return scaling, offset
 
-def get_jpk_channels(
-    file_path: Path | str, config_path: Path | str | None = None
-) -> list[str]:
-
-    file_path = Path(file_path)
-    filename = file_path.stem
+def _get_jpk_channels(
+        file: Path | BytesIO, filename: str, file_path: Path | str, config_path: Path | str | None = None
+):
     jpk_tags = _load_jpk_tags(config_path)
     try:
-        tif = tifffile.TiffFile(file_path)
+        tif = tifffile.TiffFile(file)
     except FileNotFoundError:
         logger.error(f"[{filename}] File not found : {file_path}")
         raise
@@ -193,6 +191,13 @@ def get_jpk_channels(
         channel_list[f"{available_channel}_{tr_rt}"] = i + 1
     return channel_list
 
+def get_jpk_channels(
+    file_path: Path | str, config_path: Path | str | None = None
+) -> list[str]:
+
+    file_path = Path(file_path)
+    filename = file_path.stem
+    return _get_jpk_channels(file_path, filename, file_path, config_path)
 
 
 def load_jpk(
@@ -237,11 +242,15 @@ def load_jpk(
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
     filename = file_path.stem
+    image, px2nm = _load_jpk(file=file_path, filename=filename, channel=channel, file_suffix=file_path.suffix, config_path=config_path, flip_image=flip_image)
+    return (image, px2nm)
+
+def _load_jpk(file: Path | BytesIO, filename: str, channel: str, file_suffix: str, config_path: Path | str | None = None, flip_image: bool = True):
     jpk_tags = _load_jpk_tags(config_path)
     try:
-        tif = tifffile.TiffFile(file_path)
+        tif = tifffile.TiffFile(file)
     except FileNotFoundError:
-        logger.error(f"[{filename}] File not found : {file_path}")
+        logger.error(f"[{filename}] File not found : {file}")
         raise
     # Obtain channel list for all channels in file
     channel_list = {}
@@ -255,8 +264,8 @@ def load_jpk(
     try:
         channel_idx = channel_list[channel]
     except KeyError as e:
-        logger.error(f"'{channel}' not in {file_path.suffix} channel list: {channel_list}")
-        raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {channel_list}") from e
+        logger.error(f"'{channel}' not in {file_suffix} channel list: {channel_list}")
+        raise ValueError(f"'{channel}' not in {file_suffix} channel list: {channel_list}") from e
 
     # Get image and if applicable, scale it
     channel_page = tif.pages[channel_idx]
