@@ -1,14 +1,18 @@
 from pathlib import Path
-import numpy as np
-from AFMReader.logging import logger
-from AFMReader import jpk
-import zipfile
+from contextlib import nullcontext
 import io
+import zipfile
+
+import numpy as np
 import javaproperties
 import h5py
 
+from AFMReader.logging import logger
+from AFMReader import jpk
 
-ADDITIONAL_CHANNELS = ["contact_point", "manual_trigger_point"]
+
+ADDITIONAL_CHANNELS = ["contactPoint_trace", "manualTriggerPoint_trace"]
+ADDITIONAL_CHANNELS_IN_M = ["contactPoint_trace", "manualTriggerPoint_trace"]
 
 def _get_channel_scaling(props, channel_index):
     """
@@ -78,8 +82,18 @@ def load_jpk_qi(
             image, px2nm = jpk._load_jpk(virtual_file, path_to_image, channel=channel, file_suffix=".jpk-qi-data", config_path=config_path, flip_image=False)
 
         else:
+            if save_as_h5:
+                top_level_meta = {}
+                changing_curve_keys = set()
+                changing_segment_keys = set()
+                all_curve_keys = set()
+                all_segment_keys = set()
+
             with qi_archive.open("header.properties") as archive_meta_file:
                 props = javaproperties.load(archive_meta_file)
+                if save_as_h5:
+                    for key, value in props.items():
+                        top_level_meta[f"shared-data.{key}"] = value
                 size_x, size_y, shape_x, shape_y = None, None, None, None
                 for key, value in props.items():
                     if key.endswith(".ulength"):
@@ -90,6 +104,7 @@ def load_jpk_qi(
                         shape_x = int(value)
                     if key.endswith(".jlength"):
                         shape_y = int(value)
+
 
             if None in [size_x, size_y, shape_x, shape_y]:
                 logger.error(f"Incomplete dimension data in {file_path}")
@@ -104,6 +119,9 @@ def load_jpk_qi(
             with qi_archive.open("shared-data/header.properties") as shared_data_file:
                 shared_meta = javaproperties.load(shared_data_file)
                 channel_i = 0
+                if save_as_h5:
+                    for key, value in shared_meta.items():
+                        top_level_meta[f"shared-data.{key}"] = value
                 while f"lcd-info.{channel_i}.channel.name" in shared_meta:
                     channel_dict = {}
                     channel_dict["name"] = shared_meta[f"lcd-info.{channel_i}.channel.name"]
@@ -116,12 +134,17 @@ def load_jpk_qi(
             if len(segment_channels) == 0:
                 logger.error("Could not find channels for segments")
 
-            with h5py.File(file_path.parent / f"{file_path.stem}.h5-jpk", "a") as h5file:
+            h5_context = h5py.File(file_path.parent / f"{file_path.stem}.h5-jpk", "a") if save_as_h5 else nullcontext()
+            with h5_context as h5file:
                 vlen_type = h5py.vlen_dtype(np.float32)
                 num_of_curves = shape_x * shape_y
 
                 if save_as_h5:
+                    curve_meta = [{} for _ in range(num_of_curves)]
+                    segment_meta = [{} for _ in range(num_of_curves * 2)]
                     qi_group = h5file.require_group("QI_Data")
+                    global_meta_group = qi_group.require_group("Global_Metadata")
+                    curves_meta_group = qi_group.require_group("Curve_Metadata")
 
                     curve_datasets = {}
                     for direction in range(2):
@@ -134,14 +157,30 @@ def load_jpk_qi(
                                 )
                             else:
                                 curve_datasets[f"{direction}_{ds_name}"] = dir_group[ds_name]
+
                 for y in range(shape_y):
                     for x in range(shape_x):
                         curve_num = shape_x * y + x
-                        # with qi_archive.open(f"index/{i}/header.properties") as curve_meta_file:
-                        #     curve_meta = javaproperties.load(curve_meta_file)
+                        if save_as_h5:
+                            with qi_archive.open(f"index/{curve_num}/header.properties") as curve_meta_file:
+                                curve_meta_raw = javaproperties.load(curve_meta_file)
+                                for key, value in curve_meta_raw.items():
+                                    key = ".".join(key.split(".")[1:])
+                                    curve_meta[curve_num][key] = value
+                                    all_curve_keys.add(key)
+                                    if curve_num != 0 and (key not in curve_meta[0] or curve_meta[0][key] != value):
+                                        changing_curve_keys.add(key)
+
                         for direction in range(2):
-                            # with qi_archive.open(f"index/{i}/segments/{direction}/segment-header.properties") as segment_meta_file:
-                            #     segments_meta = javaproperties.load(segment_meta_file)
+                            if save_as_h5:
+                                with qi_archive.open(f"index/{curve_num}/segments/{direction}/segment-header.properties") as segment_meta_file:
+                                    segment_meta_raw = javaproperties.load(segment_meta_file)
+                                    for key, value in segment_meta_raw.items():
+                                        key = ".".join(key.split(".")[1:])
+                                        segment_meta[curve_num * 2 + direction][key] = value
+                                        all_segment_keys.add(key)
+                                        if curve_num != 0 and (key not in segment_meta[0] or segment_meta[0][key] != value):
+                                            changing_segment_keys.add(key)
                             curve_data = {}
                             for segment_channel in segment_channels:
                                 try:
@@ -155,13 +194,37 @@ def load_jpk_qi(
                                             curve_datasets[f"{direction}_{segment_channel['name']}"][curve_num] = metres_array
                                 except KeyError:
                                     break
-                            if channel == "contact_point":
+                            if channel == "contactPoint_trace":
                                 if direction == 0:
                                     image[y, x] = _find_contact_point(curve_data)
-                            elif channel == "manual_trigger_point":
+                            elif channel == "manualTriggerPoint_trace":
                                 if direction == 0:
                                     image[y, x] = _find_trigger_point(curve_data)
-            if channel in ["manual_trigger_point", "contact_point"]:
+
+                if save_as_h5:
+                    # Move all the duplicated metadata to the top level metadata dict
+                    for key in all_curve_keys - changing_curve_keys:
+                        top_level_meta[f"curve.{key}"] = curve_meta[0][key]
+                        for curve_metadata in curve_meta:
+                            curve_metadata.pop(key)
+                    for key in all_segment_keys - changing_segment_keys:
+                        top_level_meta[f"segment.{key}"] = segment_meta[0][key]
+                        for segment_metadata in segment_meta:
+                            segment_metadata.pop(key)
+                    for key, value in top_level_meta.items():
+                        global_meta_group.attrs[key] = str(value).encode('utf-8')
+                    for i, curve_metadata in enumerate(curve_meta):
+                        curve_meta_group = curves_meta_group.require_group(f"{i}")
+                        for key, value in curve_metadata.items():
+                            curve_meta_group.attrs[key] = str(value).encode('utf-8')
+
+                        for d in range(2):
+                            segment_meta_group = curve_meta_group.require_group(f"{d}")
+                            for key, value in segment_meta[i*2+d].items():
+                                segment_meta_group.attrs[key] = str(value).encode('utf-8')
+
+
+            if channel in ADDITIONAL_CHANNELS_IN_M:
                 image = image * 1e9
 
             if save_as_h5:
@@ -194,6 +257,7 @@ def load_jpk_qi(
                             del chan_grp[dataset_name]
                         chan_grp.create_dataset(dataset_name, data=frame_stack)
 
+
         # Need to include flip image as _load_jpk flip image is set to false
         if flip_image:
             image = np.flipud(image)
@@ -210,6 +274,10 @@ def load_fdcurves_from_h5(file_path: Path | str):
         size_x = meas_grp.attrs["position-pattern.grid.ulength"]
         size_y = meas_grp.attrs["position-pattern.grid.vlength"]
 
+        pixel_to_nm_scaling_factor_x = size_x / shape_x * 1e9 if shape_x > 0 else 1.0
+        pixel_to_nm_scaling_factor_y = size_y / shape_y * 1e9 if shape_y > 0 else 1.0
+        px2nm = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
+
         image = np.zeros((shape_y, shape_x), dtype=np.float32)
         segment_0_group = h5file["QI_Data"]["Segment_0"]
         channel_datasets = {name: segment_0_group[name] for name in segment_0_group.keys()}
@@ -220,8 +288,9 @@ def load_fdcurves_from_h5(file_path: Path | str):
                 for chan_name, dataset in channel_datasets.items():
                     curve_dict[chan_name] = dataset[curve_num]
                 image[y, x] = _find_contact_point(curve=curve_dict)
+        image = image * 1e9
 
-        return image
+        return image, px2nm
 
 
 def _make_num_min_characters(num : int, min_chars: int = 3):

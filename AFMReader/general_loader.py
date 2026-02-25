@@ -107,7 +107,6 @@ class LoadFile:
         elif self.suffix == ".h5-jpk":
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
         elif self.suffix == ".jpk-qi-data":
-            # Implement this
             available_channels = jpk_qi.get_jpk_qi_channels(self.filepath)
         elif self.suffix in [".stp", ".top"]:
             available_channels = stp.load_stp(self.filepath)
@@ -116,4 +115,3 @@ class LoadFile:
         else:
             raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
         return available_channels
-    # scope for a "check what channels are available" function similar to above.
