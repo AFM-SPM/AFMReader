@@ -355,24 +355,27 @@ def load_h5jpk(
         if "QI_Curve_Data" in f:
             logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
             qi_data_group = f["QI_Curve_Data"]
+            loaded_channels_data = {}
+            for direction in ["Segment_0", "Segment_1"]:
+                if direction in qi_data_group:
+                    loaded_channels_data[direction] = {}
+                    for channel, channel_group in qi_data_group[direction].items():
+                        if channel != "error":
+                            loaded_channels_data[direction][channel] = channel_group[:]
+
             all_curve_data = []
             for y in range(shape_y):
                 row = []
                 for x in range(shape_x):
                     curve_num = shape_x * y + x
                     curve_data = {}
-                    for direction in ["Segment_0", "Segment_1"]:
-                        if direction not in qi_data_group:
-                            continue
-                        direction_group = qi_data_group[direction]
-                        for channel, channel_group in direction_group.items():
-                            if channel == "error":
-                                continue
+
+                    for direction, channels in loaded_channels_data.items():
+                        for channel, data_array in channels.items():
                             if channel not in curve_data:
                                 curve_data[channel] = {}
-                            print(f"Curve num: {curve_num} channel {channel} direction {direction}")
+                            curve_data[channel][direction] = data_array[curve_num]
 
-                            curve_data[channel][direction] = channel_group[curve_num]
                     row.append(curve_data)
                 all_curve_data.append(row)
             return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), all_curve_data, timestamps)
