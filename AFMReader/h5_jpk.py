@@ -321,20 +321,21 @@ def load_h5jpk(
 
         channel_group, measurement_group, dataset_name = _get_channel_info(f, channel)
 
+
         # Load images and scaling factors from channel dataset
         images = channel_group[dataset_name][:]
         scaling, offset = _get_z_scaling_h5(channel_group)
         images = (images * scaling) + offset
 
         # Select and reshape a flattened frame
-        size_x = measurement_group.attrs["position-pattern.grid.ilength"]
-        size_y = measurement_group.attrs.get("position-pattern.grid.jlength", size_x)  # number of pixels
+        shape_x = measurement_group.attrs["position-pattern.grid.ilength"]
+        shape_y = measurement_group.attrs.get("position-pattern.grid.jlength", shape_x)  # number of pixels
 
         # Reshape each column vector (height, width) to get (num_frames, height, width)
         num_frames = images.shape[1]
-        image_stack = np.empty((num_frames, size_y, size_x), dtype=images.dtype)
+        image_stack = np.empty((num_frames, shape_y, shape_x), dtype=images.dtype)
         for i in range(num_frames):
-            frame = images[:, i].reshape((size_y, size_x))
+            frame = images[:, i].reshape((shape_y, shape_x))
 
             # Flip images
             if flip_image:
@@ -347,7 +348,33 @@ def load_h5jpk(
 
         # Generate a dictionary of timestamps
         line_rate = _get_line_rate(measurement_group)
-        timestamps = generate_timestamps(num_frames, line_rate, size_y)
+        timestamps = generate_timestamps(num_frames, line_rate, shape_y)
 
         logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
+
+        if "QI_Curve_Data" in f:
+            logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
+            qi_data_group = f["QI_Curve_Data"]
+            all_curve_data = []
+            for y in range(shape_y):
+                row = []
+                for x in range(shape_x):
+                    curve_num = shape_x * y + x
+                    curve_data = {}
+                    for direction in ["Segment_0", "Segment_1"]:
+                        if direction not in qi_data_group:
+                            continue
+                        direction_group = qi_data_group[direction]
+                        for channel, channel_group in direction_group.items():
+                            if channel == "error":
+                                continue
+                            if channel not in curve_data:
+                                curve_data[channel] = {}
+                            print(f"Curve num: {curve_num} channel {channel} direction {direction}")
+
+                            curve_data[channel][direction] = channel_group[curve_num]
+                    row.append(curve_data)
+                all_curve_data.append(row)
+            return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), all_curve_data, timestamps)
+
         return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), timestamps)

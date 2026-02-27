@@ -46,6 +46,7 @@ class LoadFile:
         -------
         tuple
             The image data (stack if ''.asd'' or ''.h5-jpk'') and the pixel to nanometre scaling ratio.
+            If curve data is found, also return the curve data (a large dict of all the curves)
 
         Raises
         ------
@@ -65,7 +66,14 @@ class LoadFile:
             elif self.suffix == ".spm":
                 image, pixel_to_nanometre_scaling_factor = spm.load_spm(self.filepath, self.channel)
             elif self.suffix == ".h5-jpk":
-                image, pixel_to_nanometre_scaling_factor, _ = h5_jpk.load_h5jpk(self.filepath, self.channel)
+                h5_returned = h5_jpk.load_h5jpk(self.filepath, self.channel)
+                if len(h5_returned) == 3:
+                    image, pixel_to_nanometre_scaling_factor, _ = h5_returned
+                elif len(h5_returned) == 4:
+                    image, pixel_to_nanometre_scaling_factor, curve_data, _ = h5_returned
+                    return image, pixel_to_nanometre_scaling_factor, curve_data
+                else:
+                    logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
             elif self.suffix == ".jpk-qi-data":
                 image, pixel_to_nanometre_scaling_factor = jpk_qi.load_jpk_qi(self.filepath, self.channel)
             elif self.suffix == ".stp":
@@ -91,6 +99,7 @@ class LoadFile:
 
         except ValueError as e:
             logger.error(f"{e}")
+            raise e
             return (e, None)  # cheeky return of an image, px2nm-like tuple object to propagate error message to Napari
 
     def get_available_channels(self):

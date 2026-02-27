@@ -11,8 +11,8 @@ from AFMReader.logging import logger
 from AFMReader import jpk
 
 
-ADDITIONAL_CHANNELS = ["contactPoint_trace", "manualTriggerPoint_trace"]
-ADDITIONAL_CHANNELS_IN_M = ["contactPoint_trace", "manualTriggerPoint_trace"]
+ADDITIONAL_CHANNELS = ["contactPoint", "manualTriggerPoint"]
+ADDITIONAL_CHANNELS_IN_M = ["contactPoint", "manualTriggerPoint"]
 
 def _get_channel_scaling(props, channel_index):
     """
@@ -79,6 +79,7 @@ def load_jpk_qi(
             tif_bytes = qi_archive.read(path_to_image)
 
             virtual_file = io.BytesIO(tif_bytes)
+            logger.info(f"Looking for channel {channel} in ")
             image, px2nm = jpk._load_jpk(virtual_file, path_to_image, channel=channel, file_suffix=".jpk-qi-data", config_path=config_path, flip_image=False)
 
         else:
@@ -142,7 +143,7 @@ def load_jpk_qi(
                 if save_as_h5:
                     curve_meta = [{} for _ in range(num_of_curves)]
                     segment_meta = [{} for _ in range(num_of_curves * 2)]
-                    qi_group = h5file.require_group("QI_Data")
+                    qi_group = h5file.require_group("QI_Curve_Data")
                     global_meta_group = qi_group.require_group("Global_Metadata")
                     curves_meta_group = qi_group.require_group("Curve_Metadata")
 
@@ -194,10 +195,10 @@ def load_jpk_qi(
                                             curve_datasets[f"{direction}_{segment_channel['name']}"][curve_num] = metres_array
                                 except KeyError:
                                     break
-                            if channel == "contactPoint_trace":
+                            if channel == "contactPoint":
                                 if direction == 0:
                                     image[y, x] = _find_contact_point(curve_data)
-                            elif channel == "manualTriggerPoint_trace":
+                            elif channel == "manualTriggerPoint":
                                 if direction == 0:
                                     image[y, x] = _find_trigger_point(curve_data)
 
@@ -223,12 +224,13 @@ def load_jpk_qi(
                             for key, value in segment_meta[i*2+d].items():
                                 segment_meta_group.attrs[key] = str(value).encode('utf-8')
 
-
+            # Convert to nanometers if in meters
             if channel in ADDITIONAL_CHANNELS_IN_M:
                 image = image * 1e9
 
             if save_as_h5:
                 with h5py.File(file_path.parent / f"{file_path.stem}.h5-jpk", "a") as h5file:
+                    # Save data required for reading the h5 file as a normal image file
                     meas_grp = h5file.require_group("Measurement_000")
                     meas_grp.attrs["position-pattern.grid.ulength"] = size_x
                     meas_grp.attrs["position-pattern.grid.ilength"] = shape_x
@@ -240,9 +242,12 @@ def load_jpk_qi(
                     for file_name in qi_archive.namelist():
                         if file_name.endswith(".jpk-qi-image"):
                             path_to_image = file_name
+                    # Add the channels which exist in the jpk-qi-image file
                     with qi_archive.open(path_to_image, "r") as image_file:
                         h5_channels += jpk._get_jpk_channels(file=image_file, filename=file_path.stem, file_path=file_path / Path(path_to_image))
                     for i, h5_channel in enumerate(h5_channels):
+                        # For each available channel, save the required data to the h5 file
+                        # TODO make sure this metadata is accurate for the channels coming from the .jpk-qi-image file
                         chan_grp = meas_grp.require_group(f"Channel_{_make_num_min_characters(i)}")
                         chan_grp.attrs["channel.name"] = h5_channel.encode("utf-8")
                         chan_grp.attrs["retrace"] = "false".encode("utf-8")
@@ -271,26 +276,19 @@ def load_fdcurves_from_h5(file_path: Path | str):
         meas_grp = h5file["Measurement_000"]
         shape_x = meas_grp.attrs["position-pattern.grid.ilength"]
         shape_y = meas_grp.attrs["position-pattern.grid.jlength"]
-        size_x = meas_grp.attrs["position-pattern.grid.ulength"]
-        size_y = meas_grp.attrs["position-pattern.grid.vlength"]
+        num_of_curves = shape_x * shape_y
+        qi_data_group = h5file["QI_Curve_Data"]
+        all_curve_data = []
+        for i in range(num_of_curves):
+            curve_data = {}
+            for direction, direction_group in qi_data_group.items():
+                for channel, channel_group in direction_group.items():
+                    if channel not in curve_data:
+                        curve_data[channel] = {}
+                    curve_data[channel][direction] = channel_group[str(i)]
+            all_curve_data.append(curve_data)
 
-        pixel_to_nm_scaling_factor_x = size_x / shape_x * 1e9 if shape_x > 0 else 1.0
-        pixel_to_nm_scaling_factor_y = size_y / shape_y * 1e9 if shape_y > 0 else 1.0
-        px2nm = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
-
-        image = np.zeros((shape_y, shape_x), dtype=np.float32)
-        segment_0_group = h5file["QI_Data"]["Segment_0"]
-        channel_datasets = {name: segment_0_group[name] for name in segment_0_group.keys()}
-        for y in range(shape_y):
-            for x in range(shape_x):
-                curve_num = (shape_x * y) + x
-                curve_dict = {}
-                for chan_name, dataset in channel_datasets.items():
-                    curve_dict[chan_name] = dataset[curve_num]
-                image[y, x] = _find_contact_point(curve=curve_dict)
-        image = image * 1e9
-
-        return image, px2nm
+        return all_curve_data
 
 
 def _make_num_min_characters(num : int, min_chars: int = 3):
