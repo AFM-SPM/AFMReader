@@ -75,7 +75,14 @@ class LoadFile:
                 else:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
             elif self.suffix == ".jpk-qi-data":
-                image, pixel_to_nanometre_scaling_factor = jpk_qi.load_jpk_qi(self.filepath, self.channel)
+                jpk_qi_returned = jpk_qi.load_jpk_qi(self.filepath, self.channel)
+                if len(jpk_qi_returned) == 2:
+                    image, pixel_to_nanometre_scaling_factor = jpk_qi_returned
+                elif len(jpk_qi_returned) == 3:
+                    image, pixel_to_nanometre_scaling_factor, curve_data = jpk_qi_returned
+                    return image, pixel_to_nanometre_scaling_factor, curve_data
+                else:
+                    logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(jpk_qi_returned)}")
             elif self.suffix == ".stp":
                 image, pixel_to_nanometre_scaling_factor = stp.load_stp(self.filepath)
             elif self.suffix == ".top":

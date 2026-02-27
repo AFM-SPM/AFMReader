@@ -67,6 +67,7 @@ def load_jpk_qi(
 
     # Load the file path passed to the function
     file_path = Path(file_path)
+    all_curve_data = None
     with zipfile.ZipFile(file_path, "r") as qi_archive:
         if channel not in ADDITIONAL_CHANNELS:
             path_to_image = None
@@ -139,6 +140,7 @@ def load_jpk_qi(
             with h5_context as h5file:
                 vlen_type = h5py.vlen_dtype(np.float32)
                 num_of_curves = shape_x * shape_y
+                all_curve_data = []
 
                 if save_as_h5:
                     curve_meta = [{} for _ in range(num_of_curves)]
@@ -160,8 +162,10 @@ def load_jpk_qi(
                                 curve_datasets[f"{direction}_{ds_name}"] = dir_group[ds_name]
 
                 for y in range(shape_y):
+                    row = []
                     for x in range(shape_x):
                         curve_num = shape_x * y + x
+                        curve_data = {}
                         if save_as_h5:
                             with qi_archive.open(f"index/{curve_num}/header.properties") as curve_meta_file:
                                 curve_meta_raw = javaproperties.load(curve_meta_file)
@@ -182,25 +186,31 @@ def load_jpk_qi(
                                         all_segment_keys.add(key)
                                         if curve_num != 0 and (key not in segment_meta[0] or segment_meta[0][key] != value):
                                             changing_segment_keys.add(key)
-                            curve_data = {}
+                            segment_dict = {}
                             for segment_channel in segment_channels:
                                 try:
-                                    with qi_archive.open(f"index/{curve_num}/segments/{direction}/channels/{segment_channel['name']}.dat") as segment_data:
+                                    with qi_archive.open(f"index/{curve_num}/segments/{direction}/channels/{segment_channel['name']}.dat") as segment_raw:
                                         dtype_str = '>i4'
-                                        raw_bytes = segment_data.read()
+                                        raw_bytes = segment_raw.read()
                                         raw_array = np.frombuffer(raw_bytes, dtype=dtype_str)
-                                        metres_array = (raw_array * segment_channel["multiplier"]) + segment_channel["offset"]
-                                        curve_data[segment_channel['name']] = metres_array
+                                        segment_array = (raw_array * segment_channel["multiplier"]) + segment_channel["offset"]
+                                        segment_dict[segment_channel['name']] = segment_array
                                         if save_as_h5:
-                                            curve_datasets[f"{direction}_{segment_channel['name']}"][curve_num] = metres_array
+                                            curve_datasets[f"{direction}_{segment_channel['name']}"][curve_num] = segment_array
+                                        if segment_channel['name'] not in curve_data:
+                                            curve_data[segment_channel['name']] = {}
+                                        curve_data[segment_channel['name']][f"Segment_{direction}"] = segment_array
+
                                 except KeyError:
                                     break
                             if channel == "contactPoint":
                                 if direction == 0:
-                                    image[y, x] = _find_contact_point(curve_data)
+                                    image[y, x] = _find_contact_point(segment_dict)
                             elif channel == "manualTriggerPoint":
                                 if direction == 0:
-                                    image[y, x] = _find_trigger_point(curve_data)
+                                    image[y, x] = _find_trigger_point(segment_dict)
+                        row.append(curve_data)
+                    all_curve_data.append(row)
 
                 if save_as_h5:
                     # Move all the duplicated metadata to the top level metadata dict
@@ -266,6 +276,8 @@ def load_jpk_qi(
         # Need to include flip image as _load_jpk flip image is set to false
         if flip_image:
             image = np.flipud(image)
+    if all_curve_data:
+        return (image, px2nm, all_curve_data)
 
     return image, px2nm
 
