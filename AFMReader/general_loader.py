@@ -4,8 +4,9 @@ from pathlib import Path
 
 import numpy.typing as npt
 
-from AFMReader import asd, gwy, h5_jpk, ibw, jpk, spm, stp, top, topostats, jpk_qi
+from AFMReader import asd, gwy, h5_jpk, ibw, jpk, spm, stp, top, topostats, jpk_qi, bin
 from AFMReader.logging import logger
+
 
 logger.enable(__package__)
 
@@ -23,7 +24,7 @@ class LoadFile:
             Channel to extract from the AFM image.
     """
 
-    def __init__(self, filepath: str | Path, channel: str):
+    def __init__(self, filepath: str | Path, channel: str, kwargs: dict = None):
         """
         Initialise the general LoadFile class with a filepath and channel.
 
@@ -37,8 +38,10 @@ class LoadFile:
         self.filepath = Path(filepath)
         self.channel = channel
         self.suffix = self.filepath.suffix
+        self.loaded_curves = False
+        self.kwargs = kwargs
 
-    def load(self) -> tuple[npt.NDArray | str, float | None]:  # noqa: C901
+    def load(self, channel: str | None = None, kwargs: dict = None) -> tuple[npt.NDArray | str, float | None]:  # noqa: C901
         """
         Generally loads a file type that can be handled by AFMReader.
 
@@ -54,6 +57,10 @@ class LoadFile:
             Where the channel is not found, returned as a tuple of "error message" and "None" so that this can be
             propagated to Napari without outright failing.
         """
+        if channel:
+            self.channel = channel
+        if kwargs:
+            self.kwargs = kwargs
         try:
             if self.suffix == ".asd":
                 image, pixel_to_nanometre_scaling_factor, _ = asd.load_asd(self.filepath, self.channel)
@@ -66,20 +73,22 @@ class LoadFile:
             elif self.suffix == ".spm":
                 image, pixel_to_nanometre_scaling_factor = spm.load_spm(self.filepath, self.channel)
             elif self.suffix == ".h5-jpk":
-                h5_returned = h5_jpk.load_h5jpk(self.filepath, self.channel)
+                h5_returned = h5_jpk.load_h5jpk(self.filepath, self.channel, load_curves=not self.loaded_curves)
                 if len(h5_returned) == 3:
                     image, pixel_to_nanometre_scaling_factor, _ = h5_returned
                 elif len(h5_returned) == 4:
                     image, pixel_to_nanometre_scaling_factor, curve_data, _ = h5_returned
+                    self.loaded_curves = True
                     return image, pixel_to_nanometre_scaling_factor, curve_data
                 else:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
             elif self.suffix == ".jpk-qi-data":
-                jpk_qi_returned = jpk_qi.load_jpk_qi(self.filepath, self.channel)
+                jpk_qi_returned = jpk_qi.load_jpk_qi(self.filepath, self.channel, **self.kwargs)
                 if len(jpk_qi_returned) == 2:
                     image, pixel_to_nanometre_scaling_factor = jpk_qi_returned
                 elif len(jpk_qi_returned) == 3:
                     image, pixel_to_nanometre_scaling_factor, curve_data = jpk_qi_returned
+                    self.loaded_curves = True
                     return image, pixel_to_nanometre_scaling_factor, curve_data
                 else:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(jpk_qi_returned)}")
@@ -99,6 +108,8 @@ class LoadFile:
                         f"'{self.channel}' not in available image keys: "
                         f"{[im for im in image_keys if im in topostats_keys]}"
                     ) from exc
+            elif self.suffix == ".bin":
+                image, pixel_to_nanometre_scaling_factor = bin.load_bin(self.filepath, **self.kwargs)
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
 
@@ -124,10 +135,12 @@ class LoadFile:
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
         elif self.suffix == ".jpk-qi-data":
             available_channels = jpk_qi.get_jpk_qi_channels(self.filepath)
-        elif self.suffix in [".stp", ".top"]:
-            available_channels = stp.load_stp(self.filepath)
         elif self.suffix == ".topostats":
             available_channels = ["image", "image_original"]
+        elif self.suffix == ".bin":
+            available_channels = bin.get_bin_channels()
+        elif self.suffix in [".stp", ".top"]:
+            return []
         else:
             raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
         return available_channels

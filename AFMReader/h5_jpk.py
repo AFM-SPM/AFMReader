@@ -273,7 +273,7 @@ def get_h5jpk_channels(file_path: Path | str):
     return available_channels
 
 def load_h5jpk(
-    file_path: Path | str, channel: str, flip_image: bool = True
+    file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True
 ) -> tuple[np.ndarray, float, dict[str, float]]:
     """
     Load image from JPK Instruments .h5-jpk files.
@@ -352,10 +352,15 @@ def load_h5jpk(
 
         logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
 
-        if "QI_Curve_Data" in f:
+        if load_curves and "QI_Curve_Data" in f:
             logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
             qi_data_group = f["QI_Curve_Data"]
             loaded_channels_data = {}
+            channels_units = {}
+            for key, value in qi_data_group["Global_Metadata"].attrs.items():
+                if key.startswith("channel.unit."):
+                    channels_units[key.split(".")[-1]] = value
+
             for direction in ["Segment_0", "Segment_1"]:
                 if direction in qi_data_group:
                     loaded_channels_data[direction] = {}
@@ -378,6 +383,6 @@ def load_h5jpk(
 
                     row.append(curve_data)
                 all_curve_data.append(row)
-            return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), all_curve_data, timestamps)
+            return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), (all_curve_data, channels_units), timestamps)
 
         return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), timestamps)

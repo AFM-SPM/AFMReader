@@ -24,12 +24,14 @@ def _get_channel_scaling(props, channel_index):
     current_slot = props.get(f"{prefix}conversion-set.conversions.default")
 
     if not current_slot:
-        mult = float(props[f"{prefix}encoder.scaling.multiplier"])
-        off = float(props[f"{prefix}encoder.scaling.offset"])
-        return mult, off
+        mult = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
+        off = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
+        unit = props.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
+        return mult, off, unit
 
     cumulative_multiplier = 1.0
     cumulative_offset = 0.0
+    unit = props.get(f"{prefix}conversion-set.conversion.{current_slot}.scaling.unit.unit")
 
     while current_slot:
         slot_prefix = f"{prefix}conversion-set.conversion.{current_slot}."
@@ -53,8 +55,24 @@ def _get_channel_scaling(props, channel_index):
 
     final_multiplier = cumulative_multiplier * enc_m
     final_offset = (cumulative_multiplier * enc_c) + cumulative_offset
+    if not unit:
+        unit = props.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
 
-    return final_multiplier, final_offset
+    return final_multiplier, final_offset, unit
+
+def _load_preprocessed_image(qi_archive, channel, config_path=None):
+    path_to_image = None
+    for file_name in qi_archive.namelist():
+        if file_name.endswith(".jpk-qi-image"):
+            path_to_image = file_name
+    if path_to_image not in qi_archive.namelist():
+        raise FileNotFoundError(f"{path_to_image} not found in JPK archive")
+
+    tif_bytes = qi_archive.read(path_to_image)
+
+    virtual_file = io.BytesIO(tif_bytes)
+    logger.info(f"Looking for channel {channel} in ")
+    return jpk._load_jpk(virtual_file, path_to_image, channel=channel, file_suffix=".jpk-qi-data", config_path=config_path, flip_image=False)
 
 
 def load_jpk_qi(
@@ -69,19 +87,8 @@ def load_jpk_qi(
     file_path = Path(file_path)
     all_curve_data = None
     with zipfile.ZipFile(file_path, "r") as qi_archive:
-        if channel not in ADDITIONAL_CHANNELS:
-            path_to_image = None
-            for file_name in qi_archive.namelist():
-                if file_name.endswith(".jpk-qi-image"):
-                    path_to_image = file_name
-            if path_to_image not in qi_archive.namelist():
-                raise FileNotFoundError(f"{path_to_image} not found in JPK archive")
-
-            tif_bytes = qi_archive.read(path_to_image)
-
-            virtual_file = io.BytesIO(tif_bytes)
-            logger.info(f"Looking for channel {channel} in ")
-            image, px2nm = jpk._load_jpk(virtual_file, path_to_image, channel=channel, file_suffix=".jpk-qi-data", config_path=config_path, flip_image=False)
+        if channel not in ADDITIONAL_CHANNELS and not save_as_h5:
+            image, px2nm = _load_preprocessed_image(qi_archive=qi_archive, channel=channel, config_path=config_path)
 
         else:
             if save_as_h5:
@@ -127,9 +134,10 @@ def load_jpk_qi(
                 while f"lcd-info.{channel_i}.channel.name" in shared_meta:
                     channel_dict = {}
                     channel_dict["name"] = shared_meta[f"lcd-info.{channel_i}.channel.name"]
-                    multiplier, offset = _get_channel_scaling(shared_meta, channel_i)
+                    multiplier, offset, unit = _get_channel_scaling(shared_meta, channel_i)
                     channel_dict["offset"] = offset
                     channel_dict["multiplier"] = multiplier
+                    channel_dict["unit"] = unit
                     segment_channels.append(channel_dict)
                     channel_i += 1
 
@@ -178,14 +186,17 @@ def load_jpk_qi(
 
                         for direction in range(2):
                             if save_as_h5:
-                                with qi_archive.open(f"index/{curve_num}/segments/{direction}/segment-header.properties") as segment_meta_file:
-                                    segment_meta_raw = javaproperties.load(segment_meta_file)
-                                    for key, value in segment_meta_raw.items():
-                                        key = ".".join(key.split(".")[1:])
-                                        segment_meta[curve_num * 2 + direction][key] = value
-                                        all_segment_keys.add(key)
-                                        if curve_num != 0 and (key not in segment_meta[0] or segment_meta[0][key] != value):
-                                            changing_segment_keys.add(key)
+                                try:
+                                    with qi_archive.open(f"index/{curve_num}/segments/{direction}/segment-header.properties") as segment_meta_file:
+                                        segment_meta_raw = javaproperties.load(segment_meta_file)
+                                        for key, value in segment_meta_raw.items():
+                                            key = ".".join(key.split(".")[1:])
+                                            segment_meta[curve_num * 2 + direction][key] = value
+                                            all_segment_keys.add(key)
+                                            if curve_num != 0 and (key not in segment_meta[0] or segment_meta[0][key] != value):
+                                                changing_segment_keys.add(key)
+                                except KeyError:
+                                    pass
                             segment_dict = {}
                             for segment_channel in segment_channels:
                                 try:
@@ -211,6 +222,11 @@ def load_jpk_qi(
                                     image[y, x] = _find_trigger_point(segment_dict)
                         row.append(curve_data)
                     all_curve_data.append(row)
+                if channel not in ADDITIONAL_CHANNELS:
+                    image, px2nm = _load_preprocessed_image(qi_archive=qi_archive, channel=channel, config_path=config_path)
+                channels_units = {}
+                for segment_channel in segment_channels:
+                    channels_units[segment_channel['name']] = segment_channel['unit']
 
                 if save_as_h5:
                     # Move all the duplicated metadata to the top level metadata dict
@@ -221,7 +237,12 @@ def load_jpk_qi(
                     for key in all_segment_keys - changing_segment_keys:
                         top_level_meta[f"segment.{key}"] = segment_meta[0][key]
                         for segment_metadata in segment_meta:
-                            segment_metadata.pop(key)
+                            try:
+                                segment_metadata.pop(key)
+                            except KeyError:
+                                pass
+                    for segment_channel in segment_channels:
+                        global_meta_group.attrs[f"channel.unit.{segment_channel['name']}"] = segment_channel['unit']
                     for key, value in top_level_meta.items():
                         global_meta_group.attrs[key] = str(value).encode('utf-8')
                     for i, curve_metadata in enumerate(curve_meta):
@@ -248,6 +269,8 @@ def load_jpk_qi(
                     meas_grp.attrs["position-pattern.grid.jlength"] = shape_y
                     meas_grp.attrs["timing-settings.scanRate"] = 1.0  # Dummy value to satisfy reader
 
+                    logger.info(f"Saving a hdf5 copy of the data {file_path.parent / f'{file_path.stem}.h5-jpk'}")
+
                     h5_channels = [channel]
                     for file_name in qi_archive.namelist():
                         if file_name.endswith(".jpk-qi-image"):
@@ -259,14 +282,25 @@ def load_jpk_qi(
                         # For each available channel, save the required data to the h5 file
                         # TODO make sure this metadata is accurate for the channels coming from the .jpk-qi-image file
                         chan_grp = meas_grp.require_group(f"Channel_{_make_num_min_characters(i)}")
-                        chan_grp.attrs["channel.name"] = h5_channel.encode("utf-8")
-                        chan_grp.attrs["retrace"] = "false".encode("utf-8")
+                        if "_" in h5_channel:
+                            base_name, trace_dir = h5_channel.rsplit("_", 1)
+                            is_retrace = "true" if trace_dir.lower() == "retrace" else "false"
+                        else:
+                            base_name = h5_channel
+                            is_retrace = "false"
+
+                        chan_grp.attrs["channel.name"] = base_name.encode("utf-8")
+                        chan_grp.attrs["retrace"] = is_retrace.encode("utf-8")
                         chan_grp.attrs["net-encoder.scaling.multiplier"] = 1.0
                         chan_grp.attrs["net-encoder.scaling.offset"] = 0.0
 
                         # Format name and reshape image (flattened frame stack)
                         dataset_name = h5_channel.split("_")[0].capitalize()
-                        frame_stack = image.flatten().reshape(-1, 1)
+                        if h5_channel == channel:
+                            channel_image = image
+                        else:
+                            channel_image, _ = _load_preprocessed_image(qi_archive=qi_archive, channel=h5_channel, config_path=config_path)
+                        frame_stack = channel_image.flatten().reshape(-1, 1)
 
                         if dataset_name in chan_grp:
                             del chan_grp[dataset_name]
@@ -277,9 +311,10 @@ def load_jpk_qi(
         if flip_image:
             image = np.flipud(image)
     if all_curve_data:
-        return (image, px2nm, all_curve_data)
+        return (image, px2nm, (all_curve_data, channels_units))
 
     return image, px2nm
+
 
 def load_fdcurves_from_h5(file_path: Path | str):
     file_path = Path(file_path)
@@ -320,7 +355,7 @@ def get_jpk_qi_channels(file_path: Path | str):
         with qi_archive.open(path_to_image, "r") as image_file:
             channels += jpk._get_jpk_channels(file=image_file, filename=file_path.stem, file_path=file_path / Path(path_to_image))
     channels += ADDITIONAL_CHANNELS
-    return channels
+    return channels, {"save_as_h5": bool}
 
 def _find_contact_point(curve):
     # find contact point in vertical deflection by peak in first derivative
