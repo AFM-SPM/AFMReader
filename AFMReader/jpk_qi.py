@@ -1,6 +1,7 @@
 from pathlib import Path
 from contextlib import nullcontext
 import io
+import re
 import zipfile
 
 import numpy as np
@@ -65,7 +66,7 @@ def _load_preprocessed_image(qi_archive, channel, config_path=None):
     for file_name in qi_archive.namelist():
         if file_name.endswith(".jpk-qi-image"):
             path_to_image = file_name
-    if path_to_image not in qi_archive.namelist():
+    if path_to_image is None:
         raise FileNotFoundError(f"{path_to_image} not found in JPK archive")
 
     tif_bytes = qi_archive.read(path_to_image)
@@ -86,33 +87,28 @@ def load_jpk_qi(
     # Load the file path passed to the function
     file_path = Path(file_path)
     all_curve_data = None
+    channels_units = {}
+
+    # Initialize metadata containers
+    top_level_meta = {}
+    full_metadata = {}
+
     with zipfile.ZipFile(file_path, "r") as qi_archive:
         if channel not in ADDITIONAL_CHANNELS and not save_as_h5:
             image, px2nm = _load_preprocessed_image(qi_archive=qi_archive, channel=channel, config_path=config_path)
 
         else:
-            if save_as_h5:
-                top_level_meta = {}
-                changing_curve_keys = set()
-                changing_segment_keys = set()
-                all_curve_keys = set()
-                all_segment_keys = set()
-
-            with qi_archive.open("header.properties") as archive_meta_file:
-                props = javaproperties.load(archive_meta_file)
-                if save_as_h5:
+            if "header.properties" in qi_archive.namelist():
+                with qi_archive.open("header.properties") as archive_meta_file:
+                    props = javaproperties.load(archive_meta_file)
                     for key, value in props.items():
                         top_level_meta[f"shared-data.{key}"] = value
-                size_x, size_y, shape_x, shape_y = None, None, None, None
-                for key, value in props.items():
-                    if key.endswith(".ulength"):
-                        size_x = float(value)
-                    if key.endswith(".vlength"):
-                        size_y = float(value)
-                    if key.endswith(".ilength"):
-                        shape_x = int(value)
-                    if key.endswith(".jlength"):
-                        shape_y = int(value)
+
+            # Parse dimensions
+            size_x = float(props.get("position-pattern.grid.ulength", 0)) if "position-pattern.grid.ulength" in props else None
+            size_y = float(props.get("position-pattern.grid.vlength", 0)) if "position-pattern.grid.vlength" in props else None
+            shape_x = int(props.get("position-pattern.grid.ilength", 0)) if "position-pattern.grid.ilength" in props else None
+            shape_y = int(props.get("position-pattern.grid.jlength", 0)) if "position-pattern.grid.jlength" in props else None
 
 
             if None in [size_x, size_y, shape_x, shape_y]:
@@ -125,39 +121,57 @@ def load_jpk_qi(
             px2nm = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
 
             segment_channels = []
-            with qi_archive.open("shared-data/header.properties") as shared_data_file:
-                shared_meta = javaproperties.load(shared_data_file)
-                channel_i = 0
-                if save_as_h5:
+            if "shared-data/header.properties" in qi_archive.namelist():
+                with qi_archive.open("shared-data/header.properties") as shared_data_file:
+                    shared_meta = javaproperties.load(shared_data_file)
+                    channel_i = 0
                     for key, value in shared_meta.items():
                         top_level_meta[f"shared-data.{key}"] = value
-                while f"lcd-info.{channel_i}.channel.name" in shared_meta:
-                    channel_dict = {}
-                    channel_dict["name"] = shared_meta[f"lcd-info.{channel_i}.channel.name"]
-                    multiplier, offset, unit = _get_channel_scaling(shared_meta, channel_i)
-                    channel_dict["offset"] = offset
-                    channel_dict["multiplier"] = multiplier
-                    channel_dict["unit"] = unit
-                    segment_channels.append(channel_dict)
-                    channel_i += 1
+
+                    while f"lcd-info.{channel_i}.channel.name" in shared_meta:
+                        channel_dict = {"name": shared_meta[f"lcd-info.{channel_i}.channel.name"]}
+                        multiplier, offset, unit = _get_channel_scaling(shared_meta, channel_i)
+                        channel_dict["offset"] = offset
+                        channel_dict["multiplier"] = multiplier
+                        channel_dict["unit"] = unit
+                        segment_channels.append(channel_dict)
+                        channel_i += 1
 
             if len(segment_channels) == 0:
                 logger.error("Could not find channels for segments")
 
+            channels_units = {seg_chan['name'] : seg_chan['unit'] for seg_chan in segment_channels}
+
             h5_context = h5py.File(file_path.parent / f"{file_path.stem}.h5-jpk", "a") if save_as_h5 else nullcontext()
             with h5_context as h5file:
-                vlen_type = h5py.vlen_dtype(np.float32)
                 num_of_curves = shape_x * shape_y
-                all_curve_data = []
+
+                # Pre-allocate data structures
+                curve_meta_dict = {}
+                segment_meta_dict = {}
+                flat_curve_data = [{} for _ in range(num_of_curves)]
+                all_curve_keys = set()
+                all_segment_keys = set()
+
+                # Lookup map for binary scaling
+                chan_scaling = {chan["name"]: chan for chan in segment_channels}
+
+                # Compile Regexes
+                dat_regex = re.compile(r"index/(\d+)/segments/(\d+)/channels/([^/]+)\.dat")
+                curve_meta_regex = re.compile(r"index/(\d+)/header\.properties")
+                segment_meta_regex = re.compile(r"index/(\d+)/segments/(\d+)/segment-header\.properties")
+
+                # Setup H5 Data structures if needed
+                curve_datasets = {}
+
 
                 if save_as_h5:
-                    curve_meta = [{} for _ in range(num_of_curves)]
-                    segment_meta = [{} for _ in range(num_of_curves * 2)]
+                    vlen_type = h5py.vlen_dtype(np.float32)
                     qi_group = h5file.require_group("QI_Curve_Data")
                     global_meta_group = qi_group.require_group("Global_Metadata")
                     curves_meta_group = qi_group.require_group("Curve_Metadata")
 
-                    curve_datasets = {}
+                    # curve_datasets = {}
                     for direction in range(2):
                         dir_group = qi_group.require_group(f"Segment_{direction}")
                         for seg_chan in segment_channels:
@@ -169,85 +183,101 @@ def load_jpk_qi(
                             else:
                                 curve_datasets[f"{direction}_{ds_name}"] = dir_group[ds_name]
 
+                for file_info in qi_archive.infolist():
+                    filename = file_info.filename
+
+                    # Check Binary Data
+                    dat_match = dat_regex.match(filename)
+                    if dat_match:
+                        curve_num, direction, chan_name = int(dat_match.group(1)), int(dat_match.group(2)), dat_match.group(3)
+                        if chan_name in chan_scaling:
+                            scale = chan_scaling[chan_name]
+                            with qi_archive.open(file_info) as f:
+                                raw_array = np.frombuffer(f.read(), dtype='>i4')
+                                segment_array = (raw_array * scale["multiplier"]) + scale["offset"]
+
+                            if chan_name not in flat_curve_data[curve_num]:
+                                flat_curve_data[curve_num][chan_name] = {}
+                            flat_curve_data[curve_num][chan_name][f"Segment_{direction}"] = segment_array
+
+                            if save_as_h5:
+                                curve_datasets[f"{direction}_{chan_name}"][curve_num] = segment_array
+                        continue
+
+                    # Check Curve Metadata
+                    c_match = curve_meta_regex.match(filename)
+                    if c_match:
+                        curve_num = int(c_match.group(1))
+                        with qi_archive.open(file_info) as f:
+                            cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                            curve_meta_dict[curve_num] = cleaned_meta
+                            all_curve_keys.update(cleaned_meta.keys())
+                        continue
+
+                    # Check Segment Metadata
+                    s_match = segment_meta_regex.match(filename)
+                    if s_match:
+                        curve_num, direction = int(s_match.group(1)), int(s_match.group(2))
+                        idx = curve_num * 2 + direction
+                        with qi_archive.open(file_info) as f:
+                            cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                            segment_meta_dict[idx] = cleaned_meta
+                            all_segment_keys.update(cleaned_meta.keys())
+
+                curve_meta = [curve_meta_dict.get(i, {}) for i in range(num_of_curves)]
+                segment_meta = [segment_meta_dict.get(i, {}) for i in range(num_of_curves * 2)]
+
+                # Find keys that change across curves/segments
+                changing_curve_keys = {k for k in all_curve_keys if any(curve_meta[i].get(k) != curve_meta[0].get(k) for i in range(1, num_of_curves))}
+                changing_segment_keys = {k for k in all_segment_keys if any(segment_meta[i].get(k) != segment_meta[0].get(k) for i in range(1, len(segment_meta)))}
+
+                all_curve_data = []
                 for y in range(shape_y):
                     row = []
                     for x in range(shape_x):
-                        curve_num = shape_x * y + x
-                        curve_data = {}
-                        if save_as_h5:
-                            with qi_archive.open(f"index/{curve_num}/header.properties") as curve_meta_file:
-                                curve_meta_raw = javaproperties.load(curve_meta_file)
-                                for key, value in curve_meta_raw.items():
-                                    key = ".".join(key.split(".")[1:])
-                                    curve_meta[curve_num][key] = value
-                                    all_curve_keys.add(key)
-                                    if curve_num != 0 and (key not in curve_meta[0] or curve_meta[0][key] != value):
-                                        changing_curve_keys.add(key)
-
-                        for direction in range(2):
-                            if save_as_h5:
-                                try:
-                                    with qi_archive.open(f"index/{curve_num}/segments/{direction}/segment-header.properties") as segment_meta_file:
-                                        segment_meta_raw = javaproperties.load(segment_meta_file)
-                                        for key, value in segment_meta_raw.items():
-                                            key = ".".join(key.split(".")[1:])
-                                            segment_meta[curve_num * 2 + direction][key] = value
-                                            all_segment_keys.add(key)
-                                            if curve_num != 0 and (key not in segment_meta[0] or segment_meta[0][key] != value):
-                                                changing_segment_keys.add(key)
-                                except KeyError:
-                                    pass
-                            segment_dict = {}
-                            for segment_channel in segment_channels:
-                                try:
-                                    with qi_archive.open(f"index/{curve_num}/segments/{direction}/channels/{segment_channel['name']}.dat") as segment_raw:
-                                        dtype_str = '>i4'
-                                        raw_bytes = segment_raw.read()
-                                        raw_array = np.frombuffer(raw_bytes, dtype=dtype_str)
-                                        segment_array = (raw_array * segment_channel["multiplier"]) + segment_channel["offset"]
-                                        segment_dict[segment_channel['name']] = segment_array
-                                        if save_as_h5:
-                                            curve_datasets[f"{direction}_{segment_channel['name']}"][curve_num] = segment_array
-                                        if segment_channel['name'] not in curve_data:
-                                            curve_data[segment_channel['name']] = {}
-                                        curve_data[segment_channel['name']][f"Segment_{direction}"] = segment_array
-
-                                except KeyError:
-                                    break
-                            if channel == "contactPoint":
-                                if direction == 0:
-                                    image[y, x] = _find_contact_point(segment_dict)
-                            elif channel == "manualTriggerPoint":
-                                if direction == 0:
-                                    image[y, x] = _find_trigger_point(segment_dict)
+                        curve_num = y * shape_x + x
+                        curve_data = flat_curve_data[curve_num]
                         row.append(curve_data)
+
+                        # Calculate on-the-fly image data if required
+                        if channel in ADDITIONAL_CHANNELS:
+                            seg_0_dict = {c: data["Segment_0"] for c, data in curve_data.items() if "Segment_0" in data}
+                            if channel == "contactPoint":
+                                image[y, x] = _find_contact_point(seg_0_dict)
+                            elif channel == "manualTriggerPoint":
+                                image[y, x] = _find_trigger_point(seg_0_dict)
                     all_curve_data.append(row)
                 if channel not in ADDITIONAL_CHANNELS:
                     image, px2nm = _load_preprocessed_image(qi_archive=qi_archive, channel=channel, config_path=config_path)
-                channels_units = {}
-                for segment_channel in segment_channels:
-                    channels_units[segment_channel['name']] = segment_channel['unit']
+
+                # Move duplicated meta to top level
+                for key in all_curve_keys - changing_curve_keys:
+                    if curve_meta and key in curve_meta[0]:
+                        top_level_meta[f"curve.{key}"] = curve_meta[0][key]
+                for key in all_segment_keys - changing_segment_keys:
+                    if segment_meta and key in segment_meta[0]:
+                        top_level_meta[f"segment.{key}"] = segment_meta[0][key]
+
+                # Strip duplicated keys from individual curve/segment dicts
+                for c_meta in curve_meta:
+                    for k in all_curve_keys - changing_curve_keys: c_meta.pop(k, None)
+                for s_meta in segment_meta:
+                    for k in all_segment_keys - changing_segment_keys: s_meta.pop(k, None)
+
+                full_metadata = {
+                    "top_level": top_level_meta,
+                    "curves": curve_meta,
+                    "segments": segment_meta
+                }
 
                 if save_as_h5:
-                    # Move all the duplicated metadata to the top level metadata dict
-                    for key in all_curve_keys - changing_curve_keys:
-                        top_level_meta[f"curve.{key}"] = curve_meta[0][key]
-                        for curve_metadata in curve_meta:
-                            curve_metadata.pop(key)
-                    for key in all_segment_keys - changing_segment_keys:
-                        top_level_meta[f"segment.{key}"] = segment_meta[0][key]
-                        for segment_metadata in segment_meta:
-                            try:
-                                segment_metadata.pop(key)
-                            except KeyError:
-                                pass
-                    for segment_channel in segment_channels:
-                        global_meta_group.attrs[f"channel.unit.{segment_channel['name']}"] = segment_channel['unit']
+                    for seg_chan in segment_channels:
+                        global_meta_group.attrs[f"channel.unit.{seg_chan['name']}"] = seg_chan['unit']
                     for key, value in top_level_meta.items():
                         global_meta_group.attrs[key] = str(value).encode('utf-8')
-                    for i, curve_metadata in enumerate(curve_meta):
+                    for i, c_meta in enumerate(curve_meta):
                         curve_meta_group = curves_meta_group.require_group(f"{i}")
-                        for key, value in curve_metadata.items():
+                        for key, value in c_meta.items():
                             curve_meta_group.attrs[key] = str(value).encode('utf-8')
 
                         for d in range(2):
@@ -275,6 +305,7 @@ def load_jpk_qi(
                     for file_name in qi_archive.namelist():
                         if file_name.endswith(".jpk-qi-image"):
                             path_to_image = file_name
+                            break
                     # Add the channels which exist in the jpk-qi-image file
                     with qi_archive.open(path_to_image, "r") as image_file:
                         h5_channels += jpk._get_jpk_channels(file=image_file, filename=file_path.stem, file_path=file_path / Path(path_to_image))
@@ -311,7 +342,7 @@ def load_jpk_qi(
         if flip_image:
             image = np.flipud(image)
     if all_curve_data:
-        return (image, px2nm, (all_curve_data, channels_units))
+        return (image, px2nm, (all_curve_data, channels_units, full_metadata))
 
     return image, px2nm
 

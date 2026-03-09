@@ -357,9 +357,45 @@ def load_h5jpk(
             qi_data_group = f["QI_Curve_Data"]
             loaded_channels_data = {}
             channels_units = {}
+            top_level_meta = {}
             for key, value in qi_data_group["Global_Metadata"].attrs.items():
                 if key.startswith("channel.unit."):
                     channels_units[key.split(".")[-1]] = value
+                top_level_meta[key] = value
+            if "Curve_Metadata" in qi_data_group:
+                curves_group = qi_data_group["Curve_Metadata"]
+                num_of_curves = len(curves_group.keys())
+
+                # Pre-allocate the lists
+                curve_meta = [{} for _ in range(num_of_curves)]
+                segment_meta = [{} for _ in range(num_of_curves * 2)]
+
+                # Iterate through the curve groups
+                for i_str in curves_group.keys():
+                    i = int(i_str)
+                    c_group = curves_group[i_str]
+
+                    # Extract curve-specific attributes
+                    for key, val in c_group.attrs.items():
+                        if isinstance(val, bytes):
+                            val = val.decode('utf-8')
+                        curve_meta[i][key] = val
+
+                    # Extract segment-specific attributes (usually '0' for trace, '1' for retrace)
+                    for d_str in ['0', '1']:
+                        if d_str in c_group:
+                            s_group = c_group[d_str]
+                            idx = i * 2 + int(d_str)
+                            for key, val in s_group.attrs.items():
+                                if isinstance(val, bytes):
+                                    val = val.decode('utf-8')
+                                segment_meta[idx][key] = val
+
+            full_metadata = {
+                "top_level": top_level_meta,
+                "curves": curve_meta,
+                "segments": segment_meta
+            }
 
             for direction in ["Segment_0", "Segment_1"]:
                 if direction in qi_data_group:
