@@ -292,8 +292,9 @@ class LazyQIData:
         curve_num = self.shape_x * y + x
         for segment, segment_group in self.qi_data_group["Curves"].items():
             for channel in segment_group["Indicies"]:
-                start_idx = segment_group["Indicies"][channel][curve_num]
-                end_idx = segment_group["Indicies"][channel][curve_num + 1]
+                start_idx = int(segment_group["Indicies"][channel][curve_num])
+                end_idx = int(segment_group["Indicies"][channel][curve_num + 1])
+                print(f"Fetching curve for pixel (y={y}, x={x}), segment '{segment}', channel '{channel}': start_idx={start_idx}, end_idx={end_idx}")
                 if channel not in curve_dict:
                     curve_dict[channel] = {}
                 curve_dict[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
@@ -317,22 +318,21 @@ class LazyCurveMetadata:
         raise KeyError(key)
 
 class LazyMetaProxy:
-    def __init__(self, qi_data_group: h5py.Group, meta_type: str, idx: int = None):
+    def __init__(self, qi_data_group: h5py.Group, meta_type: str):
         self.qi_data_group = qi_data_group
         self.meta_type = meta_type
-        self.idx = idx
 
 
-    def __getitem__(self, key):
-        if isinstance(key, int):
-            return LazyMetaProxy(self.qi_data_group, self.meta_type, key)
-        else:
-            value = self.qi_data_group["Curve_Metadata"][key]
-            if isinstance(value, h5py.Dataset):
-                return value[self.idx]
-            else:
-                return value.decode("utf-8") if isinstance(value, bytes) else value
-
+    def __getitem__(self, idx: int):
+        meta_dict = {}
+        for key in self.qi_data_group["Curve_Metadata"]:
+            if key.startswith(f"{self.meta_type}."):
+                new_key = key.split(".", 1)[1]
+                if isinstance(self.qi_data_group["Curve_Metadata"][key], h5py.Dataset):
+                    meta_dict[new_key] = self.qi_data_group["Curve_Metadata"][key][idx]
+                else:
+                    meta_dict[new_key] = self.qi_data_group["Curve_Metadata"][key]
+        return meta_dict
 
 
 def load_h5jpk(
@@ -414,17 +414,21 @@ def load_h5jpk(
         timestamps = generate_timestamps(num_frames, line_rate, shape_y)
 
         logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
+        px2nm = _jpk_pixel_to_nm_scaling_h5(measurement_group)
 
         if "QI_Curve_Data" not in f:
             load_curves = False
 
+
     if load_curves:
+        f = h5py.File(file_path, "r")
+        logger.debug(f"QI_Curve_Data group keys: {list(f.keys())}")
         logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
         qi_data_group = f["QI_Curve_Data"]
-        loaded_channels_data = {}
         channels_units = {}
         top_level_meta = {}
         for key, value in qi_data_group["Global_Metadata"].attrs.items():
+            print(f"Global Metadata - {key}: {value}")
             if key.startswith("channel.unit."):
                 channels_units[key.split(".")[-1]] = value
             top_level_meta[key] = value
@@ -433,6 +437,6 @@ def load_h5jpk(
 
         all_curve_data = LazyQIData(qi_data_group, shape_x)
 
-        return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), (all_curve_data, channels_units, full_metadata), timestamps)
+        return (image_stack, px2nm, (all_curve_data, channels_units, full_metadata), timestamps)
 
-    return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), timestamps)
+    return (image_stack, px2nm, timestamps)

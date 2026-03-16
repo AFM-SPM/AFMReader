@@ -233,7 +233,7 @@ class jpk_qi_loader:
         self.size_x, self.size_y, self.shape_x, self.shape_y = None, None, None, None
 
         # Instantiate containers for data to be saved (so an exception is not caused if not saving)
-        self.curve_datasets = None
+        self.curve_groups = None
 
     def get_channels(self):
         """
@@ -265,9 +265,6 @@ class jpk_qi_loader:
 
         self.parse_dimension_data()
 
-        # Pre-allocate the image array based on the dimensions parsed from the metadata
-        self.image = np.zeros((self.shape_y, self.shape_x), dtype=np.float32)
-
         # Access the curve data and metadata, and save to given file format
         with self.get_saving_context() as file:
 
@@ -278,7 +275,7 @@ class jpk_qi_loader:
 
             # Setup H5 Data structures if needed
             if self.save_as == "h5":
-                self.curve_datasets, self.global_meta_group, self.curves_meta_group = self.setup_h5_structure(file)
+                self.curve_groups, self.global_meta_group, self.curves_meta_group = self.setup_h5_structure(file)
 
             if self.channel in ADDITIONAL_CHANNELS or self.save_as is not None or self.return_meta:
                 for file_info in self.qi_archive.infolist():
@@ -329,8 +326,17 @@ class jpk_qi_loader:
                     for chan_name, chan_data in self.collated_curve_data.items():
                         for direction in range(2):
                             # Save the curve data and indicies to the appropriate dataset in the h5 file
-                            self.curve_datasets[f"{direction}_{chan_name}_data"] = chan_data[f"Segment_{direction}"]
-                            self.curve_datasets[f"{direction}_{chan_name}_indices"] = self.indicies[chan_name][f"Segment_{direction}"]
+                            seg_name = f"Segment_{direction}"
+                            self.curve_groups["Data"][seg_name].create_dataset(
+                                name=chan_name,
+                                data=chan_data[seg_name],
+                                dtype=np.float32,
+                            )
+                            self.curve_groups["Indicies"][seg_name].create_dataset(
+                                name=chan_name,
+                                data=self.indicies[chan_name][seg_name],
+                                dtype=np.int32,
+                            )
 
                     # Save the global metadata to the h5 file
                     vlen_str_dt = h5py.string_dtype(encoding='utf-8')
@@ -347,6 +353,9 @@ class jpk_qi_loader:
 
             self.full_metadata = LazyCurveMetadata(self.filepath, self.top_level_meta, self.qi_archive)
             self.all_curve_data = LazyCurveData(self.filepath, self.shape_x, self.channel_scaling, self.qi_archive)
+
+        # Load the image
+        self.image = self.get_image()
 
         # Convert to nanometers if in meters
         if self.channel in ADDITIONAL_CHANNELS_IN_M:
@@ -393,17 +402,33 @@ class jpk_qi_loader:
         """
         collated_curve_data = {}
         indicies = {}
+
         for curve_data in self.flat_curve_data:
             for chan_name, chan_data in curve_data.items():
                 for seg_name, seg_data in chan_data.items():
                     if chan_name not in collated_curve_data:
                         collated_curve_data[chan_name] = {}
                         indicies[chan_name] = {}
+
                     if seg_name not in collated_curve_data[chan_name]:
                         collated_curve_data[chan_name][seg_name] = []
-                        indicies[chan_name][seg_name] = []
-                    indicies[chan_name][seg_name].append(len(collated_curve_data[chan_name][seg_name]))
+                        indicies[chan_name][seg_name] = [0]
+
+                    # Append the segment data as an array to the list (creates a 2D list)
                     collated_curve_data[chan_name][seg_name].append(seg_data)
+
+                    last_index = indicies[chan_name][seg_name][-1]
+                    next_index = last_index + len(seg_data)
+
+                    indicies[chan_name][seg_name].append(next_index)
+
+        for chan_name, segments in collated_curve_data.items():
+            for seg_name in segments:
+                # Flattens the list of arrays into one massive 1D array for more efficiency
+                collated_curve_data[chan_name][seg_name] = np.concatenate(collated_curve_data[chan_name][seg_name])
+
+                # Converts the indices list into a standard fixed-length integer array
+                indicies[chan_name][seg_name] = np.array(indicies[chan_name][seg_name], dtype=np.int32)
 
         return collated_curve_data, indicies
 
@@ -418,55 +443,54 @@ class jpk_qi_loader:
             A dictionary containing the collated metadata.
         """
         collated_meta = {}
+        for seg_chan in self.segment_channels:
+            collated_meta[f"channel.unit.{seg_chan['name']}"] = seg_chan['unit']
         for key, value in self.top_level_meta.items():
             collated_meta[key] = value
         for curve_dict in self.full_metadata["curves"]:
             for key, value in curve_dict.items():
-                if key not in collated_meta:
-                    collated_meta[key] = []
-                collated_meta[key].append(value)
+                if f"curve.{key}" not in collated_meta:
+                    collated_meta[f"curve.{key}"] = []
+                collated_meta[f"curve.{key}"].append(value)
         for segment_dict in self.full_metadata["segments"]:
             for key, value in segment_dict.items():
-                if key not in collated_meta:
-                    collated_meta[key] = []
-                collated_meta[key].append(value)
+                if f"segment.{key}" not in collated_meta:
+                    collated_meta[f"segment.{key}"] = []
+                collated_meta[f"segment.{key}"].append(value)
         return collated_meta
 
 
-    def process_flat_curve_data(self):
+    def get_image(self):
         """
         Processes the flat curve data dictionary into a 2D list structure matching the image dimensions.
-        -------
-        all_curve_data : list
-            A 2D list of curve data dictionaries, where each dictionary contains the data for all channels and segments for that curve.
-        """
-        all_curve_data = []
-        for y in range(self.shape_y):
-            row = []
-            for x in range(self.shape_x):
-                curve_num = y * self.shape_x + x
-                curve_data = self.flat_curve_data[curve_num]
-                row.append(curve_data)
 
-                # Calculate on-the-fly image data if required
-                if self.channel in ADDITIONAL_CHANNELS:
+        Returns
+        -------
+        image : np.ndarray
+            A 2D array representing the image data.
+        """
+
+        # If the image needs to be calculated, do so
+        if self.channel in ADDITIONAL_CHANNELS:
+            # Create an empty image array
+            image = np.zeros((self.shape_y, self.shape_x), dtype=np.float32)
+            for y in range(self.shape_y):
+                for x in range(self.shape_x):
+                    curve_num = y * self.shape_x + x
+                    curve_data = self.flat_curve_data[curve_num]
+                    # Calculate on-the-fly image data if required
                     seg_0_dict = {c: data["Segment_0"] for c, data in curve_data.items() if "Segment_0" in data}
                     if self.channel == "contactPoint":
-                        self.image[y, x] = _find_contact_point(seg_0_dict)
+                        image[y, x] = _find_contact_point(seg_0_dict)
                     elif self.channel == "manualTriggerPoint":
-                        self.image[y, x] = _find_trigger_point(seg_0_dict)
-            all_curve_data.append(row)
-        return all_curve_data
+                        image[y, x] = _find_trigger_point(seg_0_dict)
+        # Load the image directly if it already exists as a precalculated channel in the .jpk-qi-image file
+        else:
+            image, _ = _load_preprocessed_image(qi_archive=self.qi_archive, channel=self.channel, config_path=self.config_path)
+        return image
 
     def save_lite_data(self):
-        """
-        Saves a lite form of the data (e.g., the calculated image data) to the appropriate format based on the save_as attribute.
-
-        Parameters
-        ----------
-        qi_archive : zipfile.ZipFile
-            The archive containing the .jpk-qi-image file.
-        """
+        """Saves a lite form of the data (e.g., the calculated image data) to the appropriate format based on the save_as attribute."""
         if self.save_as == "h5":
             with h5py.File(self.filepath.parent / f"{self.filepath.stem}.h5-jpk", "a") as h5file:
                 # Save data required for reading the h5 file as a normal image file
@@ -660,8 +684,8 @@ class jpk_qi_loader:
             The h5 file in which to set up the structure for saving the curve data and metadata.
         Returns
         -------
-        curve_datasets : dict
-            A dictionary containing the datasets for each curve and segment direction.
+        curve_groups : dict
+            A dictionary containing the group structure for each segment direction.
         global_meta_group : h5py.Group
             The h5 group for storing global metadata.
         curves_meta_group : h5py.Group
@@ -671,36 +695,25 @@ class jpk_qi_loader:
 
         # Create the main group for the QI curve data that all the curve data will be in
         qi_group = h5file.require_group("QI_Curve_Data")
-        curve_datasets = {}
 
         # Establish empty groups for global metadata and curve metadata
         global_meta_group = qi_group.require_group("Global_Metadata")
         curves_meta_group = qi_group.require_group("Curve_Metadata")
+        curves_group = qi_group.require_group("Curves")
+
+        curve_groups = {
+            "Data": {},
+            "Indicies": {}
+        }
 
         for direction in range(2):
-            # For each segment direction, establish a group and datasets for each channel in the segment channels list
-            dir_group = qi_group.require_group(f"Segment_{direction}")
-            data_group = dir_group.require_group("Data")
-            indices_group = dir_group.require_group("Indicies")
-            for seg_chan in self.segment_channels:
-                ds_name = seg_chan["name"]
-                if f"{ds_name}_data" not in data_group:
-                    # Create the dataset for the given channel and segment direction if it doesn't already exist
-                    curve_datasets[f"{direction}_{ds_name}_data"] = data_group.create_dataset(
-                        f"{ds_name}", shape=(self.num_of_curves,), dtype=vlen_type
-                    )
-                else:
-                    # If the dataset already exists, just add it to the curve datasets dictionary for later use
-                    curve_datasets[f"{direction}_{ds_name}_data"] = data_group[f"{ds_name}"]
-                if f"{ds_name}" not in indices_group:
-                    # Create a corresponding dataset to hold the indicies for the curve data
-                    curve_datasets[f"{direction}_{ds_name}_indices"] = indices_group.create_dataset(
-                        f"{ds_name}", shape=(self.num_of_curves,), dtype=vlen_type
-                    )
-                else:
-                    # If the indicies dataset already exists, just add it to the curve datasets dictionary for later use
-                    curve_datasets[f"{direction}_{ds_name}_indices"] = indices_group[f"{ds_name}"]
-        return curve_datasets, global_meta_group, curves_meta_group
+            # For each segment direction, establish the necessary group structure that will contain each channel dataset
+            seg_name = f"Segment_{direction}"
+            dir_group = curves_group.require_group(seg_name)
+            # Create the Data and Indicies subfolders and store their references
+            curve_groups["Data"][seg_name] = dir_group.require_group("Data")
+            curve_groups["Indicies"][seg_name] = dir_group.require_group("Indicies")
+        return curve_groups, global_meta_group, curves_meta_group
 
     def get_saving_context(self):
         """
