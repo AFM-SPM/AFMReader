@@ -272,6 +272,69 @@ def get_h5jpk_channels(file_path: Path | str):
         available_channels = list(_available_channels(f))
     return available_channels
 
+class LazyQIData:
+    def __init__(self, qi_data_group: h5py.Group, shape_x: int):
+        self.qi_data_group = qi_data_group
+        self.shape_x = shape_x
+
+    def __getitem__(self, y: int):
+
+        class RowProxy:
+            def __init__(self, parent, y):
+                self.parent = parent
+                self.y = y
+            def __getitem__(self, x: int):
+                return self.parent._fetch_curve(self.y, x)
+        return RowProxy(self, y)
+
+    def _fetch_curve(self, y: int, x: int):
+        curve_dict = {}
+        curve_num = self.shape_x * y + x
+        for segment, segment_group in self.qi_data_group["Curves"].items():
+            for channel in segment_group["Indicies"]:
+                start_idx = segment_group["Indicies"][channel][curve_num]
+                end_idx = segment_group["Indicies"][channel][curve_num + 1]
+                if channel not in curve_dict:
+                    curve_dict[channel] = {}
+                curve_dict[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
+        return curve_dict
+
+class LazyCurveMetadata:
+    """A proxy class that fetches header.properties files on demand."""
+    def __init__(self, qi_data_group: h5py.Group, top_level_meta: dict):
+        self.qi_data_group = qi_data_group
+        self.top_level_meta = top_level_meta
+        # Expose top_level so the frontend can still do `raw_metadata["top_level"]`
+        self.top_level = top_level_meta
+
+    def __getitem__(self, key):
+        if key == "top_level":
+            return self.top_level
+        elif key == "curves":
+            return LazyMetaProxy(self.qi_data_group, "curve")
+        elif key == "segments":
+            return LazyMetaProxy(self.qi_data_group, "segment")
+        raise KeyError(key)
+
+class LazyMetaProxy:
+    def __init__(self, qi_data_group: h5py.Group, meta_type: str, idx: int = None):
+        self.qi_data_group = qi_data_group
+        self.meta_type = meta_type
+        self.idx = idx
+
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return LazyMetaProxy(self.qi_data_group, self.meta_type, key)
+        else:
+            value = self.qi_data_group["Curve_Metadata"][key]
+            if isinstance(value, h5py.Dataset):
+                return value[self.idx]
+            else:
+                return value.decode("utf-8") if isinstance(value, bytes) else value
+
+
+
 def load_h5jpk(
     file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True
 ) -> tuple[np.ndarray, float, dict[str, float]]:
@@ -352,73 +415,24 @@ def load_h5jpk(
 
         logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
 
-        if load_curves and "QI_Curve_Data" in f:
-            logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
-            qi_data_group = f["QI_Curve_Data"]
-            loaded_channels_data = {}
-            channels_units = {}
-            top_level_meta = {}
-            for key, value in qi_data_group["Global_Metadata"].attrs.items():
-                if key.startswith("channel.unit."):
-                    channels_units[key.split(".")[-1]] = value
-                top_level_meta[key] = value
-            if "Curve_Metadata" in qi_data_group:
-                curves_group = qi_data_group["Curve_Metadata"]
-                num_of_curves = len(curves_group.keys())
+        if "QI_Curve_Data" not in f:
+            load_curves = False
 
-                # Pre-allocate the lists
-                curve_meta = [{} for _ in range(num_of_curves)]
-                segment_meta = [{} for _ in range(num_of_curves * 2)]
+    if load_curves:
+        logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
+        qi_data_group = f["QI_Curve_Data"]
+        loaded_channels_data = {}
+        channels_units = {}
+        top_level_meta = {}
+        for key, value in qi_data_group["Global_Metadata"].attrs.items():
+            if key.startswith("channel.unit."):
+                channels_units[key.split(".")[-1]] = value
+            top_level_meta[key] = value
 
-                # Iterate through the curve groups
-                for i_str in curves_group.keys():
-                    i = int(i_str)
-                    c_group = curves_group[i_str]
+        full_metadata = LazyCurveMetadata(qi_data_group, top_level_meta)
 
-                    # Extract curve-specific attributes
-                    for key, val in c_group.attrs.items():
-                        if isinstance(val, bytes):
-                            val = val.decode('utf-8')
-                        curve_meta[i][key] = val
+        all_curve_data = LazyQIData(qi_data_group, shape_x)
 
-                    # Extract segment-specific attributes (usually '0' for trace, '1' for retrace)
-                    for d_str in ['0', '1']:
-                        if d_str in c_group:
-                            s_group = c_group[d_str]
-                            idx = i * 2 + int(d_str)
-                            for key, val in s_group.attrs.items():
-                                if isinstance(val, bytes):
-                                    val = val.decode('utf-8')
-                                segment_meta[idx][key] = val
+        return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), (all_curve_data, channels_units, full_metadata), timestamps)
 
-            full_metadata = {
-                "top_level": top_level_meta,
-                "curves": curve_meta,
-                "segments": segment_meta
-            }
-
-            for direction in ["Segment_0", "Segment_1"]:
-                if direction in qi_data_group:
-                    loaded_channels_data[direction] = {}
-                    for channel, channel_group in qi_data_group[direction].items():
-                        if channel != "error":
-                            loaded_channels_data[direction][channel] = channel_group[:]
-
-            all_curve_data = []
-            for y in range(shape_y):
-                row = []
-                for x in range(shape_x):
-                    curve_num = shape_x * y + x
-                    curve_data = {}
-
-                    for direction, channels in loaded_channels_data.items():
-                        for channel, data_array in channels.items():
-                            if channel not in curve_data:
-                                curve_data[channel] = {}
-                            curve_data[channel][direction] = data_array[curve_num]
-
-                    row.append(curve_data)
-                all_curve_data.append(row)
-            return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), (all_curve_data, channels_units), timestamps)
-
-        return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), timestamps)
+    return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), timestamps)

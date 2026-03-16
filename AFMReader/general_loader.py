@@ -4,7 +4,9 @@ from pathlib import Path
 
 import numpy.typing as npt
 
+print("Importing AFMReader modules...")
 from AFMReader import asd, gwy, h5_jpk, ibw, jpk, spm, stp, top, topostats, jpk_qi, bin
+print("AFMReader modules imported.")
 from AFMReader.logging import logger
 
 

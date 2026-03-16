@@ -3,6 +3,7 @@ from contextlib import nullcontext
 import io
 import re
 import zipfile
+import time
 
 import numpy as np
 import javaproperties
@@ -14,6 +15,102 @@ from AFMReader import jpk
 
 ADDITIONAL_CHANNELS = ["contactPoint", "manualTriggerPoint"]
 ADDITIONAL_CHANNELS_IN_M = ["contactPoint", "manualTriggerPoint"]
+
+class LazyCurveData:
+    """A proxy class that behaves like a 2D list but fetches .dat files on demand."""
+    def __init__(self, filepath, shape_x, channel_scaling, archive):
+        self.filepath = filepath
+        self.shape_x = shape_x
+        self.channel_scaling = channel_scaling
+
+        # 1. OPEN THE ARCHIVE ONCE AND KEEP IT OPEN
+        self.archive = archive
+
+    def __getitem__(self, y: int):
+        # Return a row proxy to handle the second index [x]
+        class RowProxy:
+            def __init__(self, parent, y):
+                self.parent = parent
+                self.y = y
+            def __getitem__(self, x: int):
+                return self.parent._fetch_curve(self.y, x)
+        return RowProxy(self, y)
+
+
+    def _fetch_curve(self, y: int, x: int):
+        t_start_total = time.perf_counter()
+
+        curve_num = y * self.shape_x + x
+        curve_data = {}
+
+        # 3. REUSE THE ALREADY-OPEN ARCHIVE
+        for chan_name, scale in self.channel_scaling.items():
+            curve_data[chan_name] = {}
+            for direction in (0, 1):
+                dat_path = f"index/{curve_num}/segments/{direction}/channels/{chan_name}.dat"
+                try:
+                    # Access the file directly without re-parsing the ZIP directory
+                    with self.archive.open(dat_path) as f:
+                        raw_array = np.frombuffer(f.read(), dtype='>i4')
+                        curve_data[chan_name][f"Segment_{direction}"] = (
+                            raw_array * scale["multiplier"]
+                        ) + scale["offset"]
+                except KeyError:
+                    pass # File doesn't exist for this segment
+
+        t_end_total = time.perf_counter()
+        print(f"[Lazy Data] Total fetch for curve {curve_num} at (y={y}, x={x}) took {t_end_total - t_start_total:.6f} seconds")
+
+        return curve_data
+
+    # Good practice: add a method to close the archive when the user closes the image
+    def close(self):
+        self.archive.close()
+
+
+class LazyCurveMetadata:
+    """A proxy class that fetches header.properties files on demand."""
+    def __init__(self, filepath, top_level_meta, archive):
+        self.filepath = filepath
+        # Expose top_level so the frontend can still do `raw_metadata["top_level"]`
+        self.top_level = top_level_meta
+        self.archive = archive
+
+    def __getitem__(self, key):
+        if key == "top_level":
+            return self.top_level
+        elif key == "curves":
+            return LazyMetaProxy(self.filepath, "curve", self.archive)
+        elif key == "segments":
+            return LazyMetaProxy(self.filepath, "segment", self.archive)
+        raise KeyError(key)
+
+class LazyMetaProxy:
+    def __init__(self, filepath, meta_type, archive):
+        self.filepath = filepath
+        self.meta_type = meta_type
+        self.archive = archive
+
+    def __getitem__(self, idx: int):
+        t_start = time.perf_counter()
+
+        if self.meta_type == "curve":
+            path = f"index/{idx}/header.properties"
+        else:
+            curve_num = idx // 2
+            direction = idx % 2
+            path = f"index/{curve_num}/segments/{direction}/segment-header.properties"
+
+        try:
+            with self.archive.open(path) as f:
+                meta_dict = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+        except KeyError:
+            meta_dict = {}
+
+        t_end = time.perf_counter()
+        print(f"[Lazy Meta] Fetched {self.meta_type} metadata for index {idx} in {t_end - t_start:.6f} seconds")
+
+        return meta_dict
 
 def _get_channel_scaling(props, channel_index):
     """
@@ -82,7 +179,8 @@ class jpk_qi_loader:
         channel: str,
         config_path: Path | str | None = None,
         flip_image: bool | None = True,
-        save_as: str | None = None):
+        save_as: str | None = None,
+        return_meta: bool = False):
         """
         Initializes the loader with the provided parameters.
 
@@ -98,6 +196,8 @@ class jpk_qi_loader:
             Whether to flip the image vertically. Default is True.
         save_as : str | None, optional
             The format to save the loaded data. Default is None.
+        return_meta : bool, optional
+            Whether to return the full metadata. Default is False.
         """
 
         self.filepath = Path(filepath)
@@ -105,6 +205,9 @@ class jpk_qi_loader:
         self.config_path = config_path
         self.flip_image = flip_image
         self.save_as = save_as
+        self.return_meta = return_meta
+        # Open the ZIP archive once and keep it open for the duration of the loading process to improve performance when accessing multiple files within the archive
+        self.qi_archive = zipfile.ZipFile(self.filepath, "r")
 
         # Initialize key attributes that will be returned / accessed frequently
 
@@ -112,13 +215,12 @@ class jpk_qi_loader:
         self.top_level_meta = {}
         # A dictionary containing all metadata, splitting the top level metadata and the metadata for each curve and segment
         self.full_metadata = {}
-
+        # A 2D list of curve data dictionaries, where each dictionary contains the data for all channels and segments
         self.all_curve_data = None
         # A lookup for channel name to unit to be returned
         self.channels_units = {}
         # The list of channels for the segments with their scaling information extracted from the shared header
         self.segment_channels = []
-
         # Dictionary of the metadata for each curve, indexed by curve number
         self.curve_meta_dict = {}
         # Dictionary of the metadata for each segment, indexed by segement number (calculated as curve_num * 2 + direction)
@@ -133,28 +235,53 @@ class jpk_qi_loader:
         # Instantiate containers for data to be saved (so an exception is not caused if not saving)
         self.curve_datasets = None
 
+    def get_channels(self):
+        """
+        Retrieves the available channels from the .jpk-qi-image file within the archive, and adds any additional calculated channels.
+
+        Returns
+        -------
+        channels : list
+            A list of available channels including the calculated channels.
+        metadata_options : dict
+            A dictionary of options for what metadata to return
+        """
+        channels = []
+
+        # Look for the jpk-qi-image file in the archive
+        for file_name in self.qi_archive.namelist():
+            if file_name.endswith(".jpk-qi-image"):
+                path_to_image = file_name
+
+        # Add the channels which exist in the jpk-qi-image file
+        with self.qi_archive.open(path_to_image, "r") as image_file:
+            channels += jpk._get_jpk_channels(file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(path_to_image))
+        channels += ADDITIONAL_CHANNELS
+        return channels, {"save_as_h5": bool}
+
     def load(self):
-        with zipfile.ZipFile(self.filepath, "r") as qi_archive:
-            self.extract_global_metadata(qi_archive)
+        """Loads the .jpk-qi file"""
+        self.extract_global_metadata()
 
-            self.parse_dimension_data()
+        self.parse_dimension_data()
 
-            # Pre-allocate the image array based on the dimensions parsed from the metadata
-            self.image = np.zeros((self.shape_y, self.shape_x), dtype=np.float32)
+        # Pre-allocate the image array based on the dimensions parsed from the metadata
+        self.image = np.zeros((self.shape_y, self.shape_x), dtype=np.float32)
 
-            # Access the curve data and metadata, and save to given file format
-            with self.get_saving_context() as file:
+        # Access the curve data and metadata, and save to given file format
+        with self.get_saving_context() as file:
 
-                # Compile Regexes
-                dat_regex = re.compile(r"index/(\d+)/segments/(\d+)/channels/([^/]+)\.dat")
-                curve_meta_regex = re.compile(r"index/(\d+)/header\.properties")
-                segment_meta_regex = re.compile(r"index/(\d+)/segments/(\d+)/segment-header\.properties")
+            # Compile Regexes
+            dat_regex = re.compile(r"index/(\d+)/segments/(\d+)/channels/([^/]+)\.dat")
+            curve_meta_regex = re.compile(r"index/(\d+)/header\.properties")
+            segment_meta_regex = re.compile(r"index/(\d+)/segments/(\d+)/segment-header\.properties")
 
-                # Setup H5 Data structures if needed
-                if self.save_as == "h5":
-                    self.curve_datasets, self.global_meta_group, self.curves_meta_group = self.setup_h5_structure(file)
+            # Setup H5 Data structures if needed
+            if self.save_as == "h5":
+                self.curve_datasets, self.global_meta_group, self.curves_meta_group = self.setup_h5_structure(file)
 
-                for file_info in qi_archive.infolist():
+            if self.channel in ADDITIONAL_CHANNELS or self.save_as is not None or self.return_meta:
+                for file_info in self.qi_archive.infolist():
                     filename = file_info.filename
 
                     # Check Binary Data
@@ -163,55 +290,156 @@ class jpk_qi_loader:
                         # If file is a .dat file, extract the curve number, segment direction and channel name from the filename
                         curve_num, direction, chan_name = int(dat_match.group(1)), int(dat_match.group(2)), dat_match.group(3)
                         # Then load the data from the file
-                        self.extract_dat_file(qi_archive, file_info, curve_num, direction, chan_name)
+                        self.extract_dat_file(file_info, curve_num, direction, chan_name)
                         continue
 
-                    # Check Curve Metadata
-                    curve_meta_match = curve_meta_regex.match(filename)
-                    if curve_meta_match:
-                        # If file is a curve metadata file, extract the curve number from the filename
-                        curve_num = int(curve_meta_match.group(1))
-                        # Then load the metadata from the file
-                        self.extract_curve_metadata(qi_archive, file_info, curve_num)
-                        continue
+                    if self.return_meta or self.save_as is not None:
+                        # Check Curve Metadata
+                        curve_meta_match = curve_meta_regex.match(filename)
+                        if curve_meta_match:
+                            # If file is a curve metadata file, extract the curve number from the filename
+                            curve_num = int(curve_meta_match.group(1))
+                            # Then load the metadata from the file
+                            self.extract_curve_metadata(file_info, curve_num)
+                            continue
 
-                    # Check Segment Metadata
-                    segment_meta_match = segment_meta_regex.match(filename)
-                    if segment_meta_match:
-                        # If file is a segment metadata file, extract the curve number and segment direction from the filename
-                        curve_num, direction = int(segment_meta_match.group(1)), int(segment_meta_match.group(2))
-                        # Then load the segment metadata from the file
-                        self.extract_segment_metadata(qi_archive, file_info, curve_num, direction)
-                        continue
+                        # Check Segment Metadata
+                        segment_meta_match = segment_meta_regex.match(filename)
+                        if segment_meta_match:
+                            # If file is a segment metadata file, extract the curve number and segment direction from the filename
+                            curve_num, direction = int(segment_meta_match.group(1)), int(segment_meta_match.group(2))
+                            # Then load the segment metadata from the file
+                            self.extract_segment_metadata(file_info, curve_num, direction)
+                            continue
 
-                self.all_curve_data = self.process_flat_curve_data()
-
+            if self.return_meta or self.save_as is not None:
                 # TODO can we remove curve_meta_dict and just use curve_meta or is the non duplicating necessary
                 self.curve_meta = [self.curve_meta_dict.get(i, {}) for i in range(self.num_of_curves)]
                 self.segment_meta = [self.segment_meta_dict.get(i, {}) for i in range(self.num_of_curves * 2)]
                 self.full_metadata = self.construct_full_metadata()
 
-                # Save the full metadata to appropiate format if saving
-                self.save_metadata()
-
-
-            # Convert to nanometers if in meters
-            if self.channel in ADDITIONAL_CHANNELS_IN_M:
-                self.image = self.image * 1e9
-
-            # Save a lite form of the images (precalculated) if saving to a file
             if self.save_as is not None:
-                self.save_lite_data(qi_archive)
+                # If saving, need to collate the curve data into a format that can be easily saved to the h5 file (a dataset per channel per segment direction)
+                self.collated_curve_data, self.indicies = self.get_collated_curves()
+                self.collated_metadata = self.get_collated_metadata()
 
-            # Need to include flip image as _load_jpk flip image is set to false
-            if self.flip_image:
-                self.image = np.flipud(self.image)
+                # Save as h5 if required
+                if self.save_as == "h5":
+                    # Save the curve data to the appropriate datasets in the h5 file
+                    for chan_name, chan_data in self.collated_curve_data.items():
+                        for direction in range(2):
+                            # Save the curve data and indicies to the appropriate dataset in the h5 file
+                            self.curve_datasets[f"{direction}_{chan_name}_data"] = chan_data[f"Segment_{direction}"]
+                            self.curve_datasets[f"{direction}_{chan_name}_indices"] = self.indicies[chan_name][f"Segment_{direction}"]
+
+                    # Save the global metadata to the h5 file
+                    vlen_str_dt = h5py.string_dtype(encoding='utf-8')
+                    for key, value in self.collated_metadata.items():
+                        if isinstance(value, list):
+                            # If the key is a changing key, save as a dataset with one entry per curve/ segment
+                            self.curves_meta_group.create_dataset(
+                                name=key,
+                                data=value,
+                                dtype=vlen_str_dt
+                            )
+                        else:
+                            self.global_meta_group.attrs[key] = str(value).encode('utf-8')
+
+            self.full_metadata = LazyCurveMetadata(self.filepath, self.top_level_meta, self.qi_archive)
+            self.all_curve_data = LazyCurveData(self.filepath, self.shape_x, self.channel_scaling, self.qi_archive)
+
+        # Convert to nanometers if in meters
+        if self.channel in ADDITIONAL_CHANNELS_IN_M:
+            self.image = self.image * 1e9
+
+        # Save a lite form of the images (precalculated) if saving to a file
+        if self.save_as is not None:
+            self.save_lite_data()
+
+        # Need to include flip image as _load_jpk flip image is set to false
+        if self.flip_image:
+            self.image = np.flipud(self.image)
         if self.all_curve_data:
             return (self.image, self.px2nm, (self.all_curve_data, self.channels_units, self.full_metadata))
 
         return self.image, self.px2nm
 
+    def get_collated_curves(self):
+        """
+        Collates the curve data from the flat structure it is extracted in into a structure grouped by channel and segment for easier saving to h5.
+
+        Returns
+        -------
+        collated_curve_data : dict
+            A dictionary containing the curve data collated by channel and segment, with the structure:
+                {
+                    "channel_name": {
+                        "Segment_0": [...],
+                        "Segment_1": [...],
+                        ...
+                    },
+                    ...
+                }
+            indicies : dict
+            A dictionary containing the indexes of the curve data within each segment, with the structure:
+                {
+                    "channel_name": {
+                        "Segment_0": [...],
+                        "Segment_1": [...],
+                        ...
+                    },
+                    ...
+                }
+        """
+        collated_curve_data = {}
+        indicies = {}
+        for curve_data in self.flat_curve_data:
+            for chan_name, chan_data in curve_data.items():
+                for seg_name, seg_data in chan_data.items():
+                    if chan_name not in collated_curve_data:
+                        collated_curve_data[chan_name] = {}
+                        indicies[chan_name] = {}
+                    if seg_name not in collated_curve_data[chan_name]:
+                        collated_curve_data[chan_name][seg_name] = []
+                        indicies[chan_name][seg_name] = []
+                    indicies[chan_name][seg_name].append(len(collated_curve_data[chan_name][seg_name]))
+                    collated_curve_data[chan_name][seg_name].append(seg_data)
+
+        return collated_curve_data, indicies
+
+
+    def get_collated_metadata(self):
+        """
+        Collates the metadata from being split by curve, to being split by attribute so data can be saved more efficiently
+
+        Returns
+        -------
+        collated_meta : dict
+            A dictionary containing the collated metadata.
+        """
+        collated_meta = {}
+        for key, value in self.top_level_meta.items():
+            collated_meta[key] = value
+        for curve_dict in self.full_metadata["curves"]:
+            for key, value in curve_dict.items():
+                if key not in collated_meta:
+                    collated_meta[key] = []
+                collated_meta[key].append(value)
+        for segment_dict in self.full_metadata["segments"]:
+            for key, value in segment_dict.items():
+                if key not in collated_meta:
+                    collated_meta[key] = []
+                collated_meta[key].append(value)
+        return collated_meta
+
+
     def process_flat_curve_data(self):
+        """
+        Processes the flat curve data dictionary into a 2D list structure matching the image dimensions.
+        -------
+        all_curve_data : list
+            A 2D list of curve data dictionaries, where each dictionary contains the data for all channels and segments for that curve.
+        """
         all_curve_data = []
         for y in range(self.shape_y):
             row = []
@@ -230,7 +458,7 @@ class jpk_qi_loader:
             all_curve_data.append(row)
         return all_curve_data
 
-    def save_lite_data(self, qi_archive):
+    def save_lite_data(self):
         """
         Saves a lite form of the data (e.g., the calculated image data) to the appropriate format based on the save_as attribute.
 
@@ -254,12 +482,12 @@ class jpk_qi_loader:
 
                 h5_channels = [self.channel]
                 # Look for the jpk-qi-image file in the archive
-                for file_name in qi_archive.namelist():
+                for file_name in self.qi_archive.namelist():
                     if file_name.endswith(".jpk-qi-image"):
                         path_to_image = file_name
                         break
                 # Add the channels which exist in the jpk-qi-image file
-                with qi_archive.open(path_to_image, "r") as image_file:
+                with self.qi_archive.open(path_to_image, "r") as image_file:
                     h5_channels += jpk._get_jpk_channels(file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(path_to_image))
                 for i, h5_channel in enumerate(h5_channels):
                     # For each available channel, save the required data to the h5 file
@@ -285,7 +513,7 @@ class jpk_qi_loader:
                     if h5_channel == self.channel:
                         channel_image = self.image
                     else:
-                        channel_image, _ = _load_preprocessed_image(qi_archive=qi_archive, channel=h5_channel, config_path=self.config_path)
+                        channel_image, _ = _load_preprocessed_image(qi_archive=self.qi_archive, channel=h5_channel, config_path=self.config_path)
                     frame_stack = channel_image.flatten().reshape(-1, 1)
 
                     # Update/ replace the channels dataset
@@ -353,14 +581,12 @@ class jpk_qi_loader:
         }
         return full_metadata
 
-    def extract_dat_file(self, qi_archive: zipfile.ZipFile, file_info: zipfile.ZipInfo, curve_num: int, direction: int, chan_name: str):
+    def extract_dat_file(self, file_info: zipfile.ZipInfo, curve_num: int, direction: int, chan_name: str):
         """
         Extracts the data from a .dat file in the JPK QI archive, applies the appropriate scaling, and saves it to the internal data structure and h5 dataset if required.
 
         Parameters
         ----------
-        qi_archive : zipfile.ZipFile
-            The JPK QI archive from which to extract the .dat file.
         file_info : zipfile.ZipInfo
             The ZipInfo object corresponding to the .dat file to be extracted.
         curve_num : int
@@ -372,7 +598,7 @@ class jpk_qi_loader:
         """
         if chan_name in self.channel_scaling:
             scale = self.channel_scaling[chan_name]
-            with qi_archive.open(file_info) as f:
+            with self.qi_archive.open(file_info) as f:
                 # Read the binary data as big-endian 32-bit integers
                 raw_array = np.frombuffer(f.read(), dtype='>i4')
                 # Apply the scaling to convert raw values into real world values
@@ -384,40 +610,33 @@ class jpk_qi_loader:
             # Add the segment data to the curve data under the appropriate channel and segment direction
             self.flat_curve_data[curve_num][chan_name][f"Segment_{direction}"] = segment_array
 
-            # Update the dataset if saving as h5
-            if self.curve_datasets is not None:
-                self.curve_datasets[f"{direction}_{chan_name}"][curve_num] = segment_array
         else:
             logger.warning(f"Channel {chan_name} not found in scaling information. Skipping data for curve {curve_num}, direction {direction}.")
 
 
-    def extract_curve_metadata(self, qi_archive: zipfile.ZipFile, file_info: zipfile.ZipInfo, curve_num: int):
+    def extract_curve_metadata(self, file_info: zipfile.ZipInfo, curve_num: int):
         """
         Extracts the curve metadata from its header.properties file in the JPK QI archive and saves it to the internal data structure.
 
         Parameters
         ----------
-        qi_archive : zipfile.ZipFile
-            The JPK QI archive from which to extract the curve metadata.
         file_info : zipfile.ZipInfo
             The ZipInfo object corresponding to the header.properties file to be extracted.
         curve_num : int
             The curve number associated with the metadata, parsed from the filename.
         """
-        with qi_archive.open(file_info) as f:
+        with self.qi_archive.open(file_info) as f:
             cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
             self.curve_meta_dict[curve_num] = cleaned_meta
             self.all_curve_keys.update(cleaned_meta.keys())
 
 
-    def extract_segment_metadata(self, qi_archive: zipfile.ZipFile, file_info: zipfile.ZipInfo, curve_num: int, direction: int):
+    def extract_segment_metadata(self, file_info: zipfile.ZipInfo, curve_num: int, direction: int):
         """
         Extracts the segment metadata from its header.properties file in the JPK QI archive and saves it to the internal data structure.
 
         Parameters
         ----------
-        qi_archive : zipfile.ZipFile
-            The JPK QI archive from which to extract the segment metadata.
         file_info : zipfile.ZipInfo
             The ZipInfo object corresponding to the header.properties file to be extracted.
         curve_num : int
@@ -426,7 +645,7 @@ class jpk_qi_loader:
             The segment direction (0 or 1) associated with the metadata, parsed from the filename.
         """
         idx = curve_num * 2 + direction
-        with qi_archive.open(file_info) as f:
+        with self.qi_archive.open(file_info) as f:
             cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
             self.segment_meta_dict[idx] = cleaned_meta
             self.all_segment_keys.update(cleaned_meta.keys())
@@ -461,16 +680,26 @@ class jpk_qi_loader:
         for direction in range(2):
             # For each segment direction, establish a group and datasets for each channel in the segment channels list
             dir_group = qi_group.require_group(f"Segment_{direction}")
+            data_group = dir_group.require_group("Data")
+            indices_group = dir_group.require_group("Indicies")
             for seg_chan in self.segment_channels:
                 ds_name = seg_chan["name"]
-                if ds_name not in dir_group:
+                if f"{ds_name}_data" not in data_group:
                     # Create the dataset for the given channel and segment direction if it doesn't already exist
-                    curve_datasets[f"{direction}_{ds_name}"] = dir_group.create_dataset(
-                        ds_name, shape=(self.num_of_curves,), dtype=vlen_type
+                    curve_datasets[f"{direction}_{ds_name}_data"] = data_group.create_dataset(
+                        f"{ds_name}", shape=(self.num_of_curves,), dtype=vlen_type
                     )
                 else:
                     # If the dataset already exists, just add it to the curve datasets dictionary for later use
-                    curve_datasets[f"{direction}_{ds_name}"] = dir_group[ds_name]
+                    curve_datasets[f"{direction}_{ds_name}_data"] = data_group[f"{ds_name}"]
+                if f"{ds_name}" not in indices_group:
+                    # Create a corresponding dataset to hold the indicies for the curve data
+                    curve_datasets[f"{direction}_{ds_name}_indices"] = indices_group.create_dataset(
+                        f"{ds_name}", shape=(self.num_of_curves,), dtype=vlen_type
+                    )
+                else:
+                    # If the indicies dataset already exists, just add it to the curve datasets dictionary for later use
+                    curve_datasets[f"{direction}_{ds_name}_indices"] = indices_group[f"{ds_name}"]
         return curve_datasets, global_meta_group, curves_meta_group
 
     def get_saving_context(self):
@@ -519,19 +748,12 @@ class jpk_qi_loader:
         # Setup the data structure to hold the curve data as it's read in
         self.flat_curve_data = [{} for _ in range(self.num_of_curves)]
 
-    def extract_global_metadata(self, qi_archive):
-        """
-        Extracts the global metadata from the JPK QI archive and populates the top level metadata dictionary and segment channels list.
-
-        Parameters
-        ----------
-        qi_archive : zipfile.ZipFile
-            The JPK QI archive from which to extract metadata.
-        """
+    def extract_global_metadata(self):
+        """Extracts the global metadata from the JPK QI archive and populates the top level metadata dictionary and segment channels list."""
 
         # Load the metadata from the global properties file
-        if "header.properties" in qi_archive.namelist():
-            with qi_archive.open("header.properties") as archive_meta_file:
+        if "header.properties" in self.qi_archive.namelist():
+            with self.qi_archive.open("header.properties") as archive_meta_file:
                 props = javaproperties.load(archive_meta_file)
 
                 # Add all the data from the main header to the top level metadata with a prefix to avoid key clashes
@@ -541,8 +763,8 @@ class jpk_qi_loader:
             logger.error(f"File {self.filepath} does not contain essential metadata and cannot be loaded")
 
         # Load the metadata from the shared header and parse the channel information for the segments
-        if "shared-data/header.properties" in qi_archive.namelist():
-            with qi_archive.open("shared-data/header.properties") as shared_data_file:
+        if "shared-data/header.properties" in self.qi_archive.namelist():
+            with self.qi_archive.open("shared-data/header.properties") as shared_data_file:
                 shared_meta = javaproperties.load(shared_data_file)
                 channel_idx = 0
 
@@ -573,6 +795,11 @@ class jpk_qi_loader:
         self.channels_units = {seg_chan['name'] : seg_chan['unit'] for seg_chan in self.segment_channels}
         # Lookup map for binary scaling
         self.channel_scaling = {chan["name"]: chan for chan in self.segment_channels}
+
+    def close(self):
+        """Closes the ZIP archive when done to free up system resources."""
+        self.qi_archive.close()
+
 
 
 
