@@ -273,9 +273,12 @@ def get_h5jpk_channels(file_path: Path | str):
     return available_channels
 
 class LazyQIData:
-    def __init__(self, qi_data_group: h5py.Group, shape_x: int):
+    def __init__(self, qi_data_group: h5py.Group, shape_x: int, shape_y: int):
         self.qi_data_group = qi_data_group
         self.shape_x = shape_x
+        self.shape_y = shape_y
+        self.dims = (shape_y, shape_x)
+
 
     def __getitem__(self, y: int):
 
@@ -287,6 +290,11 @@ class LazyQIData:
                 return self.parent._fetch_curve(self.y, x)
         return RowProxy(self, y)
 
+    def __iter__(self):
+        for y in range(self.shape_y):
+            for x in range(self.shape_x):
+                yield self._fetch_curve(y, x)
+
     def _fetch_curve(self, y: int, x: int):
         curve_dict = {}
         curve_num = self.shape_x * y + x
@@ -294,7 +302,6 @@ class LazyQIData:
             for channel in segment_group["Indicies"]:
                 start_idx = int(segment_group["Indicies"][channel][curve_num])
                 end_idx = int(segment_group["Indicies"][channel][curve_num + 1])
-                print(f"Fetching curve for pixel (y={y}, x={x}), segment '{segment}', channel '{channel}': start_idx={start_idx}, end_idx={end_idx}")
                 if channel not in curve_dict:
                     curve_dict[channel] = {}
                 curve_dict[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
@@ -435,7 +442,7 @@ def load_h5jpk(
 
         full_metadata = LazyCurveMetadata(qi_data_group, top_level_meta)
 
-        all_curve_data = LazyQIData(qi_data_group, shape_x)
+        all_curve_data = LazyQIData(qi_data_group, shape_x, shape_y)
 
         return (image_stack, px2nm, (all_curve_data, channels_units, full_metadata), timestamps)
 

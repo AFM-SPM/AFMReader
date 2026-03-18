@@ -41,7 +41,10 @@ class LoadFile:
         self.channel = channel
         self.suffix = self.filepath.suffix
         self.loaded_curves = False
-        self.kwargs = kwargs
+        self.kwargs = kwargs if kwargs else {}
+
+        # Store heavy loaded data in a dict to avoid having to reload it
+        self.cached_data = {}
 
     def load(self, channel: str | None = None, kwargs: dict = None) -> tuple[npt.NDArray | str, float | None]:  # noqa: C901
         """
@@ -85,7 +88,9 @@ class LoadFile:
                 else:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
             elif self.suffix == ".jpk-qi-data":
-                jpk_qi_returned = jpk_qi.load_jpk_qi(self.filepath, self.channel, **self.kwargs)
+                if "jpk_qi_loader" not in self.cached_data:
+                    self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(filepath=self.filepath, channel=self.channel, **self.kwargs)
+                jpk_qi_returned = self.cached_data["jpk_qi_loader"].load(channel=self.channel, **self.kwargs)
                 if len(jpk_qi_returned) == 2:
                     image, pixel_to_nanometre_scaling_factor = jpk_qi_returned
                 elif len(jpk_qi_returned) == 3:
@@ -136,7 +141,9 @@ class LoadFile:
         elif self.suffix == ".h5-jpk":
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
         elif self.suffix == ".jpk-qi-data":
-            available_channels = jpk_qi.get_jpk_qi_channels(self.filepath)
+            if "jpk_qi_loader" not in self.cached_data:
+                self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(filepath=self.filepath, **self.kwargs)
+            available_channels = self.cached_data["jpk_qi_loader"].get_available_channels()
         elif self.suffix == ".topostats":
             available_channels = ["image", "image_original"]
         elif self.suffix == ".bin":

@@ -3,7 +3,6 @@ from contextlib import nullcontext
 import io
 import re
 import zipfile
-import time
 
 import numpy as np
 import javaproperties
@@ -13,17 +12,12 @@ from AFMReader.logging import logger
 from AFMReader import jpk
 
 
-ADDITIONAL_CHANNELS = ["contactPoint", "manualTriggerPoint"]
-ADDITIONAL_CHANNELS_IN_M = ["contactPoint", "manualTriggerPoint"]
-
 class LazyCurveData:
     """A proxy class that behaves like a 2D list but fetches .dat files on demand."""
     def __init__(self, filepath, shape_x, channel_scaling, archive):
         self.filepath = filepath
         self.shape_x = shape_x
         self.channel_scaling = channel_scaling
-
-        # 1. OPEN THE ARCHIVE ONCE AND KEEP IT OPEN
         self.archive = archive
 
     def __getitem__(self, y: int):
@@ -38,12 +32,10 @@ class LazyCurveData:
 
 
     def _fetch_curve(self, y: int, x: int):
-        t_start_total = time.perf_counter()
 
         curve_num = y * self.shape_x + x
         curve_data = {}
 
-        # 3. REUSE THE ALREADY-OPEN ARCHIVE
         for chan_name, scale in self.channel_scaling.items():
             curve_data[chan_name] = {}
             for direction in (0, 1):
@@ -58,12 +50,8 @@ class LazyCurveData:
                 except KeyError:
                     pass # File doesn't exist for this segment
 
-        t_end_total = time.perf_counter()
-        print(f"[Lazy Data] Total fetch for curve {curve_num} at (y={y}, x={x}) took {t_end_total - t_start_total:.6f} seconds")
-
         return curve_data
 
-    # Good practice: add a method to close the archive when the user closes the image
     def close(self):
         self.archive.close()
 
@@ -92,7 +80,6 @@ class LazyMetaProxy:
         self.archive = archive
 
     def __getitem__(self, idx: int):
-        t_start = time.perf_counter()
 
         if self.meta_type == "curve":
             path = f"index/{idx}/header.properties"
@@ -107,15 +94,28 @@ class LazyMetaProxy:
         except KeyError:
             meta_dict = {}
 
-        t_end = time.perf_counter()
-        print(f"[Lazy Meta] Fetched {self.meta_type} metadata for index {idx} in {t_end - t_start:.6f} seconds")
-
         return meta_dict
 
 def _get_channel_scaling(props, channel_index):
     """
     Parses the JPK properties dictionary to find the cumulative multiplier
     and offset for a specific channel index (e.g., '1' for vDeflection).
+
+    Parameters
+    ----------
+    props : dict
+        The properties dictionary loaded from the JPK file.
+    channel_index : str
+        The index of the channel to find the scaling for (e.g., '1' for vDeflection).
+
+    Returns
+    -------
+    final_multiplier : float
+        The cumulative multiplier for the specified channel.
+    final_offset : float
+        The cumulative offset for the specified channel.
+    unit : str
+        The unit of the channel.
     """
     prefix = f"lcd-info.{channel_index}."
 
@@ -158,29 +158,15 @@ def _get_channel_scaling(props, channel_index):
 
     return final_multiplier, final_offset, unit
 
-def _load_preprocessed_image(qi_archive, channel, config_path=None):
-    path_to_image = None
-    for file_name in qi_archive.namelist():
-        if file_name.endswith(".jpk-qi-image"):
-            path_to_image = file_name
-    if path_to_image is None:
-        raise FileNotFoundError(f"{path_to_image} not found in JPK archive")
-
-    tif_bytes = qi_archive.read(path_to_image)
-
-    virtual_file = io.BytesIO(tif_bytes)
-    logger.info(f"Looking for channel {channel} in ")
-    return jpk._load_jpk(virtual_file, path_to_image, channel=channel, file_suffix=".jpk-qi-data", config_path=config_path, flip_image=False)
 
 class jpk_qi_loader:
     """Class for readability and improving modularity in the load jpk qi data function"""
     def __init__(self,
         filepath: Path | str,
-        channel: str,
+        channel: str | None = None,
         config_path: Path | str | None = None,
         flip_image: bool | None = True,
-        save_as: str | None = None,
-        return_meta: bool = False):
+        save_as_h5: bool = False):
         """
         Initializes the loader with the provided parameters.
 
@@ -188,26 +174,25 @@ class jpk_qi_loader:
         ----------
         filepath : Path | str
             The path to the .jpk-qi file to be loaded.
-        channel : str
-            The specific channel to be extracted from the file (e.g., "measuredHeight")."
+        channel : str | None, optional
+            The specific channel to be extracted from the file (e.g., "measuredHeight"). Default is None.
         config_path : Path | str | None, optional
             The path to the configuration file, if any. Default is None.
         flip_image : bool | None, optional
             Whether to flip the image vertically. Default is True.
-        save_as : str | None, optional
-            The format to save the loaded data. Default is None.
-        return_meta : bool, optional
-            Whether to return the full metadata. Default is False.
+        save_as_h5 : bool, optional
+            Whether to save the loaded data as an H5 file. Default is False.
         """
 
         self.filepath = Path(filepath)
         self.channel = channel
         self.config_path = config_path
         self.flip_image = flip_image
-        self.save_as = save_as
-        self.return_meta = return_meta
+        self.save_as_h5 = save_as_h5
         # Open the ZIP archive once and keep it open for the duration of the loading process to improve performance when accessing multiple files within the archive
         self.qi_archive = zipfile.ZipFile(self.filepath, "r")
+        # Set path to the .jpk-qi-image file within the archive for later use
+        self.path_to_image = None
 
         # Initialize key attributes that will be returned / accessed frequently
 
@@ -235,7 +220,7 @@ class jpk_qi_loader:
         # Instantiate containers for data to be saved (so an exception is not caused if not saving)
         self.curve_groups = None
 
-    def get_channels(self):
+    def get_available_channels(self):
         """
         Retrieves the available channels from the .jpk-qi-image file within the archive, and adds any additional calculated channels.
 
@@ -246,21 +231,49 @@ class jpk_qi_loader:
         metadata_options : dict
             A dictionary of options for what metadata to return
         """
-        channels = []
 
         # Look for the jpk-qi-image file in the archive
-        for file_name in self.qi_archive.namelist():
-            if file_name.endswith(".jpk-qi-image"):
-                path_to_image = file_name
+        if self.path_to_image is None:
+            for file_name in self.qi_archive.namelist():
+                if file_name.endswith(".jpk-qi-image"):
+                    self.path_to_image = file_name
 
         # Add the channels which exist in the jpk-qi-image file
-        with self.qi_archive.open(path_to_image, "r") as image_file:
-            channels += jpk._get_jpk_channels(file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(path_to_image))
-        channels += ADDITIONAL_CHANNELS
+        with self.qi_archive.open(self.path_to_image, "r") as image_file:
+            channels = jpk._get_jpk_channels(file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(self.path_to_image))
         return channels, {"save_as_h5": bool}
 
-    def load(self):
-        """Loads the .jpk-qi file"""
+    def load(self,
+        channel: str | None = None,
+        config_path: Path | str | None = None,
+        flip_image: bool | None = True,
+        save_as_h5: bool = False) -> tuple[np.ndarray, float, dict] | tuple[np.ndarray, float]:
+        """
+        Loads the .jpk-qi file
+
+        Parameters
+        ----------
+        channel : str | None, optional
+            The specific channel to be extracted from the file (e.g., "measuredHeight"). If None, the default channel will be used. Default is None.
+        config_path : Path | str | None, optional
+            Path to the configuration file. If None, the default configuration will be used. Default is None.
+        flip_image : bool | None, optional
+            Whether to flip the image. If None, the default behavior will be used. Default is True.
+        save_as_h5 : bool, optional
+            Whether to save the data as an H5 file. Default is False.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the image data (numpy.ndarray), the pixel to nanometre scaling factor (float), and optionally the curve data (dict) if available.
+        """
+
+        # Update instance attributes based on provided parameters, largely so loader can be called to get channels without setting a channel
+        self.channel = channel if channel else self.channel
+        self.config_path = config_path if config_path else self.config_path
+        self.flip_image = flip_image if flip_image is not None else self.flip_image
+        self.save_as_h5 = save_as_h5 if save_as_h5 is not None else self.save_as_h5
+
         self.extract_global_metadata()
 
         self.parse_dimension_data()
@@ -274,10 +287,9 @@ class jpk_qi_loader:
             segment_meta_regex = re.compile(r"index/(\d+)/segments/(\d+)/segment-header\.properties")
 
             # Setup H5 Data structures if needed
-            if self.save_as == "h5":
+            if self.save_as_h5:
                 self.curve_groups, self.global_meta_group, self.curves_meta_group = self.setup_h5_structure(file)
 
-            if self.channel in ADDITIONAL_CHANNELS or self.save_as is not None or self.return_meta:
                 for file_info in self.qi_archive.infolist():
                     filename = file_info.filename
 
@@ -290,38 +302,35 @@ class jpk_qi_loader:
                         self.extract_dat_file(file_info, curve_num, direction, chan_name)
                         continue
 
-                    if self.return_meta or self.save_as is not None:
-                        # Check Curve Metadata
-                        curve_meta_match = curve_meta_regex.match(filename)
-                        if curve_meta_match:
-                            # If file is a curve metadata file, extract the curve number from the filename
-                            curve_num = int(curve_meta_match.group(1))
-                            # Then load the metadata from the file
-                            self.extract_curve_metadata(file_info, curve_num)
-                            continue
+                    # Check Segment Metadata
+                    segment_meta_match = segment_meta_regex.match(filename)
+                    if segment_meta_match:
+                        # If file is a segment metadata file, extract the curve number and segment direction from the filename
+                        curve_num, direction = int(segment_meta_match.group(1)), int(segment_meta_match.group(2))
+                        # Then load the segment metadata from the file
+                        self.extract_segment_metadata(file_info, curve_num, direction)
+                        continue
 
-                        # Check Segment Metadata
-                        segment_meta_match = segment_meta_regex.match(filename)
-                        if segment_meta_match:
-                            # If file is a segment metadata file, extract the curve number and segment direction from the filename
-                            curve_num, direction = int(segment_meta_match.group(1)), int(segment_meta_match.group(2))
-                            # Then load the segment metadata from the file
-                            self.extract_segment_metadata(file_info, curve_num, direction)
-                            continue
+                    # Check Curve Metadata
+                    curve_meta_match = curve_meta_regex.match(filename)
+                    if curve_meta_match:
+                        # If file is a curve metadata file, extract the curve number from the filename
+                        curve_num = int(curve_meta_match.group(1))
+                        # Then load the metadata from the file
+                        self.extract_curve_metadata(file_info, curve_num)
+                        continue
 
-            if self.return_meta or self.save_as is not None:
                 # TODO can we remove curve_meta_dict and just use curve_meta or is the non duplicating necessary
                 self.curve_meta = [self.curve_meta_dict.get(i, {}) for i in range(self.num_of_curves)]
                 self.segment_meta = [self.segment_meta_dict.get(i, {}) for i in range(self.num_of_curves * 2)]
                 self.full_metadata = self.construct_full_metadata()
 
-            if self.save_as is not None:
                 # If saving, need to collate the curve data into a format that can be easily saved to the h5 file (a dataset per channel per segment direction)
                 self.collated_curve_data, self.indicies = self.get_collated_curves()
                 self.collated_metadata = self.get_collated_metadata()
 
                 # Save as h5 if required
-                if self.save_as == "h5":
+                if self.save_as_h5:
                     # Save the curve data to the appropriate datasets in the h5 file
                     for chan_name, chan_data in self.collated_curve_data.items():
                         for direction in range(2):
@@ -355,19 +364,12 @@ class jpk_qi_loader:
             self.all_curve_data = LazyCurveData(self.filepath, self.shape_x, self.channel_scaling, self.qi_archive)
 
         # Load the image
-        self.image = self.get_image()
-
-        # Convert to nanometers if in meters
-        if self.channel in ADDITIONAL_CHANNELS_IN_M:
-            self.image = self.image * 1e9
+        self.image, _ = self.get_image()
 
         # Save a lite form of the images (precalculated) if saving to a file
-        if self.save_as is not None:
+        if self.save_as_h5:
             self.save_lite_data()
 
-        # Need to include flip image as _load_jpk flip image is set to false
-        if self.flip_image:
-            self.image = np.flipud(self.image)
         if self.all_curve_data:
             return (self.image, self.px2nm, (self.all_curve_data, self.channels_units, self.full_metadata))
 
@@ -460,7 +462,7 @@ class jpk_qi_loader:
         return collated_meta
 
 
-    def get_image(self):
+    def get_image(self, overide_channel: str | None = None):
         """
         Processes the flat curve data dictionary into a 2D list structure matching the image dimensions.
 
@@ -470,28 +472,27 @@ class jpk_qi_loader:
             A 2D array representing the image data.
         """
 
-        # If the image needs to be calculated, do so
-        if self.channel in ADDITIONAL_CHANNELS:
-            # Create an empty image array
-            image = np.zeros((self.shape_y, self.shape_x), dtype=np.float32)
-            for y in range(self.shape_y):
-                for x in range(self.shape_x):
-                    curve_num = y * self.shape_x + x
-                    curve_data = self.flat_curve_data[curve_num]
-                    # Calculate on-the-fly image data if required
-                    seg_0_dict = {c: data["Segment_0"] for c, data in curve_data.items() if "Segment_0" in data}
-                    if self.channel == "contactPoint":
-                        image[y, x] = _find_contact_point(seg_0_dict)
-                    elif self.channel == "manualTriggerPoint":
-                        image[y, x] = _find_trigger_point(seg_0_dict)
-        # Load the image directly if it already exists as a precalculated channel in the .jpk-qi-image file
+        if overide_channel:
+            channel = overide_channel
         else:
-            image, _ = _load_preprocessed_image(qi_archive=self.qi_archive, channel=self.channel, config_path=self.config_path)
-        return image
+            channel = self.channel
+
+        path_to_image = None
+        for file_name in self.qi_archive.namelist():
+            if file_name.endswith(".jpk-qi-image"):
+                path_to_image = file_name
+        if path_to_image is None:
+            raise FileNotFoundError(f"{path_to_image} not found in JPK archive")
+
+        tif_bytes = self.qi_archive.read(path_to_image)
+
+        virtual_file = io.BytesIO(tif_bytes)
+        logger.info(f"Looking for channel {channel} in {path_to_image}")
+        return jpk._load_jpk(virtual_file, path_to_image, channel=channel, file_suffix=".jpk-qi-data", config_path=self.config_path)
 
     def save_lite_data(self):
-        """Saves a lite form of the data (e.g., the calculated image data) to the appropriate format based on the save_as attribute."""
-        if self.save_as == "h5":
+        """Saves a lite form of the data (e.g., the calculated image data) to the appropriate format based on the save_as_h5 attribute."""
+        if self.save_as_h5:
             with h5py.File(self.filepath.parent / f"{self.filepath.stem}.h5-jpk", "a") as h5file:
                 # Save data required for reading the h5 file as a normal image file
                 meas_grp = h5file.require_group("Measurement_000")
@@ -537,7 +538,7 @@ class jpk_qi_loader:
                     if h5_channel == self.channel:
                         channel_image = self.image
                     else:
-                        channel_image, _ = _load_preprocessed_image(qi_archive=self.qi_archive, channel=h5_channel, config_path=self.config_path)
+                        channel_image, _ = self.get_image(overide_channel=h5_channel)
                     frame_stack = channel_image.flatten().reshape(-1, 1)
 
                     # Update/ replace the channels dataset
@@ -547,8 +548,8 @@ class jpk_qi_loader:
 
 
     def save_metadata(self):
-        """Saves the metadata to the appropriate format based on the save_as attribute."""
-        if self.save_as == "h5":
+        """Saves the metadata to the appropriate format based on the save_as_h5 attribute."""
+        if self.save_as_h5:
             for seg_chan in self.segment_channels:
                 self.global_meta_group.attrs[f"channel.unit.{seg_chan['name']}"] = seg_chan['unit']
             for key, value in self.top_level_meta.items():
@@ -717,15 +718,15 @@ class jpk_qi_loader:
 
     def get_saving_context(self):
         """
-        Returns the appropriate context manager for saving the data based on the save_as attribute.
-        If save_as is "h5", it returns a context manager for an h5 file. Otherwise, it returns a null context.
+        Returns the appropriate context manager for saving the data based on the save_as_h5 attribute.
+        If save_as_h5 is True, it returns a context manager for an h5 file. Otherwise, it returns a null context.
 
         Returns
         -------
         contextlib.AbstractContextManager
             The context manager for saving the data.
         """
-        if self.save_as == "h5":
+        if self.save_as_h5:
             return h5py.File(self.filepath.parent / f"{self.filepath.stem}.h5-jpk", "a")
         else:
             return nullcontext()
@@ -857,37 +858,6 @@ def _make_num_min_characters(num : int, min_chars: int = 3):
     string_num = "0" * (min_chars - len(string_num)) + string_num
     return string_num
 
-def get_jpk_qi_channels(file_path: Path | str):
-    logger.debug("Starting to get jpk qi data channels")
-    file_path = Path(file_path)
-    channels = []
-    with zipfile.ZipFile(file_path, "r") as qi_archive:
-        for file_name in qi_archive.namelist():
-            if file_name.endswith(".jpk-qi-image"):
-                path_to_image = file_name
-        with qi_archive.open(path_to_image, "r") as image_file:
-            channels += jpk._get_jpk_channels(file=image_file, filename=file_path.stem, file_path=file_path / Path(path_to_image))
-    channels += ADDITIONAL_CHANNELS
-    logger.debug("Got jpk qi data channels")
-    return channels, {"save_as_h5": bool}
-
-def _find_contact_point(curve):
-    # find contact point in vertical deflection by peak in first derivative
-    vdef = curve["vDeflection"]
-    if len(vdef) < 2:
-        return np.nan
-    derivative_vert_deflection = np.diff(vdef)
-    # Doesn't look like this line is needed: peak_derivative_value = np.max(derivative_vert_deflection)
-    peak_derivative_index = np.argmax(derivative_vert_deflection)
-
-    # find corresponding height value
-    corresponding_height_at_peak = curve["measuredHeight"][peak_derivative_index]
-
-    return corresponding_height_at_peak
-
-def _find_trigger_point(curve):
-    trigger_point = curve["measuredHeight"][-1]
-    return trigger_point
 
 def _max_points_buffer(curves_data, samples=20, points_buffer=1.2):
 
