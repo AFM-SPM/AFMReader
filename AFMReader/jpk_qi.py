@@ -14,11 +14,13 @@ from AFMReader import jpk
 
 class LazyCurveData:
     """A proxy class that behaves like a 2D list but fetches .dat files on demand."""
-    def __init__(self, filepath, shape_x, channel_scaling, archive):
+    def __init__(self, filepath, shape_x, shape_y, channel_scaling, archive, flip_image: bool = True):
         self.filepath = filepath
         self.shape_x = shape_x
+        self.shape_y = shape_y
         self.channel_scaling = channel_scaling
         self.archive = archive
+        self.flip_image = flip_image
 
     def __getitem__(self, y: int):
         # Return a row proxy to handle the second index [x]
@@ -31,8 +33,16 @@ class LazyCurveData:
         return RowProxy(self, y)
 
 
-    def _fetch_curve(self, y: int, x: int):
+    def __iter__(self):
+        for y in range(self.shape_y):
+            for x in range(self.shape_x):
+                yield self._fetch_curve(y, x)
 
+    def _fetch_curve(self, y: int, x: int):
+        if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
+            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
+        if self.flip_image:
+            y = self.shape_y - 1 - y
         curve_num = y * self.shape_x + x
         curve_data = {}
 
@@ -58,35 +68,64 @@ class LazyCurveData:
 
 class LazyCurveMetadata:
     """A proxy class that fetches header.properties files on demand."""
-    def __init__(self, filepath, top_level_meta, archive):
+    def __init__(self, filepath, top_level_meta, archive, shape_x: int, shape_y: int, flip_image: bool = True):
         self.filepath = filepath
         # Expose top_level so the frontend can still do `raw_metadata["top_level"]`
         self.top_level = top_level_meta
         self.archive = archive
+        self.shape_x = shape_x
+        self.shape_y = shape_y
+        self.flip_image = flip_image
 
     def __getitem__(self, key):
         if key == "top_level":
             return self.top_level
         elif key == "curves":
-            return LazyMetaProxy(self.filepath, "curve", self.archive)
+            return LazyMetaProxy(self.filepath, "curve", self.archive, self.shape_x, self.shape_y, self.flip_image)
         elif key == "segments":
-            return LazyMetaProxy(self.filepath, "segment", self.archive)
+            return LazyMetaProxy(self.filepath, "segment", self.archive, self.shape_x, self.shape_y, self.flip_image)
         raise KeyError(key)
 
 class LazyMetaProxy:
-    def __init__(self, filepath, meta_type, archive):
+    def __init__(self, filepath, meta_type, archive, shape_x: int, shape_y: int, flip_image: bool = True):
         self.filepath = filepath
         self.meta_type = meta_type
         self.archive = archive
+        self.shape_x = shape_x
+        self.shape_y = shape_y
+        self.flip_image = flip_image
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, y: int):
+        class RowProxy:
+            def __init__(self, parent, y):
+                self.parent = parent
+                self.y = y
+            def __getitem__(self, x):
+                if self.parent.meta_type == "curve":
+                    return self.parent._fetch_meta(self.y, x)
+                elif self.parent.meta_type == "segment":
+                    class SegmentMetaProxy:
+                        def __init__(self, parent, y, x):
+                            self.parent = parent
+                            self.y = y
+                            self.x = x
+                        def __getitem__(self, direction):
+                            return self.parent.parent._fetch_meta(self.y, self.x, direction)
+                    return SegmentMetaProxy(self, self.y, x)
+        return RowProxy(self, y)
 
+    def _fetch_meta(self, y: int, x: int, direction: int = None):
+        if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
+            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
+        if self.flip_image:
+            y = self.shape_y - 1 - y
+        idx = (y * self.shape_x) + x
         if self.meta_type == "curve":
             path = f"index/{idx}/header.properties"
         else:
-            curve_num = idx // 2
-            direction = idx % 2
-            path = f"index/{curve_num}/segments/{direction}/segment-header.properties"
+            if direction is None:
+                raise ValueError("Direction must be provided for segment metadata")
+            path = f"index/{idx}/segments/{direction}/segment-header.properties"
 
         try:
             with self.archive.open(path) as f:
@@ -289,7 +328,6 @@ class jpk_qi_loader:
             # Setup H5 Data structures if needed
             if self.save_as_h5:
                 self.curve_groups, self.global_meta_group, self.curves_meta_group = self.setup_h5_structure(file)
-
                 for file_info in self.qi_archive.infolist():
                     filename = file_info.filename
 
@@ -360,8 +398,8 @@ class jpk_qi_loader:
                         else:
                             self.global_meta_group.attrs[key] = str(value).encode('utf-8')
 
-            self.full_metadata = LazyCurveMetadata(self.filepath, self.top_level_meta, self.qi_archive)
-            self.all_curve_data = LazyCurveData(self.filepath, self.shape_x, self.channel_scaling, self.qi_archive)
+            self.full_metadata = LazyCurveMetadata(self.filepath, self.top_level_meta, self.qi_archive, self.shape_x, self.shape_y, flip_image=self.flip_image)
+            self.all_curve_data = LazyCurveData(self.filepath, self.shape_x, self.shape_y, self.channel_scaling, self.qi_archive, flip_image=self.flip_image)
 
         # Load the image
         self.image, _ = self.get_image()

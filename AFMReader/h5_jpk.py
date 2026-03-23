@@ -273,11 +273,12 @@ def get_h5jpk_channels(file_path: Path | str):
     return available_channels
 
 class LazyQIData:
-    def __init__(self, qi_data_group: h5py.Group, shape_x: int, shape_y: int):
+    def __init__(self, qi_data_group: h5py.Group, shape_x: int, shape_y: int, flip_image: bool = True):
         self.qi_data_group = qi_data_group
         self.shape_x = shape_x
         self.shape_y = shape_y
         self.dims = (shape_y, shape_x)
+        self.flip_image = flip_image
 
 
     def __getitem__(self, y: int):
@@ -296,7 +297,11 @@ class LazyQIData:
                 yield self._fetch_curve(y, x)
 
     def _fetch_curve(self, y: int, x: int):
+        if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
+            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
         curve_dict = {}
+        if self.flip_image:
+            y = self.shape_y - 1 - y
         curve_num = self.shape_x * y + x
         for segment, segment_group in self.qi_data_group["Curves"].items():
             for channel in segment_group["Indicies"]:
@@ -309,9 +314,12 @@ class LazyQIData:
 
 class LazyCurveMetadata:
     """A proxy class that fetches header.properties files on demand."""
-    def __init__(self, qi_data_group: h5py.Group, top_level_meta: dict):
+    def __init__(self, qi_data_group: h5py.Group, top_level_meta: dict, shape_x: int, shape_y: int, flip_image: bool = True):
         self.qi_data_group = qi_data_group
         self.top_level_meta = top_level_meta
+        self.shape_x = shape_x
+        self.shape_y = shape_y
+        self.flip_image = flip_image
         # Expose top_level so the frontend can still do `raw_metadata["top_level"]`
         self.top_level = top_level_meta
 
@@ -319,18 +327,46 @@ class LazyCurveMetadata:
         if key == "top_level":
             return self.top_level
         elif key == "curves":
-            return LazyMetaProxy(self.qi_data_group, "curve")
+            return LazyMetaProxy(self.qi_data_group, "curve", self.shape_x, self.shape_y, self.flip_image)
         elif key == "segments":
-            return LazyMetaProxy(self.qi_data_group, "segment")
+            return LazyMetaProxy(self.qi_data_group, "segment", self.shape_x, self.shape_y, self.flip_image)
         raise KeyError(key)
 
 class LazyMetaProxy:
-    def __init__(self, qi_data_group: h5py.Group, meta_type: str):
+    def __init__(self, qi_data_group: h5py.Group, meta_type: str, shape_x: int, shape_y: int, flip_image: bool = True):
         self.qi_data_group = qi_data_group
         self.meta_type = meta_type
+        self.shape_x = shape_x
+        self.shape_y = shape_y
+        self.flip_image = flip_image
 
+    def __getitem__(self, y: int):
+        class RowProxy:
+            def __init__(self, parent, y):
+                self.parent = parent
+                self.y = y
+            def __getitem__(self, x):
+                if self.parent.meta_type == "curve":
+                    return self.parent._fetch_meta(self.y, x)
+                elif self.parent.meta_type == "segment":
+                    class SegmentMetaProxy:
+                        def __init__(self, parent, y, x):
+                            self.parent = parent
+                            self.y = y
+                            self.x = x
+                        def __getitem__(self, direction):
+                            return self.parent.parent._fetch_meta(self.y, self.x, direction)
+                    return SegmentMetaProxy(self, self.y, x)
+        return RowProxy(self, y)
 
-    def __getitem__(self, idx: int):
+    def _fetch_meta(self, y: int, x: int, direction: int = None):
+        if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
+            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
+        if self.flip_image:
+            y = self.shape_y - 1 - y
+        idx = (y * self.shape_x) + x
+        if direction is not None:
+            idx = (idx * 2) + direction
         meta_dict = {}
         for key in self.qi_data_group["Curve_Metadata"]:
             if key.startswith(f"{self.meta_type}."):
@@ -340,6 +376,7 @@ class LazyMetaProxy:
                 else:
                     meta_dict[new_key] = self.qi_data_group["Curve_Metadata"][key]
         return meta_dict
+
 
 
 def load_h5jpk(
@@ -440,9 +477,9 @@ def load_h5jpk(
                 channels_units[key.split(".")[-1]] = value
             top_level_meta[key] = value
 
-        full_metadata = LazyCurveMetadata(qi_data_group, top_level_meta)
+        full_metadata = LazyCurveMetadata(qi_data_group, top_level_meta, shape_x, shape_y, flip_image)
 
-        all_curve_data = LazyQIData(qi_data_group, shape_x, shape_y)
+        all_curve_data = LazyQIData(qi_data_group, shape_x, shape_y, flip_image)
 
         return (image_stack, px2nm, (all_curve_data, channels_units, full_metadata), timestamps)
 
