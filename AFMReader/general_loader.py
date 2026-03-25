@@ -4,9 +4,7 @@ from pathlib import Path
 
 import numpy.typing as npt
 
-print("Importing AFMReader modules...")
 from AFMReader import asd, gwy, h5_jpk, ibw, jpk, spm, stp, top, topostats, jpk_qi, bin
-print("AFMReader modules imported.")
 from AFMReader.logging import logger
 
 
@@ -84,6 +82,8 @@ class LoadFile:
                 elif len(h5_returned) == 4:
                     image, pixel_to_nanometre_scaling_factor, curve_data, _ = h5_returned
                     self.loaded_curves = True
+                    print(f"Loaded image with shape {image.shape} and pixel to nanometre scaling factor {pixel_to_nanometre_scaling_factor}")
+                    print(f"Image has max value {image.max()} and min value {image.min()}")
                     return image, pixel_to_nanometre_scaling_factor, curve_data
                 else:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
@@ -119,6 +119,9 @@ class LoadFile:
                 image, pixel_to_nanometre_scaling_factor = bin.load_bin(self.filepath, **self.kwargs)
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
+
+            print(f"Loaded image with shape {image.shape} and pixel to nanometre scaling factor {pixel_to_nanometre_scaling_factor}")
+            print(f"Image has max value {image.max()} and min value {image.min()}")
 
             return image, pixel_to_nanometre_scaling_factor
 

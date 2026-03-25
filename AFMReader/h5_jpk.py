@@ -312,6 +312,25 @@ class LazyQIData:
                 curve_dict[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
         return curve_dict
 
+    def load_all_curves(self):
+        all_curves = [[{} for _ in range(self.shape_x)] for _ in range(self.shape_y)]
+        for segment, segment_group in self.qi_data_group["Curves"].items():
+            for channel in segment_group["Indicies"]:
+                indicies = segment_group["Indicies"][channel][:]
+                data = segment_group["Data"][channel][:]
+                for i in range(len(indicies) - 1):
+                    start_idx = int(indicies[i])
+                    end_idx = int(indicies[i + 1])
+                    x = i % self.shape_x
+                    y = i // self.shape_x
+                    if self.flip_image:
+                        y = self.shape_y - 1 - y
+                    if channel not in all_curves[y][x]:
+                        all_curves[y][x][channel] = {}
+                    all_curves[y][x][channel][segment] = data[start_idx:end_idx]
+
+        return all_curves
+
 class LazyCurveMetadata:
     """A proxy class that fetches header.properties files on demand."""
     def __init__(self, qi_data_group: h5py.Group, top_level_meta: dict, shape_x: int, shape_y: int, flip_image: bool = True):
@@ -472,7 +491,6 @@ def load_h5jpk(
         channels_units = {}
         top_level_meta = {}
         for key, value in qi_data_group["Global_Metadata"].attrs.items():
-            print(f"Global Metadata - {key}: {value}")
             if key.startswith("channel.unit."):
                 channels_units[key.split(".")[-1]] = value
             top_level_meta[key] = value
