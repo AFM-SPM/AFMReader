@@ -245,7 +245,7 @@ def load_jpk(
     image, px2nm = _load_jpk(file=file_path, filename=filename, channel=channel, file_suffix=file_path.suffix, config_path=config_path, flip_image=flip_image)
     return (image, px2nm)
 
-def _load_jpk(file: Path | BytesIO, filename: str, channel: str, file_suffix: str, config_path: Path | str | None = None, flip_image: bool = True):
+def _load_jpk(file: Path | BytesIO, filename: str, channel: str, file_suffix: str, config_path: Path | str | None = None, flip_image: bool = True, convert_to_nm: bool = True) -> tuple[np.ndarray, float]:
     jpk_tags = _load_jpk_tags(config_path)
     try:
         tif = tifffile.TiffFile(file)
@@ -275,7 +275,7 @@ def _load_jpk(file: Path | BytesIO, filename: str, channel: str, file_suffix: st
     if flip_image is True:
         image = np.flipud(image)
 
-    if channel_page.tags[jpk_tags["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
+    if convert_to_nm and channel_page.tags[jpk_tags["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
         image = image * 1e9
 
     # Get page for common metadata between scans

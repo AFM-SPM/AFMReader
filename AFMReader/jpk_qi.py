@@ -346,6 +346,7 @@ class jpk_qi_loader:
         self.flip_image = flip_image if flip_image is not None else self.flip_image
         self.save_as_h5 = save_as_h5 if save_as_h5 is not None else self.save_as_h5
 
+        logger.info(f"Loading JPK QI data from {self.filepath} with channel {self.channel}")
         self.extract_global_metadata()
 
         self.parse_dimension_data()
@@ -459,6 +460,8 @@ class jpk_qi_loader:
                     else:
                         global_meta_group.attrs[key] = str(value).encode("utf-8")
 
+            logger.info(f"QI data copied to h5 data {file.name}")
+
     def get_collated_curves(self):
         """
         Collates the curve data from the flat structure it is extracted in into a structure grouped by channel and segment for easier saving to h5.
@@ -544,7 +547,7 @@ class jpk_qi_loader:
                 collated_meta[f"segment.{key}"].append(value)
         return collated_meta
 
-    def get_image(self, overide_channel: str | None = None):
+    def get_image(self, overide_channel: str | None = None, convert_to_nm: bool = True) -> tuple[np.ndarray, float]:
         """
         Processes the flat curve data dictionary into a 2D list structure matching the image dimensions.
 
@@ -571,7 +574,7 @@ class jpk_qi_loader:
         virtual_file = io.BytesIO(tif_bytes)
         logger.info(f"Looking for channel {channel} in {path_to_image}")
         return jpk._load_jpk(
-            virtual_file, path_to_image, channel=channel, file_suffix=".jpk-qi-data", config_path=self.config_path
+            virtual_file, path_to_image, channel=channel, file_suffix=".jpk-qi-data", config_path=self.config_path, convert_to_nm=convert_to_nm
         )
 
     def save_lite_data(self):
@@ -624,7 +627,7 @@ class jpk_qi_loader:
                     if h5_channel == self.channel:
                         channel_image = self.image
                     else:
-                        channel_image, _ = self.get_image(overide_channel=h5_channel)
+                        channel_image, _ = self.get_image(overide_channel=h5_channel, convert_to_nm=False)
                     frame_stack = channel_image.flatten().reshape(-1, 1)
 
                     # Update/ replace the channels dataset
