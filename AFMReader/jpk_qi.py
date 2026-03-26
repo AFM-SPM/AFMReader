@@ -321,7 +321,7 @@ class jpk_qi_loader:
         save_as_h5: bool | None = None,
     ) -> tuple[np.ndarray, float, dict] | tuple[np.ndarray, float]:
         """
-        Loads the .jpk-qi file
+        Loads the .jpk-qi-data file
 
         Parameters
         ----------
@@ -547,7 +547,7 @@ class jpk_qi_loader:
                 collated_meta[f"segment.{key}"].append(value)
         return collated_meta
 
-    def get_image(self, overide_channel: str | None = None, convert_to_nm: bool = True) -> tuple[np.ndarray, float]:
+    def get_image(self, overide_channel: str | None = None, convert_to_nm: bool = True):
         """
         Processes the flat curve data dictionary into a 2D list structure matching the image dimensions.
 
@@ -624,9 +624,7 @@ class jpk_qi_loader:
                     # Format name and reshape image (flattened frame stack)
                     dataset_name = h5_channel.split("_")[0].capitalize()
                     # Include all the channels including the calculated channel
-                    if h5_channel == self.channel:
-                        channel_image = self.image
-                    else:
+                    # TODO make this slightly faster by remembering we have load a channel already but difficult cause of scaling
                         channel_image, _ = self.get_image(overide_channel=h5_channel, convert_to_nm=False)
                     frame_stack = channel_image.flatten().reshape(-1, 1)
 
