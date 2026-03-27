@@ -625,7 +625,7 @@ class jpk_qi_loader:
                     dataset_name = h5_channel.split("_")[0].capitalize()
                     # Include all the channels including the calculated channel
                     # TODO make this slightly faster by remembering we have load a channel already but difficult cause of scaling
-                        channel_image, _ = self.get_image(overide_channel=h5_channel, convert_to_nm=False)
+                    channel_image, _ = self.get_image(overide_channel=h5_channel, convert_to_nm=False)
                     frame_stack = channel_image.flatten().reshape(-1, 1)
 
                     # Update/ replace the channels dataset
