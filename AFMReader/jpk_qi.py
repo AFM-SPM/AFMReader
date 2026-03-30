@@ -2,6 +2,7 @@ from pathlib import Path
 from contextlib import nullcontext
 import io
 import re
+import time
 import zipfile
 
 import numpy as np
@@ -262,6 +263,12 @@ class jpk_qi_loader:
         # Set path to the .jpk-qi-image file within the archive for later use
         self.path_to_image = None
 
+        self.time_loading_data = 0.0
+        self.time_loading_metadata = 0.0
+        self.time_saving_h5 = 0.0
+        self.time_with_regex = 0.0
+        self.time_collating_data = 0.0
+
         # Initialize key attributes that will be returned / accessed frequently
 
         # Just the top level metadata extracted from the header files
@@ -282,6 +289,8 @@ class jpk_qi_loader:
         self.all_curve_keys = set()
         # The keys that exist in the segment metadata across all segments, used to determine which keys to move to the top level metadata
         self.all_segment_keys = set()
+        self.curve_meta = {}
+        self.segment_meta = {}
         # Define the image shape and size attributes
         self.size_x, self.size_y, self.shape_x, self.shape_y = None, None, None, None
 
@@ -354,7 +363,9 @@ class jpk_qi_loader:
         # Setup H5 Data structures if needed
         if self.save_as_h5:
             self.load_all_data()
+            start_time = time.perf_counter()
             self.save_to_h5(collated_curve_data=self.collated_curve_data, indicies=self.indicies, collated_metadata=self.collated_metadata)
+            self.time_saving_h5 += time.perf_counter() - start_time
 
         self.full_metadata = LazyCurveMetadata(
             self.filepath, self.top_level_meta, self.qi_archive, self.shape_x, self.shape_y, flip_image=self.flip_image
@@ -368,7 +379,16 @@ class jpk_qi_loader:
 
         # Save a lite form of the images (precalculated) if saving to a file
         if self.save_as_h5:
+            start_time = time.perf_counter()
             self.save_lite_data()
+            self.time_saving_h5 += time.perf_counter() - start_time
+
+        logger.info(f"Finished loading JPK QI data from {self.filepath} in {self.time_loading_data + self.time_loading_metadata + self.time_collating_data + self.time_saving_h5:.2f} seconds \n"
+                    f"Data loading: {self.time_loading_data:.2f}s\n"
+                    f"Metadata loading: {self.time_loading_metadata:.2f}s\n"
+                    f"Time spent in regex matching: {self.time_with_regex:.2f}s\n"
+                    f"Collating data: {self.time_collating_data:.2f}s\n"
+                    f"Saving H5: {self.time_saving_h5:.2f}s")
 
         if self.all_curve_data:
             return (self.image, self.px2nm, (self.all_curve_data, self.channels_units, self.full_metadata))
@@ -381,16 +401,26 @@ class jpk_qi_loader:
         if include_metadata:
             curve_meta_regex = re.compile(r"index/(\d+)/header\.properties")
             segment_meta_regex = re.compile(r"index/(\d+)/segments/(\d+)/segment-header\.properties")
-        for file_info in self.qi_archive.infolist():
+        archive_infolist = self.qi_archive.infolist()
+        logger.info(f"Loading all curve data from JPK QI archive with {len(archive_infolist)} files {'' if include_metadata else 'not '}including metadata")
+        progress_counter = 0
+        for file_info in archive_infolist:
             filename = file_info.filename
+            if progress_counter % 10000 == 0:
+                logger.info(f"Progress: {progress_counter}/{len(archive_infolist)} files processed")
+            progress_counter += 1
 
             # Check Binary Data
+            start_time = time.perf_counter()
             dat_match = dat_regex.match(filename)
             if dat_match:
                 # If file is a .dat file, extract the curve number, segment direction and channel name from the filename
                 curve_num, direction, chan_name = int(dat_match.group(1)), int(dat_match.group(2)), dat_match.group(3)
                 # Then load the data from the file
+                self.time_with_regex += time.perf_counter() - start_time
+                start_time = time.perf_counter()
                 self.extract_dat_file(file_info, curve_num, direction, chan_name)
+                self.time_loading_data += time.perf_counter() - start_time
                 continue
 
             if include_metadata:
@@ -399,8 +429,11 @@ class jpk_qi_loader:
                 if segment_meta_match:
                     # If file is a segment metadata file, extract the curve number and segment direction from the filename
                     curve_num, direction = int(segment_meta_match.group(1)), int(segment_meta_match.group(2))
+                    self.time_with_regex += time.perf_counter() - start_time
                     # Then load the segment metadata from the file
+                    start_time = time.perf_counter()
                     self.extract_segment_metadata(file_info, curve_num, direction)
+                    self.time_loading_metadata += time.perf_counter() - start_time
                     continue
 
                 # Check Curve Metadata
@@ -408,10 +441,15 @@ class jpk_qi_loader:
                 if curve_meta_match:
                     # If file is a curve metadata file, extract the curve number from the filename
                     curve_num = int(curve_meta_match.group(1))
+                    self.time_with_regex += time.perf_counter() - start_time
                     # Then load the metadata from the file
+                    start_time = time.perf_counter()
+
                     self.extract_curve_metadata(file_info, curve_num)
+                    self.time_loading_metadata += time.perf_counter() - start_time
                     continue
 
+        start_time = time.perf_counter()
         # If saving, need to collate the curve data into a format that can be easily saved to the h5 file (a dataset per channel per segment direction)
         self.collated_curve_data, self.indicies = self.get_collated_curves()
 
@@ -421,6 +459,8 @@ class jpk_qi_loader:
             self.segment_meta = [self.segment_meta_dict.get(i, {}) for i in range(self.num_of_curves * 2)]
             self.full_metadata = self.construct_full_metadata()
             self.collated_metadata = self.get_collated_metadata()
+
+        self.time_collating_data += time.perf_counter() - start_time
 
     def save_to_h5(
         self,
@@ -460,7 +500,7 @@ class jpk_qi_loader:
                     else:
                         global_meta_group.attrs[key] = str(value).encode("utf-8")
 
-            logger.info(f"QI data copied to h5 data {file.name}")
+            logger.info(f"QI data copied to h5 data {file.filename}")
 
     def get_collated_curves(self):
         """
@@ -742,9 +782,20 @@ class jpk_qi_loader:
         curve_num : int
             The curve number associated with the metadata, parsed from the filename.
         """
+        # with self.qi_archive.open(file_info) as f:
+        #     cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+        #     self.curve_meta_dict[curve_num] = cleaned_meta
+        #     self.all_curve_keys.update(cleaned_meta.keys())
+
         with self.qi_archive.open(file_info) as f:
             cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
-            self.curve_meta_dict[curve_num] = cleaned_meta
+            for key, value in cleaned_meta.items():
+                if key not in self.curve_meta:
+                    self.curve_meta[key] = [None for _ in range(len(self.curve_meta))]
+                self.curve_meta[key].append(value)
+            for key in self.curve_meta.keys():
+                if key not in cleaned_meta:
+                    self.curve_meta[key].append(None)
             self.all_curve_keys.update(cleaned_meta.keys())
 
     def extract_segment_metadata(self, file_info: zipfile.ZipInfo, curve_num: int, direction: int):
@@ -763,8 +814,16 @@ class jpk_qi_loader:
         idx = curve_num * 2 + direction
         with self.qi_archive.open(file_info) as f:
             cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
-            self.segment_meta_dict[idx] = cleaned_meta
-            self.all_segment_keys.update(cleaned_meta.keys())
+            for key, value in cleaned_meta.items():
+                if key not in self.segment_meta:
+                    self.segment_meta[key] = [None for _ in range(len(self.segment_meta))]
+                self.segment_meta[key].append(value)
+            for key in self.segment_meta.keys():
+                if key not in cleaned_meta:
+                    self.segment_meta[key].append(None)
+            self.all_se.update(cleaned_meta.keys())
+            # self.segment_meta_dict[idx] = cleaned_meta
+            # self.all_segment_keys.update(cleaned_meta.keys())
 
     def setup_h5_structure(self, h5file):
         """
@@ -931,10 +990,3 @@ def _make_num_min_characters(num: int, min_chars: int = 3):
         return string_num
     string_num = "0" * (min_chars - len(string_num)) + string_num
     return string_num
-
-
-def _max_points_buffer(curves_data, samples=20, points_buffer=1.2):
-
-    step = len(curves_data) // samples
-    max_points = np.max(len(curves_data[i]["segment"]) for i in range(0, len(curves_data), step))
-    return max_points * points_buffer
