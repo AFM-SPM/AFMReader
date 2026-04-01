@@ -264,7 +264,6 @@ class jpk_qi_loader:
         self.qi_archive = zipfile.ZipFile(self.filepath, "r")
         logger.debug(f"Opened JPK QI archive at {self.filepath}")
         self.namelist = self.qi_archive.namelist()
-        logger.debug(f"JPK QI archive of size {asizeof.asizeof(self.qi_archive) / 1024 / 1024:.2f} MB, namelist is of size: {asizeof.asizeof(self.namelist) / 1024 / 1024:.2f} MB")
         # Set path to the .jpk-qi-image file within the archive for later use
         self.path_to_image = None
 
@@ -298,8 +297,10 @@ class jpk_qi_loader:
         # Timing counters for performance monitoring
         self.t_load_data = 0.0
         self.t_proc_data = 0.0
+        self.t_save_data = 0.0
         self.t_load_meta = 0.0
         self.t_proc_meta = 0.0
+        self.t_save_meta = 0.0
         self.t_changing_keys = 0.0
 
         # Instantiate containers for data to be saved (so an exception is not caused if not saving)
@@ -412,6 +413,10 @@ class jpk_qi_loader:
         logger.info(f"Loading all curve data from JPK QI archive with {len(self.namelist)} files {'' if include_metadata else 'not '}including metadata")
         progress_counter = 0
         process = psutil.Process(os.getpid())
+        curve_work = [(f"{k}=".encode("utf-8"), h5_meta_datasets[f"curve.{k}"])
+                      for k in self.changing_curve_keys]
+        seg_work = [(f"{k}=".encode("utf-8"), h5_meta_datasets[f"segment.{k}"])
+                     for k in self.changing_segment_keys]
         for curve_num in range(self.num_of_curves):
             # Output progress every 1000 curves to give some indication of how long the loading is taking
             if progress_counter % 1000 == 0:
@@ -424,10 +429,10 @@ class jpk_qi_loader:
                     self.extract_dat_file(h5_datasets=h5_datasets, curve_num=curve_num, direction=direction, chan_name=chan['name'])
                 if include_metadata:
                     # Extract and store the segment metadata for later saving
-                    self.extract_segment_metadata(h5_meta_datasets=h5_meta_datasets, curve_num=curve_num, direction=direction)
+                    self.extract_segment_metadata(h5_meta_datasets=h5_meta_datasets, curve_num=curve_num, direction=direction, seg_work=seg_work)
             if include_metadata:
                 # Extract and store the curve metadata for later saving
-                self.extract_curve_metadata(h5_meta_datasets=h5_meta_datasets, curve_num=curve_num)
+                self.extract_curve_metadata(h5_meta_datasets=h5_meta_datasets, curve_num=curve_num, curve_work=curve_work)
         # Add the last index to the indicies datasets to mark the end of the last curve
         for direction in range(2):
             seg_name = f"Segment_{direction}"
@@ -465,8 +470,8 @@ class jpk_qi_loader:
             summary = (
                 f"\n--- Performance Summary ---\n"
                 f"Changing Keys Detection: {self.t_changing_keys:.2f}s\n"
-                f"Raw Data - Loading: {self.t_load_data:.2f}s | Processing: {self.t_proc_data:.2f}s\n"
-                f"Metadata - Loading: {self.t_load_meta:.2f}s | Processing: {self.t_proc_meta:.2f}s\n"
+                f"Raw Data - Loading: {self.t_load_data:.2f}s | Processing: {self.t_proc_data:.2f}s | Saving: {self.t_save_data:.2f}s\n"
+                f"Metadata - Loading: {self.t_load_meta:.2f}s | Processing: {self.t_proc_meta:.2f}s | Saving: {self.t_save_meta:.2f}s\n"
                 f"---------------------------"
             )
             logger.info(summary)
@@ -814,6 +819,7 @@ class jpk_qi_loader:
             data_set = h5_datasets[f"Segment_{direction}"][chan_name]["Data"]
             data_size = data_set.shape[0]
             indicies_set = h5_datasets[f"Segment_{direction}"][chan_name]["Indicies"]
+            filled_size = self.points_for_channel_segment[direction][chan_name]
             try:
                 t0 = time.perf_counter()
                 with self.qi_archive.open(dat_path) as f:
@@ -832,9 +838,11 @@ class jpk_qi_loader:
                         # Fetch and resize the existing dataset for this channel and segment to fit the new data
                         data_set.resize((self.points_for_channel_segment[direction][chan_name],))
 
-                    # Append the new data to the end of the existing dataset
-                    data_set[data_size:] = segment_array
                     self.t_proc_data += time.perf_counter() - t1
+                    # Append the new data to the end of the existing dataset
+                    start_time = time.perf_counter()
+                    data_set[filled_size:filled_size + len(segment_array)] = segment_array
+                    self.t_save_data += time.perf_counter() - start_time
 
             except KeyError:
                 self.failed_curves.add((curve_num, direction, chan_name))
@@ -848,7 +856,7 @@ class jpk_qi_loader:
                     logger.warning("Lots of missing files, further warnings will be suppressed. View summary at the end.")
 
             # Append the new index to the end of the existing indicies dataset
-            indicies_set[curve_num] = data_size
+            indicies_set[curve_num] = filled_size
         else:
             self.failed_curves.add((curve_num, direction, chan_name))
             if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
@@ -856,7 +864,7 @@ class jpk_qi_loader:
                     f"Channel {chan_name} not found in scaling information. Skipping data for curve {curve_num}, direction {direction}."
                 )
 
-    def extract_curve_metadata(self, h5_meta_datasets, curve_num: int):
+    def extract_curve_metadata(self, curve_num: int, curve_work):
         """
         Extracts the curve metadata from its header.properties file in the JPK QI archive and saves it to the internal data structure.
 
@@ -871,10 +879,12 @@ class jpk_qi_loader:
         """
 
         meta_path = f"index/{curve_num}/header.properties"
-        cleaned_meta = {}
+        raw_bytes = b""
         try:
+            start_time = time.perf_counter()
             with self.qi_archive.open(meta_path) as f:
-                cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                raw_bytes = f.read()
+            self.t_load_meta += time.perf_counter() - start_time
         except KeyError:
             self.failed_curves.add((curve_num, None, None))
             if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
@@ -882,14 +892,26 @@ class jpk_qi_loader:
             elif len(self.failed_curves) == 10:
                 logger.warning("Lots of missing files, further warnings will be suppressed. View summary at the end.")
 
-        for key in self.changing_curve_keys:
-            meta_set = h5_meta_datasets.get(f"curve.{key}")
-            if meta_set:
-                meta_set[curve_num] = cleaned_meta.get(key, "No data")
+        for search_term, meta_set in curve_work:
+            start_time = time.perf_counter()
+            start = raw_bytes.find(search_term)
+            if start != -1:
+                start += len(search_term)
+                end = raw_bytes.find(b"\n", start)
+                value = raw_bytes[start:end].decode("utf-8").strip()
             else:
-                logger.error(f"Metadata dataset for key curve.{key} not found when trying to save metadata for curve {curve_num}")
+                value = "No data"
+            self.t_proc_meta += time.perf_counter() - start_time
+            if meta_set:
+                start_time = time.perf_counter()
+                meta_set[curve_num] = value
+                self.t_save_meta += time.perf_counter() - start_time
+            else:
+                logger.error(f"Metadata dataset for key {search_term.decode('utf-8')} not found when trying to save metadata for curve {curve_num}")
 
-    def extract_segment_metadata(self, h5_meta_datasets, curve_num: int, direction: int):
+
+
+    def extract_segment_metadata(self, curve_num: int, direction: int, seg_work):
         """
         Extracts the segment metadata from its header.properties file in the JPK QI archive and saves it to the internal data structure.
 
@@ -903,23 +925,32 @@ class jpk_qi_loader:
             The segment direction (0 or 1) associated with the metadata, parsed from the filename.
         """
         meta_path = f"index/{curve_num}/segments/{direction}/segment-header.properties"
-        cleaned_meta = {}
+        raw_content = b""
         try:
+            start_time = time.perf_counter()
             with self.qi_archive.open(meta_path) as f:
-                cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                raw_content = f.read()
+            self.t_load_meta += time.perf_counter() - start_time
         except KeyError:
             self.failed_curves.add((curve_num, direction, None))
             if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
                 logger.warning(f"Metadata file {meta_path} not found in archive. Skipping metadata for curve {curve_num}, direction {direction}.")
             elif len(self.failed_curves) == 10:
                 logger.warning("Lots of missing files, further warnings will be suppressed. View summary at the end.")
-
-        for key in self.changing_segment_keys:
-            meta_set = h5_meta_datasets.get(f"segment.{key}")
-            if meta_set:
-                meta_set[curve_num * 2 + direction] = cleaned_meta.get(key, "No data")
+        start_time = time.perf_counter()
+        for search_term, meta_set in seg_work:
+            start = raw_content.find(search_term)
+            if start != -1:
+                start += len(search_term)
+                end = raw_content.find(b"\n", start)
+                value = raw_content[start:end].decode("utf-8").strip()
             else:
-                logger.error(f"Metadata dataset for key segment.{key} not found when trying to save metadata for curve {curve_num}, direction {direction}")
+                value = "No data"
+            if meta_set:
+                meta_set[curve_num * 2 + direction] = value
+            else:
+                logger.error(f"Metadata dataset for key {search_term.decode('utf-8')} not found when trying to save metadata for curve {curve_num}, direction {direction}")
+        self.t_proc_meta += time.perf_counter() - start_time
 
     def setup_h5_structure(self, h5file):
         """
