@@ -265,8 +265,14 @@ class jpk_qi_loader:
         # Set path to the .jpk-qi-image file within the archive for later use
         self.path_to_image = None
 
-        self.DATA_CHUNKSIZE = 2 * 1024 * 1024  # chunk size for H5 datasets
-        self.INDICIES_CHUNKSIZE = 64 * 1024  # chunk size for indicies datasets
+        # Chunk size for H5 datasets
+        self.DATA_CHUNKSIZE = 2 * 1024 * 1024
+        # Chunk size for indicies datasets
+        self.INDICIES_CHUNKSIZE = 64 * 1024
+        # Chunk size for metadata datasets (if needed)
+        self.META_CHUNKSIZE = 64 * 1024
+        # Maximum number of curves to check for changing metadata keys (to avoid checking every curve in large datasets)
+        self.MAX_CURVE_CHECKS = 20
 
         # Initialize key attributes that will be returned / accessed frequently
 
@@ -389,12 +395,10 @@ class jpk_qi_loader:
                             logger.warning(f"Failed to load segment meta file for curve {curve_num}, direction {direction}")
                         else:
                             logger.warning(f"Failed to load curve meta file for curve {curve_num}")
-
-
         else:
             logger.info("Successfully loaded all curve data without any missing files.")
 
-    def load_all_data(self, h5_datasets, include_metadata: bool = True):
+    def load_all_data(self, h5_datasets, h5_meta_datasets, include_metadata: bool = True):
         logger.info(f"Loading all curve data from JPK QI archive with {len(self.namelist)} files {'' if include_metadata else 'not '}including metadata")
         progress_counter = 0
         process = psutil.Process(os.getpid())
@@ -410,10 +414,19 @@ class jpk_qi_loader:
                     self.extract_dat_file(h5_datasets=h5_datasets, curve_num=curve_num, direction=direction, chan_name=chan['name'])
                 if include_metadata:
                     # Extract and store the segment metadata for later saving
-                    self.extract_segment_metadata(curve_num=curve_num, direction=direction)
+                    self.extract_segment_metadata(h5_meta_datasets=h5_meta_datasets, curve_num=curve_num, direction=direction)
             if include_metadata:
                 # Extract and store the curve metadata for later saving
-                self.extract_curve_metadata(curve_num=curve_num)
+                self.extract_curve_metadata(h5_meta_datasets=h5_meta_datasets, curve_num=curve_num)
+        # Add the last index to the indicies datasets to mark the end of the last curve
+        for direction in range(2):
+            seg_name = f"Segment_{direction}"
+            for chan in self.segment_channels:
+                chan_name = chan['name']
+                current_dataset = h5_datasets[seg_name][chan_name]["Data"]
+                indicies_dataset = h5_datasets[seg_name][chan_name]["Indicies"]
+                indicies_dataset[-1] = current_dataset.shape[0]
+
         self.output_summary()
 
     def save_to_h5(
@@ -423,29 +436,79 @@ class jpk_qi_loader:
         """Saves the data as an H5 file. If include_metadata is False, only the curve data will be saved."""
         with self.get_saving_context() as file:
 
-            global_meta_group, curves_meta_group, h5_datasets = self.setup_h5_structure(file)
+            self.changing_curve_keys, self.changing_segment_keys = self.get_changing_keys()
+            global_meta_group, h5_datasets, h5_meta_datasets = self.setup_h5_structure(file)
 
-            self.load_all_data(h5_datasets, include_metadata=include_metadata)
+            self.load_all_data(h5_datasets, h5_meta_datasets, include_metadata=include_metadata)
             logger.debug(f"Curve meta size in memory: {asizeof.asizeof(self.curve_meta) / 1024 / 1024:.2f} MB")
             logger.debug(f"Segment meta size in memory: {asizeof.asizeof(self.segment_meta) / 1024 / 1024:.2f} MB")
 
             if include_metadata:
                 # Save the global metadata to the h5 file
-                vlen_str_dt = h5py.string_dtype(encoding="utf-8")
                 for key, value in self.get_collated_metadata().items():
                     global_meta_group.attrs[key] = str(value).encode("utf-8")
-                for prefix, meta_dict in [("curve", self.curve_meta), ("segment", self.segment_meta)]:
-                    for key, values in meta_dict.items():
-                        cleaned_values = [str(v) if v is not None else "" for v in values]
-                        unique_values = set(cleaned_values)
-                        if len(unique_values) == 1:
-                            # If all values are the same, save as a single attribute
-                            global_meta_group.attrs[f"{prefix}.{key}"] = str(unique_values.pop()).encode("utf-8")
-                        else:
-                            # If the key is a changing key, save as a dataset with one entry per curve/ segment
-                            curves_meta_group.create_dataset(name=f"{prefix}.{key}", data=cleaned_values, dtype=vlen_str_dt)
 
             logger.info(f"QI data copied to h5 data {file.filename}")
+
+    def get_changing_keys(self):
+        # Check evenly spaced curves in the dataset to sample metadata without having to load every curve
+        step = 1 if self.num_of_curves <= self.MAX_CURVE_CHECKS else self.num_of_curves // self.MAX_CURVE_CHECKS
+        # If the step is equal to a shape dimension, we might just go down the row or column
+        while step in [self.shape_x, self.shape_y] and step > 1:
+            # So make the step slightly smaller (more checks) to ensure we get a good sample
+            step -= 1
+        curves_to_check = range(0, self.num_of_curves, step)
+        curve_meta_dict = {}
+        segment_meta_dict = {}
+        for curve_num in curves_to_check:
+            for direction in range(2):
+                meta_path = f"index/{curve_num}/segments/{direction}/segment-header.properties"
+                while True:
+                    try:
+                        with self.qi_archive.open(meta_path) as f:
+                            meta_dict = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                            for k, v in meta_dict.items():
+                                if k not in segment_meta_dict:
+                                    segment_meta_dict[k] = []
+                                segment_meta_dict[k].append(v)
+                        break
+
+                    except KeyError:
+                        if curve_num + 1 >= self.num_of_curves:
+                            break  # If we've gone past the number of curves, stop checking
+                        curve_num += 1
+                        continue
+            meta_path = f"index/{curve_num}/header.properties"
+            while True:
+                try:
+                    with self.qi_archive.open(meta_path) as f:
+                        meta_dict = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                        for k, v in meta_dict.items():
+                            if k not in curve_meta_dict:
+                                curve_meta_dict[k] = []
+                            curve_meta_dict[k].append(v)
+                        break
+                except KeyError:
+                    if curve_num + 1 >= self.num_of_curves:
+                        break  # If we've gone past the number of curves, stop checking
+                    curve_num += 1
+                    continue
+
+        changing_curve_keys, changing_segment_keys = set(), set()
+        for key, values in curve_meta_dict.items():
+            if len(set(v for v in values if v is not None)) > 1:
+                changing_curve_keys.add(key)
+            else:
+                # If the key does not change across curves, move it to the top level metadata
+                self.top_level_meta[f"curve.{key}"] = values[0]
+        for key, values in segment_meta_dict.items():
+            if len(set(v for v in values if v is not None)) > 1:
+                changing_segment_keys.add(key)
+            else:
+                # If the key does not change across segments, move it to the top level metadata
+                self.top_level_meta[f"segment.{key}"] = values[0]
+        return changing_curve_keys, changing_segment_keys
+
 
     def get_collated_curves(self):
         """
@@ -693,36 +756,36 @@ class jpk_qi_loader:
         if chan_name in self.channel_scaling:
             scale = self.channel_scaling[chan_name]
             dat_path = f"index/{curve_num}/segments/{direction}/channels/{chan_name}.dat"
+            data_set = h5_datasets[f"Segment_{direction}"][chan_name]["Data"]
+            data_size = data_set.shape[0]
+            indicies_set = h5_datasets[f"Segment_{direction}"][chan_name]["Indicies"]
             try:
                 with self.qi_archive.open(dat_path) as f:
                     # Read the binary data as big-endian 32-bit integers
                     raw_array = np.frombuffer(f.read(), dtype=">i4")
+
                     # Apply the scaling to convert raw values into real world values
                     segment_array = (raw_array * scale["multiplier"]) + scale["offset"]
 
                     # Fetch and resize the existing dataset for this channel and segment to fit the new data
-                    current_dataset = h5_datasets[f"Segment_{direction}"][chan_name]["Data"]
-                    current_size = current_dataset.shape[0]
-                    current_dataset.resize((current_size + segment_array.shape[0],))
+                    data_set.resize((data_size + segment_array.shape[0],))
 
                     # Append the new data to the end of the existing dataset
-                    current_dataset[current_size:] = segment_array
-
-                    # Fetch and resize the indicies dataset for this channel and segment to fit the new index
-                    indicies_set = h5_datasets[f"Segment_{direction}"][chan_name]["Indicies"]
-                    indicies_set.resize((indicies_set.shape[0] + 1,))
-
-                    # Append the new index to the end of the existing indicies dataset
-                    indicies_set[-1] = current_size
+                    data_set[data_size:] = segment_array
 
             except KeyError:
                 self.failed_curves.add((curve_num, direction, chan_name))
-                if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
+
+                # Limit the number of warnings to avoid spamming the logs
+                if len(self.failed_curves) < 10:
                     logger.warning(
                         f"Data file {dat_path} not found in archive. Skipping data for curve {curve_num}, direction {direction}, channel {chan_name}."
                     )
                 elif len(self.failed_curves) == 10:
                     logger.warning("Lots of missing files, further warnings will be suppressed. View summary at the end.")
+
+            # Append the new index to the end of the existing indicies dataset
+            indicies_set[curve_num] = data_size
         else:
             self.failed_curves.add((curve_num, direction, chan_name))
             if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
@@ -730,12 +793,14 @@ class jpk_qi_loader:
                     f"Channel {chan_name} not found in scaling information. Skipping data for curve {curve_num}, direction {direction}."
                 )
 
-    def extract_curve_metadata(self, curve_num: int):
+    def extract_curve_metadata(self, h5_meta_datasets, curve_num: int):
         """
         Extracts the curve metadata from its header.properties file in the JPK QI archive and saves it to the internal data structure.
 
         Parameters
         ----------
+        h5_meta_datasets : dict
+            A dictionary containing the h5 datasets for each metadata key, used for saving the metadata.
         file_info : zipfile.ZipInfo
             The ZipInfo object corresponding to the header.properties file to be extracted.
         curve_num : int
@@ -743,14 +808,14 @@ class jpk_qi_loader:
         """
 
         meta_path = f"index/{curve_num}/header.properties"
+        cleaned_meta = {}
         try:
             with self.qi_archive.open(meta_path) as f:
                 cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
-                for key, value in cleaned_meta.items():
-                    if key not in self.curve_meta:
-                        # Initialize with None for all curves when a key is discovered
-                        self.curve_meta[key] = [None] * self.num_of_curves
-                    self.curve_meta[key][curve_num] = value
+                for key in self.changing_curve_keys:
+                    meta_set = h5_meta_datasets.get(f"curve.{key}")
+                    meta_set.resize((meta_set.shape[0] + 1 if meta_set else curve_num,))
+                    meta_set[curve_num] = cleaned_meta.get(key, "No data")
         except KeyError:
             self.failed_curves.add((curve_num, None, None))
             if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
@@ -758,32 +823,43 @@ class jpk_qi_loader:
             elif len(self.failed_curves) == 10:
                 logger.warning("Lots of missing files, further warnings will be suppressed. View summary at the end.")
 
-    def extract_segment_metadata(self, curve_num: int, direction: int):
+        for key in self.changing_curve_keys:
+            meta_set = h5_meta_datasets.get(f"curve.{key}")
+            if meta_set:
+                meta_set[curve_num] = cleaned_meta.get(key, "No data")
+            else:
+                logger.error(f"Metadata dataset for key curve.{key} not found when trying to save metadata for curve {curve_num}")
+
+    def extract_segment_metadata(self, h5_meta_datasets, curve_num: int, direction: int):
         """
         Extracts the segment metadata from its header.properties file in the JPK QI archive and saves it to the internal data structure.
 
         Parameters
         ----------
+        h5_meta_datasets : dict
+            A dictionary containing the h5 datasets for each metadata key, used for saving the metadata.
         curve_num : int
             The curve number associated with the metadata, parsed from the filename.
         direction : int
             The segment direction (0 or 1) associated with the metadata, parsed from the filename.
         """
         meta_path = f"index/{curve_num}/segments/{direction}/segment-header.properties"
+        cleaned_meta = {}
         try:
             with self.qi_archive.open(meta_path) as f:
                 cleaned_meta = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
-                for key, value in cleaned_meta.items():
-                    if key not in self.segment_meta:
-                        # Initialize with None for all segments when a key is discovered
-                        self.segment_meta[key] = [None] * self.num_of_curves * 2
-                    self.segment_meta[key][curve_num * 2 + direction] = value
         except KeyError:
             self.failed_curves.add((curve_num, direction, None))
             if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
                 logger.warning(f"Metadata file {meta_path} not found in archive. Skipping metadata for curve {curve_num}, direction {direction}.")
             elif len(self.failed_curves) == 10:
                 logger.warning("Lots of missing files, further warnings will be suppressed. View summary at the end.")
+
+        for key in self.changing_segment_keys:
+            meta_set = h5_meta_datasets.get(f"segment.{key}")
+            if meta_set:
+                meta_set[curve_num * 2 + direction] = cleaned_meta.get(key, "No data")
+
     def setup_h5_structure(self, h5file):
         """
         Sets up the structure in the h5 file for saving the curve data and metadata, and returns the datasets and metadata groups for later use.
@@ -812,6 +888,11 @@ class jpk_qi_loader:
 
         curve_groups = {"Data": {}, "Indicies": {}}
         h5_datasets = {}
+        h5_meta_datasets = {}
+        for key in self.changing_curve_keys:
+            h5_meta_datasets[f"curve.{key}"] = curves_meta_group.create_dataset(name=f"{key}", shape=(self.num_of_curves,), maxshape=(None,), chunks=self.META_CHUNKSIZE, dtype=h5py.string_dtype(encoding="utf-8"))
+        for key in self.changing_segment_keys:
+            h5_meta_datasets[f"segment.{key}"] = curves_meta_group.create_dataset(name=f"{key}", shape=(self.num_of_curves * 2,), maxshape=(None,), chunks=self.META_CHUNKSIZE, dtype=h5py.string_dtype(encoding="utf-8"))
 
         for direction in range(2):
             # For each segment direction, establish the necessary group structure that will contain each channel dataset
@@ -825,8 +906,8 @@ class jpk_qi_loader:
                 h5_datasets[seg_name][chan['name']] = {}
                 # For each channel, create an empty dataset for the curve data and indicies with the appropriate name and data type
                 h5_datasets[seg_name][chan['name']]['Data'] = curve_groups["Data"][seg_name].create_dataset(name=chan["name"], shape=(0,), maxshape=(None,), chunks=(self.DATA_CHUNKSIZE,), dtype=np.float32)
-                h5_datasets[seg_name][chan['name']]['Indicies'] = curve_groups["Indicies"][seg_name].create_dataset(name=chan["name"], shape=(0,), maxshape=(None,), chunks=(self.INDICIES_CHUNKSIZE,), dtype=np.int32)
-        return global_meta_group, curves_meta_group, h5_datasets
+                h5_datasets[seg_name][chan['name']]['Indicies'] = curve_groups["Indicies"][seg_name].create_dataset(name=chan["name"], shape=(self.num_of_curves, ), maxshape=(None,), chunks=(self.INDICIES_CHUNKSIZE,), dtype=np.int32)
+        return global_meta_group, h5_datasets, h5_meta_datasets
 
     def get_saving_context(self):
         """
