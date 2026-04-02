@@ -268,7 +268,7 @@ class jpk_qi_loader:
         self.path_to_image = None
 
         # Chunk size for H5 datasets
-        self.DATA_CHUNKSIZE = 2 * 1024 * 1024
+        self.DATA_CHUNKSIZE = 512 * 1024
         # Chunk size for indicies datasets
         self.INDICIES_CHUNKSIZE = 64 * 1024
         # Chunk size for metadata datasets (if needed)
@@ -469,6 +469,7 @@ class jpk_qi_loader:
             self.load_all_data(h5_datasets, h5_meta_datasets, h5_datasets_buffer, h5_meta_datasets_buffer, include_metadata=include_metadata)
             for direction in range(2):
                 for chan in self.segment_channels:
+                    logger.debug(f"Resizing dataset for channel {chan['name']} in segment {direction} from {h5_datasets[f'Segment_{direction}'][chan['name']]['Data'].shape[0]} to final size {self.points_for_channel_segment[direction][chan['name']]}")
                     h5_datasets[f"Segment_{direction}"][chan['name']]["Data"].resize((self.points_for_channel_segment[direction][chan['name']],))
             logger.debug(f"Curve meta size in memory: {asizeof.asizeof(self.curve_meta) / 1024 / 1024:.2f} MB")
             logger.debug(f"Segment meta size in memory: {asizeof.asizeof(self.segment_meta) / 1024 / 1024:.2f} MB")
@@ -575,64 +576,7 @@ class jpk_qi_loader:
         return changing_curve_keys, changing_segment_keys
 
 
-    def get_collated_curves(self):
-        """
-        Collates the curve data from the flat structure it is extracted in into a structure grouped by channel and segment for easier saving to h5.
 
-        Returns
-        -------
-        collated_curve_data : dict
-            A dictionary containing the curve data collated by channel and segment, with the structure:
-                {
-                    "channel_name": {
-                        "Segment_0": [...],
-                        "Segment_1": [...],
-                        ...
-                    },
-                    ...
-                }
-            indicies : dict
-            A dictionary containing the indexes of the curve data within each segment, with the structure:
-                {
-                    "channel_name": {
-                        "Segment_0": [...],
-                        "Segment_1": [...],
-                        ...
-                    },
-                    ...
-                }
-        """
-        collated_curve_data = {}
-        indicies = {}
-
-        for curve_data in self.flat_curve_data:
-            for chan_name, chan_data in curve_data.items():
-                for seg_name, seg_data in chan_data.items():
-                    if chan_name not in collated_curve_data:
-                        collated_curve_data[chan_name] = {}
-                        indicies[chan_name] = {}
-
-                    if seg_name not in collated_curve_data[chan_name]:
-                        collated_curve_data[chan_name][seg_name] = []
-                        indicies[chan_name][seg_name] = [0]
-
-                    # Append the segment data as an array to the list (creates a 2D list)
-                    collated_curve_data[chan_name][seg_name].append(seg_data)
-
-                    last_index = indicies[chan_name][seg_name][-1]
-                    next_index = last_index + len(seg_data)
-
-                    indicies[chan_name][seg_name].append(next_index)
-
-        for chan_name, segments in collated_curve_data.items():
-            for seg_name in segments:
-                # Flattens the list of arrays into one massive 1D array for more efficiency
-                collated_curve_data[chan_name][seg_name] = np.concatenate(collated_curve_data[chan_name][seg_name])
-
-                # Converts the indices list into a standard fixed-length integer array
-                indicies[chan_name][seg_name] = np.array(indicies[chan_name][seg_name], dtype=np.int32)
-
-        return collated_curve_data, indicies
 
     def get_collated_metadata(self):
         """
@@ -739,69 +683,6 @@ class jpk_qi_loader:
                         del chan_grp[dataset_name]
                     chan_grp.create_dataset(dataset_name, data=frame_stack)
 
-    def save_metadata(self):
-        """Saves the metadata to the appropriate format based on the save_as_h5 attribute."""
-        if self.save_as_h5:
-            for seg_chan in self.segment_channels:
-                self.global_meta_group.attrs[f"channel.unit.{seg_chan['name']}"] = seg_chan["unit"]
-            for key, value in self.top_level_meta.items():
-                self.global_meta_group.attrs[key] = str(value).encode("utf-8")
-            for i, c_meta in enumerate(self.curve_meta):
-                curve_meta_group = self.curves_meta_group.require_group(f"{i}")
-                for key, value in c_meta.items():
-                    curve_meta_group.attrs[key] = str(value).encode("utf-8")
-
-                for d in range(2):
-                    segment_meta_group = curve_meta_group.require_group(f"{d}")
-                    for key, value in self.segment_meta[i * 2 + d].items():
-                        segment_meta_group.attrs[key] = str(value).encode("utf-8")
-
-    def construct_full_metadata(self):
-        """
-        Constructs the full metadata dictionary by determining which keys in the curve and segment metadata change across curves/segments and which do not, moving the non-changing keys to the top level metadata, and then combining everything into a single dictionary.
-
-        Returns
-        -------
-        dict
-            The full metadata dictionary with the structure:
-            {
-                "top_level": { ... },
-                "curves": [ { ... }, { ... }, ... ],
-                "segments": [ { ... }, { ... }, ... ]
-            }
-        """
-
-        # Find keys that change across curves/segments
-        changing_curve_keys = {
-            k
-            for k in self.all_curve_keys
-            if any(self.curve_meta[i].get(k) != self.curve_meta[0].get(k) for i in range(1, self.num_of_curves))
-        }
-        changing_segment_keys = {
-            k
-            for k in self.all_segment_keys
-            if any(self.segment_meta[i].get(k) != self.segment_meta[0].get(k) for i in range(1, len(self.segment_meta)))
-        }
-
-        # Move duplicated meta to top level for both segments and curves
-        for key in self.all_curve_keys - changing_curve_keys:
-            if self.curve_meta and key in self.curve_meta[0]:
-                self.top_level_meta[f"curve.{key}"] = self.curve_meta[0][key]
-        for key in self.all_segment_keys - changing_segment_keys:
-            if self.segment_meta and key in self.segment_meta[0]:
-                self.top_level_meta[f"segment.{key}"] = self.segment_meta[0][key]
-
-        # Strip duplicated keys from individual curve/segment dicts
-        for c_meta in self.curve_meta:
-            for k in self.all_curve_keys - changing_curve_keys:
-                c_meta.pop(k, None)
-        for s_meta in self.segment_meta:
-            for k in self.all_segment_keys - changing_segment_keys:
-                s_meta.pop(k, None)
-
-        # Construct full metadata dict from subdicts
-        full_metadata = {"top_level": self.top_level_meta, "curves": self.curve_meta, "segments": self.segment_meta}
-        return full_metadata
 
     def extract_dat_file(self, h5_datasets, h5_datasets_buffer, curve_num: int, direction: int, chan_name: str):
         """
@@ -845,7 +726,7 @@ class jpk_qi_loader:
                     self.current_offsets[direction][chan_name] += len(segment_array)
 
                     buf["Data"].append(segment_array)
-                    if len(buf["Data"]) >= self.BUFFER_SIZE:
+                    if len(buf["Data"]) >= self.BUFFER_SIZE or curve_num == self.num_of_curves - 1:
                         if self.points_for_channel_segment[direction][chan_name] > data_size:
                             # Fetch and resize the existing dataset for this channel and segment to fit the new data
                             data_set.resize((self.points_for_channel_segment[direction][chan_name],))
@@ -1040,7 +921,7 @@ class jpk_qi_loader:
                 h5_datasets[seg_name][chan['name']] = {}
                 # For each channel, create an empty dataset for the curve data and indicies with the appropriate name and data type
                 h5_datasets[seg_name][chan['name']]['Data'] = curve_groups["Data"][seg_name].create_dataset(name=chan["name"], shape=(self.points_for_channel_segment[direction][chan['name']],), maxshape=(None,), chunks=(self.DATA_CHUNKSIZE,), dtype=np.float32)
-                h5_datasets[seg_name][chan['name']]['Indicies'] = curve_groups["Indicies"][seg_name].create_dataset(name=chan["name"], shape=(self.num_of_curves, ), maxshape=(None,), chunks=(self.INDICIES_CHUNKSIZE,), dtype=np.int32)
+                h5_datasets[seg_name][chan['name']]['Indicies'] = curve_groups["Indicies"][seg_name].create_dataset(name=chan["name"], shape=(self.num_of_curves + 1, ), maxshape=(None,), chunks=(self.INDICIES_CHUNKSIZE,), dtype=np.int32)
                 h5_datasets_buffer[seg_name][chan['name']] = {'Data': [], 'Indicies': []}
         return global_meta_group, h5_datasets, h5_meta_datasets, h5_datasets_buffer, h5_meta_datasets_buffer
 

@@ -267,10 +267,12 @@ def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> d
     # Compose a dictionary of timestamsps
     return {f"frame {i}": timestamp for i, timestamp in enumerate(timestamps)}
 
+
 def get_h5jpk_channels(file_path: Path | str):
     with h5py.File(file_path, "r") as f:
         available_channels = list(_available_channels(f))
     return available_channels
+
 
 class LazyQIData:
     def __init__(self, qi_data_group: h5py.Group, shape_x: int, shape_y: int, flip_image: bool = True):
@@ -280,15 +282,16 @@ class LazyQIData:
         self.dims = (shape_y, shape_x)
         self.flip_image = flip_image
 
-
     def __getitem__(self, y: int):
 
         class RowProxy:
             def __init__(self, parent, y):
                 self.parent = parent
                 self.y = y
+
             def __getitem__(self, x: int):
                 return self.parent._fetch_curve(self.y, x)
+
         return RowProxy(self, y)
 
     def __iter__(self):
@@ -331,9 +334,13 @@ class LazyQIData:
 
         return all_curves
 
+
 class LazyCurveMetadata:
     """A proxy class that fetches header.properties files on demand."""
-    def __init__(self, qi_data_group: h5py.Group, top_level_meta: dict, shape_x: int, shape_y: int, flip_image: bool = True):
+
+    def __init__(
+        self, qi_data_group: h5py.Group, top_level_meta: dict, shape_x: int, shape_y: int, flip_image: bool = True
+    ):
         self.qi_data_group = qi_data_group
         self.top_level_meta = top_level_meta
         self.shape_x = shape_x
@@ -351,6 +358,7 @@ class LazyCurveMetadata:
             return LazyMetaProxy(self.qi_data_group, "segment", self.shape_x, self.shape_y, self.flip_image)
         raise KeyError(key)
 
+
 class LazyMetaProxy:
     def __init__(self, qi_data_group: h5py.Group, meta_type: str, shape_x: int, shape_y: int, flip_image: bool = True):
         self.qi_data_group = qi_data_group
@@ -364,18 +372,23 @@ class LazyMetaProxy:
             def __init__(self, parent, y):
                 self.parent = parent
                 self.y = y
+
             def __getitem__(self, x):
                 if self.parent.meta_type == "curve":
                     return self.parent._fetch_meta(self.y, x)
                 elif self.parent.meta_type == "segment":
+
                     class SegmentMetaProxy:
                         def __init__(self, parent, y, x):
                             self.parent = parent
                             self.y = y
                             self.x = x
+
                         def __getitem__(self, direction):
                             return self.parent.parent._fetch_meta(self.y, self.x, direction)
+
                     return SegmentMetaProxy(self, self.y, x)
+
         return RowProxy(self, y)
 
     def _fetch_meta(self, y: int, x: int, direction: int = None):
@@ -391,11 +404,14 @@ class LazyMetaProxy:
             if key.startswith(f"{self.meta_type}."):
                 new_key = key.split(".", 1)[1]
                 if isinstance(self.qi_data_group["Curve_Metadata"][key], h5py.Dataset):
-                    meta_dict[new_key] = self.qi_data_group["Curve_Metadata"][key][idx]
+                    meta_dict[new_key] = (
+                        self.qi_data_group["Curve_Metadata"][key][idx].decode("utf-8")
+                        if isinstance(self.qi_data_group["Curve_Metadata"][key][idx], bytes)
+                        else self.qi_data_group["Curve_Metadata"][key][idx]
+                    )
                 else:
                     meta_dict[new_key] = self.qi_data_group["Curve_Metadata"][key]
         return meta_dict
-
 
 
 def load_h5jpk(
@@ -447,7 +463,6 @@ def load_h5jpk(
 
         channel_group, measurement_group, dataset_name = _get_channel_info(f, channel)
 
-
         # Load images and scaling factors from channel dataset
         images = channel_group[dataset_name][:]
         scaling, offset = _get_z_scaling_h5(channel_group)
@@ -481,7 +496,6 @@ def load_h5jpk(
 
         if "QI_Curve_Data" not in f:
             load_curves = False
-
 
     if load_curves:
         f = h5py.File(file_path, "r")
