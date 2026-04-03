@@ -474,14 +474,20 @@ def load_h5jpk(
 
         # Reshape each column vector (height, width) to get (num_frames, height, width)
         num_frames = images.shape[1]
-        image_stack = np.empty((num_frames, shape_y, shape_x), dtype=images.dtype)
+        if num_frames == 1:
+            image_stack = np.empty((shape_y, shape_x), dtype=images.dtype)
+        else:
+            image_stack = np.empty((num_frames, shape_y, shape_x), dtype=images.dtype)
         for i in range(num_frames):
             frame = images[:, i].reshape((shape_y, shape_x))
 
             # Flip images
             if flip_image:
                 frame = np.flipud(frame)
-            image_stack[i] = frame
+            if num_frames == 1:
+                image_stack = frame
+            else:
+                image_stack[i] = frame
 
         # Convert to nm
         if dataset_name.lower() in ("height", "error", "measuredheight", "amplitude"):
