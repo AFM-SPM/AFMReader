@@ -281,6 +281,7 @@ class LazyQIData:
         self.shape_y = shape_y
         self.dims = (shape_y, shape_x)
         self.flip_image = flip_image
+        self.CHUNK_SIZE = 500  # Number of curves to load at once when iterating
 
     def __getitem__(self, y: int):
 
@@ -295,9 +296,34 @@ class LazyQIData:
         return RowProxy(self, y)
 
     def __iter__(self):
-        for y in range(self.shape_y):
+        indicies_map = {}
+        for segment, segment_group in self.qi_data_group["Curves"].items():
+            for channel in segment_group["Indicies"]:
+                if channel not in indicies_map:
+                    indicies_map[channel] = {}
+                indicies_map[channel][segment] = segment_group["Indicies"][channel][:]
+        for y_idx in range(self.shape_y):
+            data = {}
+            y = self.shape_y - 1 - y_idx if self.flip_image else y_idx
+            for segment, segment_group in self.qi_data_group["Curves"].items():
+                for channel in segment_group["Indicies"]:
+                    if channel not in data:
+                        data[channel] = {}
+                    indicies = indicies_map[channel][segment]
+                    start_idx = int(indicies[self.shape_x * y])
+                    end_idx = int(indicies[self.shape_x * (y + 1)])
+
+                    data[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
             for x in range(self.shape_x):
-                yield self._fetch_curve(y, x)
+                curve_data = {}
+                for channel in data:
+                    curve_data[channel] = {}
+                    for segment in data[channel]:
+                        indicies = indicies_map[channel][segment]
+                        start_idx = int(indicies[self.shape_x * y + x]) - int(indicies[self.shape_x * y])
+                        end_idx = int(indicies[self.shape_x * y + x + 1]) - int(indicies[self.shape_x * y])
+                        curve_data[channel][segment] = data[channel][segment][start_idx:end_idx]
+                yield curve_data
 
     def _fetch_curve(self, y: int, x: int):
         if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
