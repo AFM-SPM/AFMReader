@@ -9,7 +9,6 @@ import numpy as np
 import javaproperties
 import h5py
 import psutil
-from pympler import asizeof
 
 from AFMReader.logging import logger
 from AFMReader import jpk
@@ -260,10 +259,10 @@ class jpk_qi_loader:
         self.config_path = config_path
         self.flip_image = flip_image
         self.save_as_h5 = save_as_h5
-        logger.debug(f"Initialized JPK QI loader for file {self.filepath} with channel {self.channel}")
+
         # Open the ZIP archive once and keep it open for the duration of the loading process to improve performance when accessing multiple files within the archive
         self.qi_archive = zipfile.ZipFile(self.filepath, "r")
-        logger.debug(f"Opened JPK QI archive at {self.filepath}")
+        logger.info(f"Opened JPK QI archive at {self.filepath}")
         self.namelist = self.qi_archive.namelist()
         # Set path to the .jpk-qi-image file within the archive for later use
         self.path_to_image = None
@@ -286,7 +285,7 @@ class jpk_qi_loader:
         # A dictionary containing all metadata, splitting the top level metadata and the metadata for each curve and segment
         self.full_metadata = {}
         # A 2D list of curve data dictionaries, where each dictionary contains the data for all channels and segments
-        self.all_curve_data = None
+        self.curve_data = None
         # A lookup for channel name to unit to be returned
         self.channels_units = {}
         # The list of channels for the segments with their scaling information extracted from the shared header
@@ -367,6 +366,13 @@ class jpk_qi_loader:
         self.flip_image = flip_image if flip_image is not None else self.flip_image
         self.save_as_h5 = save_as_h5 if save_as_h5 is not None else self.save_as_h5
 
+        if self.save_as_h5:
+            self.h5_path = self.filepath.parent / f"{self.filepath.stem}.h5-jpk"
+            i = 0
+            while self.h5_path.exists():
+                self.h5_path = self.filepath.parent / f"{self.filepath.stem}_{i}.h5-jpk"
+                i += 1
+
         logger.info(f"Loading JPK QI data from {self.filepath} with channel {self.channel}")
         self.extract_global_metadata()
 
@@ -381,7 +387,7 @@ class jpk_qi_loader:
         self.full_metadata = LazyCurveMetadata(
             self.filepath, self.top_level_meta, self.qi_archive, self.shape_x, self.shape_y, flip_image=self.flip_image
         )
-        self.all_curve_data = LazyCurveData(
+        self.curve_data = LazyCurveData(
             self.filepath, self.shape_x, self.shape_y, self.channel_scaling, self.qi_archive, flip_image=self.flip_image
         )
 
@@ -392,10 +398,7 @@ class jpk_qi_loader:
         if self.save_as_h5:
             self.save_lite_data()
 
-        if self.all_curve_data:
-            return (self.image, self.px2nm, (self.all_curve_data, self.channels_units, self.full_metadata))
-
-        return self.image, self.px2nm
+        return (self.image, self.px2nm, (self.curve_data, self.channels_units, self.full_metadata))
 
     def output_summary(self):
         """
@@ -555,9 +558,6 @@ class jpk_qi_loader:
             # Resize the datasets to the actual number of points read
             for direction in range(2):
                 for chan in self.segment_channels:
-                    logger.debug(
-                        f"Resizing dataset for channel {chan['name']} in segment {direction} from {h5_datasets[f'Segment_{direction}'][chan['name']]['Data'].shape[0]} to final size {self.points_for_channel_segment[direction][chan['name']]}"
-                    )
                     h5_datasets[f"Segment_{direction}"][chan["name"]]["Data"].resize(
                         (self.points_for_channel_segment[direction][chan["name"]],)
                     )
@@ -763,7 +763,7 @@ class jpk_qi_loader:
         """
         Saves a lite form of the data (e.g., the calculated image data) to the appropriate format based on the save_as_h5 attribute.
         """
-        with h5py.File(self.filepath.parent / f"{self.filepath.stem}.h5-jpk", "a") as h5file:
+        with h5py.File(self.h5_path, "a") as h5file:
             # Save data required for reading the h5 file as a normal image file
             meas_grp = h5file.require_group("Measurement_000")
             # Save dimensions data
@@ -773,7 +773,7 @@ class jpk_qi_loader:
             meas_grp.attrs["position-pattern.grid.jlength"] = self.shape_y
             meas_grp.attrs["timing-settings.scanRate"] = 1.0  # Dummy value to satisfy reader
 
-            logger.info(f"Saving a hdf5 copy of the data {self.filepath.parent / f'{self.filepath.stem}.h5-jpk'}")
+            logger.info(f"Saving a hdf5 copy of the data {self.h5_path}")
 
             h5_channels = [self.channel]
             # Look for the jpk-qi-image file in the archive
@@ -1109,7 +1109,7 @@ class jpk_qi_loader:
             The context manager for saving the data.
         """
         if self.save_as_h5:
-            return h5py.File(self.filepath.parent / f"{self.filepath.stem}.h5-jpk", "a")
+            return h5py.File(self.h5_path, "a")
         else:
             return nullcontext()
 
@@ -1192,7 +1192,7 @@ class jpk_qi_loader:
         """Closes the ZIP archive when done to free up system resources."""
         self.qi_archive.close()
         self.image = None
-        self.all_curve_data = None
+        self.curve_data = None
         self.curve_meta = {}
         self.segment_meta = {}
         self.top_level_meta = {}
