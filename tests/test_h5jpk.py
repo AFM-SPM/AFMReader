@@ -143,6 +143,51 @@ def test_load_h5jpk(
         for i in range(len(results_timestamps) - 1)
     )
 
+@pytest.mark.parametrize(
+    (
+        "file_name",
+        "channel",
+        "flip_image",
+        "curve_coords",
+        "curve_direction",
+        "curve_targets",
+    ),
+    [
+        pytest.param(
+            "sample_0_curves.h5-jpk",
+            "height_trace",
+            True,
+            (0, 0),
+            "Segment_0",
+            {
+                "height": (31, 0.00019106604),
+                "measuredHeight": (31, 0.00027384484),
+                "smoothedMeasuredHeight": (31, -38066577408.0),
+                "vDeflection": (31, 2.7409627e-07),
+            },
+            id="test curves 0",
+        ),
+    ],
+)
+def test_load_h5jpk_curves(
+    file_name: str,
+    channel: str,
+    flip_image: bool,
+    curve_coords: tuple[int, int],
+    curve_direction: str,
+    curve_targets: dict[str, tuple[int, float]],
+
+) -> None:
+
+    _, _, _, result_curve_data = h5_jpk.load_h5jpk(
+        RESOURCES / file_name, channel, flip_image
+    )
+    all_curves, _, _ = result_curve_data
+    curve_at_coords = all_curves[curve_coords[0]][curve_coords[1]]
+    for curve_channel, (expected_size, expected_sum) in curve_targets.items():
+        curve = curve_at_coords[curve_channel][curve_direction]
+        assert curve.shape == (expected_size,)
+        assert curve.sum() == pytest.approx(expected_sum)
 
 def test_load_h5jpk_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""

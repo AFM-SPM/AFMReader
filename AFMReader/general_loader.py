@@ -80,7 +80,7 @@ class LoadFile:
                 if len(h5_returned) == 3:
                     image, pixel_to_nanometre_scaling_factor, _ = h5_returned
                 elif len(h5_returned) == 4:
-                    image, pixel_to_nanometre_scaling_factor, curve_data, _ = h5_returned
+                    image, pixel_to_nanometre_scaling_factor, _, curve_data = h5_returned
                     self.loaded_curves = True
                     print(f"Loaded image with shape {image.shape} and pixel to nanometre scaling factor {pixel_to_nanometre_scaling_factor}")
                     print(f"Image has max value {image.max()} and min value {image.min()}")

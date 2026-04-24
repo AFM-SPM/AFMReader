@@ -545,6 +545,6 @@ def load_h5jpk(
 
         all_curve_data = LazyQIData(qi_data_group, shape_x, shape_y, flip_image)
 
-        return (image_stack, px2nm, (all_curve_data, channels_units, full_metadata), timestamps)
+        return (image_stack, px2nm, timestamps, (all_curve_data, channels_units, full_metadata))
 
     return (image_stack, px2nm, timestamps)
