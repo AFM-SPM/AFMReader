@@ -132,7 +132,7 @@ def test_load_spm_file_not_found() -> None:
     ],
 )
 def test_load_spm_channel_not_found(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture,
     channel: str,
     message: str,
     error: bool,
@@ -143,4 +143,5 @@ def test_load_spm_channel_not_found(
             spm.load_spm(RESOURCES / "sample_0.spm", channel)
     else:
         spm.load_spm(RESOURCES / "sample_0.spm", channel)
-    assert message in caplog.text
+    captured = capsys.readouterr()
+    assert message in captured.err

@@ -7,7 +7,7 @@ from loguru import logger
 logger.remove()
 # Set the format to have blue time, green file, module, function and line, and white message
 logger.add(
-    sys.stderr,
+    lambda msg: sys.stderr.write(msg),
     colorize=True,
     format="<blue>{time:HH:mm:ss}</blue> | <level>{level}</level> |"
     "<magenta>{file}</magenta>:<magenta>{module}</magenta>:<magenta>"

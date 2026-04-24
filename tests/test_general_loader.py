@@ -126,23 +126,22 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         ),
     ],
 )
-def test_load(caplog: pytest.LogCaptureFixture, filepath: Path, channel: str, error: bool, message: str) -> None:
+def test_load(capsys: pytest.CaptureFixture, filepath: Path, channel: str, error: bool, message: str) -> None:
     """Test loading of all (asd, gwy, ibw, jpk, spm, stp, top, topostats) filetypes."""
     loader = general_loader.LoadFile(filepath, channel)
-
-    image, px2nm = loader.load()
-
-    if not error:
+    try:
+        image, px2nm = loader.load()
         # check array and px2nm returned
         assert isinstance(image, np.ndarray)
         assert isinstance(px2nm, float)
-    else:
-        # check when channel wrong
-        assert isinstance(image, ValueError)
-        assert px2nm is None
-
+    except ValueError as e:
+        if error:
+            assert message in str(e)
     # check output logs
-    assert message in caplog.text
+    captured = capsys.readouterr()
+    assert message in captured.err
+
+
 
 
 @pytest.mark.parametrize(

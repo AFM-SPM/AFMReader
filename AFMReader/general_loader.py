@@ -120,15 +120,11 @@ class LoadFile:
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
 
-            print(f"Loaded image with shape {image.shape} and pixel to nanometre scaling factor {pixel_to_nanometre_scaling_factor}")
-            print(f"Image has max value {image.max()} and min value {image.min()}")
-
             return image, pixel_to_nanometre_scaling_factor
 
         except ValueError as e:
             logger.error(f"{e}")
             raise e
-            return (e, None)  # cheeky return of an image, px2nm-like tuple object to propagate error message to Napari
 
     def get_available_channels(self):
         if self.suffix == ".asd":
