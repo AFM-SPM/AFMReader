@@ -1,17 +1,17 @@
 """Switchboard for input files."""
 
 from pathlib import Path
+from typing import Any
 
 import numpy.typing as npt
 
-from AFMReader import asd, gwy, h5_jpk, ibw, jpk, spm, stp, top, topostats, jpk_qi, bin
+from AFMReader import asd, gwy, h5_jpk, ibw, jpk, raw_bin, spm, stp, top, topostats, jpk_qi
 from AFMReader.logging import logger
-
 
 logger.enable(__package__)
 
 
-# pylint: disable=too-few-public-methods
+# pylint: disable=too-few-public-methods,too-many-branches,too-many-statements,fixme
 class LoadFile:
     """
     Class to handle the general loading of an AFM file.
@@ -22,9 +22,11 @@ class LoadFile:
             Path to the AFM image.
         channel : str
             Channel to extract from the AFM image.
+        kwargs : dict, optional
+            Additional keyword arguments to pass to the specific loaders
     """
 
-    def __init__(self, filepath: str | Path, channel: str, kwargs: dict = None):
+    def __init__(self, filepath: str | Path, channel: str, kwargs: dict | None = None):
         """
         Initialise the general LoadFile class with a filepath and channel.
 
@@ -34,6 +36,8 @@ class LoadFile:
             Path to the AFM image.
         channel : str
             Channel to extract from the AFM image.
+        kwargs : dict, optional
+            Additional keyword arguments to pass to the specific loaders
         """
         self.filepath = Path(filepath)
         self.channel = channel
@@ -42,17 +46,26 @@ class LoadFile:
         self.kwargs = kwargs if kwargs else {}
 
         # Store heavy loaded data in a dict to avoid having to reload it
-        self.cached_data = {}
+        self.cached_data: dict[str, Any] = {}
 
-    def load(self, channel: str | None = None, kwargs: dict = None) -> tuple[npt.NDArray | str, float | None]:  # noqa: C901
+    def load(  # noqa: C901
+        self, channel: str | None = None, kwargs: dict | None = None
+    ) -> tuple[npt.NDArray | str, float | None] | tuple[npt.NDArray | str, float | None, Any]:
         """
         Generally loads a file type that can be handled by AFMReader.
+
+        Parameters
+        ----------
+        channel : str, optional
+            Overriding channel to extract from the AFM image.
+        kwargs : dict, optional
+            Additional keyword arguments to pass to the specific loaders
 
         Returns
         -------
         tuple
             The image data (stack if ''.asd'' or ''.h5-jpk'') and the pixel to nanometre scaling ratio.
-            If curve data is found, also return the curve data (a large dict of all the curves)
+            If curve data is found, also return the curve data (a large dict of all the curves).
 
         Raises
         ------
@@ -82,14 +95,19 @@ class LoadFile:
                 elif len(h5_returned) == 4:
                     image, pixel_to_nanometre_scaling_factor, _, curve_data = h5_returned
                     self.loaded_curves = True
-                    print(f"Loaded image with shape {image.shape} and pixel to nanometre scaling factor {pixel_to_nanometre_scaling_factor}")
+                    print(
+                        f"Loaded image with shape {image.shape} and pixel to nanometre "
+                        f"scaling factor {pixel_to_nanometre_scaling_factor}"
+                    )
                     print(f"Image has max value {image.max()} and min value {image.min()}")
                     return image, pixel_to_nanometre_scaling_factor, curve_data
                 else:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
             elif self.suffix == ".jpk-qi-data":
                 if "jpk_qi_loader" not in self.cached_data:
-                    self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(filepath=self.filepath, channel=self.channel, **self.kwargs)
+                    self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(
+                        filepath=self.filepath, channel=self.channel, **self.kwargs
+                    )
                 jpk_qi_returned = self.cached_data["jpk_qi_loader"].load(channel=self.channel, **self.kwargs)
                 if len(jpk_qi_returned) == 2:
                     image, pixel_to_nanometre_scaling_factor = jpk_qi_returned
@@ -116,7 +134,7 @@ class LoadFile:
                         f"{[im for im in image_keys if im in topostats_keys]}"
                     ) from exc
             elif self.suffix == ".bin":
-                image, pixel_to_nanometre_scaling_factor = bin.load_bin(self.filepath, **self.kwargs)
+                image, pixel_to_nanometre_scaling_factor = raw_bin.load_bin(self.filepath, **self.kwargs)
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
 
@@ -126,7 +144,15 @@ class LoadFile:
             logger.error(f"{e}")
             raise e
 
-    def get_available_channels(self):
+    def get_available_channels(self):  # noqa: C901
+        """
+        Get the available channels for the file type.
+
+        Returns
+        -------
+        list
+            List of available channels.
+        """
         if self.suffix == ".asd":
             available_channels = asd.get_asd_channels(self.filepath)
         elif self.suffix == ".gwy":
@@ -146,7 +172,7 @@ class LoadFile:
         elif self.suffix == ".topostats":
             available_channels = ["image", "image_original"]
         elif self.suffix == ".bin":
-            available_channels = bin.get_bin_channels()
+            available_channels = raw_bin.get_bin_channels()
         elif self.suffix in [".stp", ".top"]:
             return []
         else:

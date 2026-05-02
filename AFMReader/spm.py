@@ -111,8 +111,23 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
 
     return (image, spm_pixel_to_nm_scaling(filename, channel_data))
 
-def get_spm_channels(file_path):
+
+def get_spm_channels(file_path: Path | str) -> list:
+    """
+    Get the list of channels available in the .spm file.
+
+    Parameters
+    ----------
+    file_path : Path or str
+        Path to the .spm file.
+
+    Returns
+    -------
+    list
+        List of available channels.
+    """
     labels = []
+    file_path = Path(file_path)
     filename = file_path.stem
     try:
         scan = pySPM.Bruker(file_path)

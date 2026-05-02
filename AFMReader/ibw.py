@@ -38,7 +38,22 @@ def _ibw_pixel_to_nm_scaling(scan: dict) -> float:
         float(notes["FastScanSize"]) / scan["wave"]["wData"].shape[1] * 1e9,  # as in m
     )[0]
 
+
 def get_ibw_channels(file_path: Path | str):
+    """
+    Extract a list of available channels and their corresponding dictionary key ids from the `.ibw` file.
+
+    Parameters
+    ----------
+    file_path : Path or str
+        Path to the .ibw file.
+
+    Returns
+    -------
+    list
+        List of available channels.
+    """
+    file_path = Path(file_path)
     filename = file_path.stem
     scan = binarywave.load(file_path)
     logger.info(f"[{filename}] : Loaded image from : {file_path}")

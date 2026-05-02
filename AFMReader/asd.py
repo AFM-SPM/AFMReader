@@ -287,7 +287,21 @@ def load_asd(file_path: str | Path, channel: str):
         logger.info(f"[{filename}] : Extracted image.")
         return frames, pixel_to_nanometre_scaling_factor, header_dict
 
+
 def get_asd_channels(file_path: Path):
+    """
+    Get the channels available in given .asd file.
+
+    Parameters
+    ----------
+    file_path : Path
+        Path to the .asd file.
+
+    Returns
+    -------
+    list
+        List of channels available in the .asd file.
+    """
     with Path.open(file_path, "rb", encoding=None) as open_file:  # pylint: disable=unspecified-encoding
         file_version = read_file_version(open_file)
 
@@ -303,8 +317,7 @@ def get_asd_channels(file_path: Path):
             raise ValueError(
                 f"File version {file_version} unknown. Please add support if you know how to decode this file version."
             )
-        channel_list = [header_dict["channel1"], header_dict["channel2"]]
-        return channel_list
+        return [header_dict["channel1"], header_dict["channel2"]]
 
 
 def read_file_version(open_file: BinaryIO) -> int:

@@ -9,7 +9,21 @@ from loguru import logger
 
 from AFMReader.io import read_char, read_double, read_null_terminated_string, read_uint32
 
+
 def get_gwy_channels(file_path):
+    """
+    Extract a list of available channels and their corresponding dictionary key ids from the `.gwy` file.
+
+    Parameters
+    ----------
+    file_path : Path or str
+        Path to the .gwy file.
+
+    Returns
+    -------
+    list
+        List of available channels.
+    """
     image_data_dict: dict[Any, Any] = {}
     with Path.open(file_path, "rb") as open_file:  # pylint: disable=unspecified-encoding
         # Read header
@@ -20,6 +34,7 @@ def get_gwy_channels(file_path):
     channel_ids = gwy_get_channels(gwy_file_structure=image_data_dict)
 
     return list(channel_ids)
+
 
 def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.float64], float]:
     """

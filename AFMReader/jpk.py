@@ -12,7 +12,7 @@ from AFMReader.logging import logger
 
 logger.enable(__package__)
 
-# pylint: disable=too-many-locals
+# pylint: disable=too-many-locals,too-many-positional-arguments,fixme
 
 
 def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: dict[str, int]) -> float:
@@ -171,8 +171,9 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
         raise ValueError(f"Scaling type {scaling_type} is not 'NullScaling' or 'LinearScaling'")
     return scaling, offset
 
+
 def _get_jpk_channels(
-        file: Path | BytesIO, filename: str, file_path: Path | str, config_path: Path | str | None = None
+    file: Path | BytesIO, filename: str, file_path: Path | str, config_path: Path | str | None = None
 ):
     jpk_tags = _load_jpk_tags(config_path)
     try:
@@ -191,10 +192,24 @@ def _get_jpk_channels(
         channel_list[f"{available_channel}_{tr_rt}"] = i + 1
     return channel_list
 
-def get_jpk_channels(
-    file_path: Path | str, config_path: Path | str | None = None
-) -> list[str]:
 
+def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = None) -> list[str]:
+    """
+    Get the list of channels available in the .jpk file.
+
+    Parameters
+    ----------
+    file_path : Path | str
+        Path to the .jpk file.
+    config_path : Path | str | None
+        Path to a configuration file. If ''None'' (default) then the packages
+        default configuration is loaded from ''default_config.yaml''.
+
+    Returns
+    -------
+    list[str]
+        List of available channels.
+    """
     file_path = Path(file_path)
     filename = file_path.stem
     return _get_jpk_channels(file_path, filename, file_path, config_path)
@@ -242,10 +257,26 @@ def load_jpk(
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
     filename = file_path.stem
-    image, px2nm = _load_jpk(file=file_path, filename=filename, channel=channel, file_suffix=file_path.suffix, config_path=config_path, flip_image=flip_image)
+    image, px2nm = _load_jpk(
+        file=file_path,
+        filename=filename,
+        channel=channel,
+        file_suffix=file_path.suffix,
+        config_path=config_path,
+        flip_image=flip_image,
+    )
     return (image, px2nm)
 
-def _load_jpk(file: Path | BytesIO, filename: str, channel: str, file_suffix: str, config_path: Path | str | None = None, flip_image: bool = True, convert_to_nm: bool = True) -> tuple[np.ndarray, float]:
+
+def _load_jpk(
+    file: Path | BytesIO,
+    filename: str,
+    channel: str,
+    file_suffix: str,
+    config_path: Path | str | None = None,
+    flip_image: bool = True,
+    convert_to_nm: bool = True,
+) -> tuple[np.ndarray, float]:
     jpk_tags = _load_jpk_tags(config_path)
     try:
         tif = tifffile.TiffFile(file)

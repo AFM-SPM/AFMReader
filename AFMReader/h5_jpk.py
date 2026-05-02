@@ -6,13 +6,21 @@ timestamps based on scan metadata.
 """
 
 from pathlib import Path
+from typing import Any
 
 import h5py
 import numpy as np
 
 from AFMReader.logging import logger
+from AFMReader.jpk_utils import (
+    LazyMetaProxy,
+    LazyMetadata,
+    LazyQiData,
+)
 
 logger.enable(__package__)
+
+# pylint: disable=too-few-public-methods,too-many-locals,fixme
 
 
 def _parse_channel_name(channel: str) -> tuple[str, str]:
@@ -269,33 +277,58 @@ def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> d
 
 
 def get_h5jpk_channels(file_path: Path | str):
+    """
+    Get available channels from a .h5-jpk file.
+
+    Parameters
+    ----------
+    file_path : Path | str
+        Path to the .h5-jpk file.
+
+    Returns
+    -------
+    list
+        List of available channels.
+    """
     with h5py.File(file_path, "r") as f:
-        available_channels = list(_available_channels(f))
-    return available_channels
+        return list(_available_channels(f))
 
 
-class LazyQIData:
+class LazyH5QiData(LazyQiData):
+    """
+    A proxy class that fetches QI curve data from the HDF5 file on demand.
+
+    It behaves like a 2D array of shape (shape_y, shape_x) where each element
+    is a dictionary containing the QI curve data for that pixel.
+    """
+
     def __init__(self, qi_data_group: h5py.Group, shape_x: int, shape_y: int, flip_image: bool = True):
+        """
+        Initialize the LazyH5QiData proxy.
+
+        Parameters
+        ----------
+        qi_data_group : h5py.Group
+            The HDF5 group containing the QI curve data.
+        shape_x : int
+            The number of columns in the image.
+        shape_y : int
+            The number of rows in the image.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is ``True``.
+        """
+        super().__init__(shape_x, shape_y, flip_image)
         self.qi_data_group = qi_data_group
-        self.shape_x = shape_x
-        self.shape_y = shape_y
-        self.dims = (shape_y, shape_x)
-        self.flip_image = flip_image
-        self.CHUNK_SIZE = 500  # Number of curves to load at once when iterating
 
-    def __getitem__(self, y: int):
+    def __iter__(self):  # noqa: C901
+        """
+        Efficiently iterate over the QI curve data, loading one row at a time.
 
-        class RowProxy:
-            def __init__(self, parent, y):
-                self.parent = parent
-                self.y = y
-
-            def __getitem__(self, x: int):
-                return self.parent._fetch_curve(self.y, x)
-
-        return RowProxy(self, y)
-
-    def __iter__(self):
+        Yields
+        ------
+        dict
+            A dictionary containing the QI curve data for each channel and segment.
+        """
         indicies_map = {}
         for segment, segment_group in self.qi_data_group["Curves"].items():
             for channel in segment_group["Indicies"]:
@@ -326,6 +359,21 @@ class LazyQIData:
                 yield curve_data
 
     def _fetch_curve(self, y: int, x: int):
+        """
+        Fetch the QI curve data for a specific pixel (x, y) on demand.
+
+        Parameters
+        ----------
+        y : int
+            The row index.
+        x : int
+            The column index.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the QI curve data for the specified pixel.
+        """
         if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
         curve_dict = {}
@@ -342,6 +390,14 @@ class LazyQIData:
         return curve_dict
 
     def load_all_curves(self):
+        """
+        Load all QI curve data into memory.
+
+        Returns
+        -------
+        list
+            A 2D list containing dictionaries with QI curve data for each pixel.
+        """
         all_curves = [[{} for _ in range(self.shape_x)] for _ in range(self.shape_y)]
         for segment, segment_group in self.qi_data_group["Curves"].items():
             for channel in segment_group["Indicies"]:
@@ -361,63 +417,100 @@ class LazyQIData:
         return all_curves
 
 
-class LazyCurveMetadata:
+class LazyH5Metadata(LazyMetadata):
     """A proxy class that fetches header.properties files on demand."""
 
     def __init__(
         self, qi_data_group: h5py.Group, top_level_meta: dict, shape_x: int, shape_y: int, flip_image: bool = True
     ):
+        """
+        Initialize the LazyH5Metadata proxy.
+
+        Parameters
+        ----------
+        qi_data_group : h5py.Group
+            The HDF5 group containing the QI curve data.
+        top_level_meta : dict
+            The top-level metadata dictionary.
+        shape_x : int
+            The number of columns in the image.
+        shape_y : int
+            The number of rows in the image.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is ``True``.
+        """
         self.qi_data_group = qi_data_group
-        self.top_level_meta = top_level_meta
-        self.shape_x = shape_x
-        self.shape_y = shape_y
-        self.flip_image = flip_image
-        # Expose top_level so the frontend can still do `raw_metadata["top_level"]`
-        self.top_level = top_level_meta
+        super().__init__(top_level_meta, shape_x, shape_y, flip_image)
 
     def __getitem__(self, key):
+        """
+        Fetch metadata based on the key.
+
+        Parameters
+        ----------
+        key : str
+            The key to fetch metadata for.
+
+        Returns
+        -------
+        object
+            The fetched metadata, a lazy object that can be further queried.
+        """
         if key == "top_level":
             return self.top_level
-        elif key == "curves":
-            return LazyMetaProxy(self.qi_data_group, "curve", self.shape_x, self.shape_y, self.flip_image)
-        elif key == "segments":
-            return LazyMetaProxy(self.qi_data_group, "segment", self.shape_x, self.shape_y, self.flip_image)
+        if key == "curves":
+            return LazyH5MetaProxy(self.qi_data_group, "curve", self.shape_x, self.shape_y, self.flip_image)
+        if key == "segments":
+            return LazyH5MetaProxy(self.qi_data_group, "segment", self.shape_x, self.shape_y, self.flip_image)
         raise KeyError(key)
 
 
-class LazyMetaProxy:
+class LazyH5MetaProxy(LazyMetaProxy):
+    """
+    A proxy class that fetches curve or segment metadata from the HDF5 file on demand.
+
+    It behaves like a 2D array of shape (shape_y, shape_x) where each element
+    is a dictionary containing the requested metadata for that pixel.
+    """
+
     def __init__(self, qi_data_group: h5py.Group, meta_type: str, shape_x: int, shape_y: int, flip_image: bool = True):
+        """
+        Initialize the LazyH5MetaProxy.
+
+        Parameters
+        ----------
+        qi_data_group : h5py.Group
+            The HDF5 group containing the QI curve data.
+        meta_type : str
+            The type of metadata to fetch ("curve" or "segment").
+        shape_x : int
+            The number of columns in the image.
+        shape_y : int
+            The number of rows in the image.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is ``True``.
+        """
+        super().__init__(meta_type, shape_x, shape_y, flip_image)
         self.qi_data_group = qi_data_group
-        self.meta_type = meta_type
-        self.shape_x = shape_x
-        self.shape_y = shape_y
-        self.flip_image = flip_image
 
-    def __getitem__(self, y: int):
-        class RowProxy:
-            def __init__(self, parent, y):
-                self.parent = parent
-                self.y = y
+    def _fetch_meta(self, y: int, x: int, direction: int | None = None):
+        """
+        Fetch metadata for a specific pixel (x, y) on demand.
 
-            def __getitem__(self, x):
-                if self.parent.meta_type == "curve":
-                    return self.parent._fetch_meta(self.y, x)
-                elif self.parent.meta_type == "segment":
+        Parameters
+        ----------
+        y : int
+            The row index.
+        x : int
+            The column index.
+        direction : int, optional
+            The direction index for segment metadata (0 or 1), required if meta_type is "segment".
 
-                    class SegmentMetaProxy:
-                        def __init__(self, parent, y, x):
-                            self.parent = parent
-                            self.y = y
-                            self.x = x
-
-                        def __getitem__(self, direction):
-                            return self.parent.parent._fetch_meta(self.y, self.x, direction)
-
-                    return SegmentMetaProxy(self, self.y, x)
-
-        return RowProxy(self, y)
-
-    def _fetch_meta(self, y: int, x: int, direction: int = None):
+        Returns
+        -------
+        dict
+            A dictionary containing the fetched metadata.
+        """
         if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
         if self.flip_image:
@@ -442,7 +535,7 @@ class LazyMetaProxy:
 
 def load_h5jpk(
     file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True
-) -> tuple[np.ndarray, float, dict[str, float]]:
+) -> tuple[np.ndarray, float, dict[str, float]] | tuple[np.ndarray, float, dict[str, float], Any]:
     """
     Load image from JPK Instruments .h5-jpk files.
 
@@ -463,6 +556,9 @@ def load_h5jpk(
         Scaling factor converting pixels to nanometers.
     timestamps : dict[str, float]
         Dictionary mapping frame labels (e.g., "frame 0") to timestamp values in seconds.
+    curves_data : tuple(LazyH5QiData, dict, LazyH5Metadata), optional
+        Tuple containing lazy-loaded QI curve data, channel units, and metadata.
+        Returned only if load_curves is True and QI curve data is present in the file.
 
     Raises
     ------
@@ -541,9 +637,9 @@ def load_h5jpk(
                 channels_units[key.split(".")[-1]] = value
             top_level_meta[key] = value
 
-        full_metadata = LazyCurveMetadata(qi_data_group, top_level_meta, shape_x, shape_y, flip_image)
+        full_metadata = LazyH5Metadata(qi_data_group, top_level_meta, shape_x, shape_y, flip_image)
 
-        all_curve_data = LazyQIData(qi_data_group, shape_x, shape_y, flip_image)
+        all_curve_data = LazyH5QiData(qi_data_group, shape_x, shape_y, flip_image)
 
         return (image_stack, px2nm, timestamps, (all_curve_data, channels_units, full_metadata))
 
