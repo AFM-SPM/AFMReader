@@ -329,22 +329,22 @@ class LazyH5QiData(LazyQiData):
         dict
             A dictionary containing the QI curve data for each channel and segment.
         """
-        indicies_map = {}
+        indices_map = {}
         for segment, segment_group in self.qi_data_group["Curves"].items():
-            for channel in segment_group["Indicies"]:
-                if channel not in indicies_map:
-                    indicies_map[channel] = {}
-                indicies_map[channel][segment] = segment_group["Indicies"][channel][:]
+            for channel in segment_group["Indices"]:
+                if channel not in indices_map:
+                    indices_map[channel] = {}
+                indices_map[channel][segment] = segment_group["Indices"][channel][:]
         for y_idx in range(self.shape_y):
             data = {}
             y = self.shape_y - 1 - y_idx if self.flip_image else y_idx
             for segment, segment_group in self.qi_data_group["Curves"].items():
-                for channel in segment_group["Indicies"]:
+                for channel in segment_group["Indices"]:
                     if channel not in data:
                         data[channel] = {}
-                    indicies = indicies_map[channel][segment]
-                    start_idx = int(indicies[self.shape_x * y])
-                    end_idx = int(indicies[self.shape_x * (y + 1)])
+                    indices = indices_map[channel][segment]
+                    start_idx = int(indices[self.shape_x * y])
+                    end_idx = int(indices[self.shape_x * (y + 1)])
 
                     data[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
             for x in range(self.shape_x):
@@ -352,9 +352,9 @@ class LazyH5QiData(LazyQiData):
                 for channel in data:
                     curve_data[channel] = {}
                     for segment in data[channel]:
-                        indicies = indicies_map[channel][segment]
-                        start_idx = int(indicies[self.shape_x * y + x]) - int(indicies[self.shape_x * y])
-                        end_idx = int(indicies[self.shape_x * y + x + 1]) - int(indicies[self.shape_x * y])
+                        indices = indices_map[channel][segment]
+                        start_idx = int(indices[self.shape_x * y + x]) - int(indices[self.shape_x * y])
+                        end_idx = int(indices[self.shape_x * y + x + 1]) - int(indices[self.shape_x * y])
                         curve_data[channel][segment] = data[channel][segment][start_idx:end_idx]
                 yield curve_data
 
@@ -381,9 +381,9 @@ class LazyH5QiData(LazyQiData):
             y = self.shape_y - 1 - y
         curve_num = self.shape_x * y + x
         for segment, segment_group in self.qi_data_group["Curves"].items():
-            for channel in segment_group["Indicies"]:
-                start_idx = int(segment_group["Indicies"][channel][curve_num])
-                end_idx = int(segment_group["Indicies"][channel][curve_num + 1])
+            for channel in segment_group["Indices"]:
+                start_idx = int(segment_group["Indices"][channel][curve_num])
+                end_idx = int(segment_group["Indices"][channel][curve_num + 1])
                 if channel not in curve_dict:
                     curve_dict[channel] = {}
                 curve_dict[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
@@ -400,12 +400,12 @@ class LazyH5QiData(LazyQiData):
         """
         all_curves = [[{} for _ in range(self.shape_x)] for _ in range(self.shape_y)]
         for segment, segment_group in self.qi_data_group["Curves"].items():
-            for channel in segment_group["Indicies"]:
-                indicies = segment_group["Indicies"][channel][:]
+            for channel in segment_group["Indices"]:
+                indices = segment_group["Indices"][channel][:]
                 data = segment_group["Data"][channel][:]
-                for i in range(len(indicies) - 1):
-                    start_idx = int(indicies[i])
-                    end_idx = int(indicies[i + 1])
+                for i in range(len(indices) - 1):
+                    start_idx = int(indices[i])
+                    end_idx = int(indices[i + 1])
                     x = i % self.shape_x
                     y = i // self.shape_x
                     if self.flip_image:

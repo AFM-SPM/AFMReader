@@ -355,8 +355,8 @@ class jpk_qi_loader:
 
         # Chunk size for H5 datasets
         self.DATA_CHUNKSIZE = 512 * 1024
-        # Chunk size for indicies datasets
-        self.INDICIES_CHUNKSIZE = 64 * 1024
+        # Chunk size for indices datasets
+        self.INDICES_CHUNKSIZE = 64 * 1024
         # Chunk size for metadata datasets (if needed)
         self.META_CHUNKSIZE = 64 * 1024
         # Maximum number of curves to check for changing metadata keys (to avoid checking every curve)
@@ -384,15 +384,6 @@ class jpk_qi_loader:
         self.shape_x: int | None = None
         self.shape_y: int | None = None
         self.failed_curves: set[tuple[int, int | None, str | None]] = set()
-
-        # Timing counters for performance monitoring
-        self.t_load_data = 0.0
-        self.t_proc_data = 0.0
-        self.t_save_data = 0.0
-        self.t_load_meta = 0.0
-        self.t_proc_meta = 0.0
-        self.t_save_meta = 0.0
-        self.t_changing_keys = 0.0
 
         # Instantiate containers for data to be saved (so an exception is not caused if not saving)
         self.curve_groups = None
@@ -523,18 +514,6 @@ class jpk_qi_loader:
             # If there are no failed loads, log that all data was loaded successfully
             logger.info("Successfully loaded all curve data without any missing files.")
 
-        # Output the performance summary for the loading process
-        summary = (
-            f"\n--- Performance Summary ---\n"
-            f"Changing Keys Detection: {self.t_changing_keys:.2f}s\n"
-            f"Raw Data - Loading: {self.t_load_data:.2f}s | Processing: {self.t_proc_data:.2f}s | "
-            f"Saving: {self.t_save_data:.2f}s\n"
-            f"Metadata - Loading: {self.t_load_meta:.2f}s | Processing: {self.t_proc_meta:.2f}s | "
-            f"Saving: {self.t_save_meta:.2f}s\n"
-            f"---------------------------"
-        )
-        logger.info(summary)
-
     def extract_data_to_h5(
         self, h5_datasets, h5_meta_datasets, h5_datasets_buffer, h5_meta_datasets_buffer, include_metadata: bool = True
     ):
@@ -598,14 +577,14 @@ class jpk_qi_loader:
                 # Extract and store the curve metadata for later saving
                 self.extract_curve_metadata(curve_num=curve_num, curve_work=curve_work)
 
-        # Add the last index to the indicies datasets to mark the end of the last curve
+        # Add the last index to the indices datasets to mark the end of the last curve
         for direction in range(2):
             seg_name = f"Segment_{direction}"
             for chan in self.segment_channels:
                 chan_name = chan["name"]
                 current_dataset = h5_datasets[seg_name][chan_name]["Data"]
-                indicies_dataset = h5_datasets[seg_name][chan_name]["Indicies"]
-                indicies_dataset[-1] = current_dataset.shape[0]
+                indices_dataset = h5_datasets[seg_name][chan_name]["Indices"]
+                indices_dataset[-1] = current_dataset.shape[0]
 
     def save_to_h5(
         self,
@@ -928,20 +907,17 @@ class jpk_qi_loader:
             scale = self.channel_scaling[chan_name]
             dat_path = f"index/{curve_num}/segments/{direction}/channels/{chan_name}.dat"
             data_set = h5_datasets[f"Segment_{direction}"][chan_name]["Data"]
-            indicies_set = h5_datasets[f"Segment_{direction}"][chan_name]["Indicies"]
+            indices_set = h5_datasets[f"Segment_{direction}"][chan_name]["Indices"]
             data_size = data_set.shape[0]
             buf = h5_datasets_buffer[f"Segment_{direction}"][chan_name]
             filled_size = self.points_for_channel_segment[direction][chan_name]
             start_offset = self.current_offsets[direction][chan_name]
 
             try:
-                t0 = time.perf_counter()
                 with self.qi_archive.open(dat_path) as f:
                     # Read binary data as big-endian 32-bit integers
                     raw_bytes = f.read()
-                    self.t_load_data += time.perf_counter() - t0
 
-                    t1 = time.perf_counter()
                     raw_array = np.frombuffer(raw_bytes, dtype=">i4")
 
                     # Apply scaling to convert raw values into real world values
@@ -958,16 +934,12 @@ class jpk_qi_loader:
 
                         buffered_data = np.concatenate(buf["Data"])
 
-                        self.t_proc_data += time.perf_counter() - t1
-                        start_time = time.perf_counter()
-
                         # Add the buffer to the dataset
                         data_set[filled_size : filled_size + len(buffered_data)] = buffered_data
                         # Update the filled size for this channel and segment
                         self.points_for_channel_segment[direction][chan_name] += len(buffered_data)
                         # Clear the buffer
                         buf["Data"].clear()
-                        self.t_save_data += time.perf_counter() - start_time
 
             except KeyError:
                 self.failed_curves.add((curve_num, direction, chan_name))
@@ -983,23 +955,20 @@ class jpk_qi_loader:
                         "Lots of missing files, further warnings will be suppressed. View summary at the end."
                     )
 
-            start_time = time.perf_counter()
-            # Append the new index to the indicies buffer
-            buf["Indicies"].append(start_offset)
+            # Append the new index to the indices buffer
+            buf["Indices"].append(start_offset)
 
-            # If the indicies buffer is full add it to the indicies dataset and clear the buffer
-            if len(buf["Indicies"]) > 0 and len(buf["Indicies"]) % self.BUFFER_SIZE == 0:
-                indicies_set[curve_num - self.BUFFER_SIZE + 1 : curve_num + 1] = buf["Indicies"]
-                buf["Indicies"].clear()
+            # If the indices buffer is full add it to the indices dataset and clear the buffer
+            if len(buf["Indices"]) > 0 and len(buf["Indices"]) % self.BUFFER_SIZE == 0:
+                indices_set[curve_num - self.BUFFER_SIZE + 1 : curve_num + 1] = buf["Indices"]
+                buf["Indices"].clear()
 
-            # Or if this is the last curve and there are still indicies in the buffer
-            elif len(buf["Indicies"]) > 0 and curve_num == self.num_of_curves - 1:
-                # Add the remaining indicies to the indicies dataset and clear the buffer
-                items_in_buffer = len(buf["Indicies"])
-                indicies_set[curve_num - items_in_buffer + 1 : curve_num + 1] = buf["Indicies"]
-                buf["Indicies"].clear()
-
-            self.t_save_data += time.perf_counter() - start_time
+            # Or if this is the last curve and there are still indices in the buffer
+            elif len(buf["Indices"]) > 0 and curve_num == self.num_of_curves - 1:
+                # Add the remaining indices to the indices dataset and clear the buffer
+                items_in_buffer = len(buf["Indices"])
+                indices_set[curve_num - items_in_buffer + 1 : curve_num + 1] = buf["Indices"]
+                buf["Indices"].clear()
 
         else:
             # Log if curve failed
@@ -1025,11 +994,9 @@ class jpk_qi_loader:
         meta_path = f"index/{curve_num}/header.properties"
         raw_bytes = b""
         try:
-            start_time = time.perf_counter()
             # Read metadata file as raw bytes
             with self.qi_archive.open(meta_path) as f:
                 raw_bytes = f.read()
-            self.t_load_meta += time.perf_counter() - start_time
         except KeyError:
             self.failed_curves.add((curve_num, None, None))
             # Limit the number of warnings to avoid spamming the logs
@@ -1052,14 +1019,11 @@ class jpk_qi_loader:
             # Save a no data value if the search term is not found in the metadata file
             else:
                 value = "No data"
-            self.t_proc_meta += time.perf_counter() - start_time
             if meta_buffer is not None:
-                start_time = time.perf_counter()
                 meta_buffer.append(value)
                 if len(meta_buffer) >= self.BUFFER_SIZE or curve_num == self.num_of_curves - 1:
                     meta_set[curve_num - len(meta_buffer) + 1 : curve_num + 1] = meta_buffer
                     meta_buffer.clear()
-                self.t_save_meta += time.perf_counter() - start_time
             else:
                 logger.error(
                     f"Metadata dataset for key {search_term.decode('utf-8')} not found when trying to save "
@@ -1082,10 +1046,8 @@ class jpk_qi_loader:
         meta_path = f"index/{curve_num}/segments/{direction}/segment-header.properties"
         raw_content = b""
         try:
-            start_time = time.perf_counter()
             with self.qi_archive.open(meta_path) as f:
                 raw_content = f.read()
-            self.t_load_meta += time.perf_counter() - start_time
         except KeyError:
             self.failed_curves.add((curve_num, direction, None))
             if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
@@ -1095,7 +1057,6 @@ class jpk_qi_loader:
                 )
             elif len(self.failed_curves) == 10:
                 logger.warning("Lots of missing files, further warnings will be suppressed. View summary at the end.")
-        start_time = time.perf_counter()
         for search_term, meta_set, meta_buffer in seg_work:
             start = raw_content.find(search_term)
             if start != -1:
@@ -1115,7 +1076,6 @@ class jpk_qi_loader:
                     f"Metadata dataset for key {search_term.decode('utf-8')} not found when trying to save "
                     f"metadata for curve {curve_num}, direction {direction}"
                 )
-        self.t_proc_meta += time.perf_counter() - start_time
 
     def setup_h5_structure(self, h5file):
         """
@@ -1147,7 +1107,7 @@ class jpk_qi_loader:
         curves_meta_group = qi_group.require_group("Curve_Metadata")
         curves_group = qi_group.require_group("Curves")
 
-        curve_groups = {"Data": {}, "Indicies": {}}
+        curve_groups = {"Data": {}, "Indices": {}}
         h5_datasets = {}
         h5_meta_datasets = {}
         h5_datasets_buffer = {}
@@ -1177,9 +1137,9 @@ class jpk_qi_loader:
             dir_group = curves_group.require_group(seg_name)
             h5_datasets[seg_name] = {}
             h5_datasets_buffer[seg_name] = {}
-            # Create the Data and Indicies subfolders and store their references
+            # Create the Data and Indices subfolders and store their references
             curve_groups["Data"][seg_name] = dir_group.require_group("Data")
-            curve_groups["Indicies"][seg_name] = dir_group.require_group("Indicies")
+            curve_groups["Indices"][seg_name] = dir_group.require_group("Indices")
             for chan in self.segment_channels:
                 h5_datasets[seg_name][chan["name"]] = {}
                 # For each channel, create an empty dataset
@@ -1190,14 +1150,14 @@ class jpk_qi_loader:
                     chunks=(self.DATA_CHUNKSIZE,),
                     dtype=np.float32,
                 )
-                h5_datasets[seg_name][chan["name"]]["Indicies"] = curve_groups["Indicies"][seg_name].create_dataset(
+                h5_datasets[seg_name][chan["name"]]["Indices"] = curve_groups["Indices"][seg_name].create_dataset(
                     name=chan["name"],
                     shape=(self.num_of_curves + 1,),
                     maxshape=(None,),
-                    chunks=(self.INDICIES_CHUNKSIZE,),
+                    chunks=(self.INDICES_CHUNKSIZE,),
                     dtype=np.int32,
                 )
-                h5_datasets_buffer[seg_name][chan["name"]] = {"Data": [], "Indicies": []}
+                h5_datasets_buffer[seg_name][chan["name"]] = {"Data": [], "Indices": []}
         return global_meta_group, h5_datasets, h5_meta_datasets, h5_datasets_buffer, h5_meta_datasets_buffer
 
     def get_saving_context(self):
