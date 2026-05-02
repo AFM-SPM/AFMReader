@@ -142,8 +142,6 @@ def test_load(capsys: pytest.CaptureFixture, filepath: Path, channel: str, error
     assert message in captured.err
 
 
-
-
 @pytest.mark.parametrize(
     ("filepath"),
     [
