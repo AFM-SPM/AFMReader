@@ -166,8 +166,6 @@ frames, pixel_to_nanometre_scaling_factor, timestamp_dict, force_curves = load_h
 ```
 
 
-### .stp
-
 You can open `.stp` files using the `load_stp` function. Just pass in the path
 to the file you want to use.
 
