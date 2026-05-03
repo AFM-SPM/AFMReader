@@ -144,6 +144,7 @@ def test_load_h5jpk(
     )
 
 
+@pytest.mark.skip(reason="Test files are too large to store in the repo; a remote storage solution is needed.")
 @pytest.mark.parametrize(
     (
         "file_name",
@@ -178,7 +179,24 @@ def test_load_h5jpk_curves(
     curve_direction: str,
     curve_targets: dict[str, tuple[int, float]],
 ) -> None:
+    """
+    Test loading of curve data from a .h5-jpk file.
 
+    Parameters
+    ----------
+    file_name : str
+        The name of the .h5-jpk file to load (should be located in the test resources directory).
+    channel : str
+        The channel to load curve data for.
+    flip_image : bool
+        Whether to flip the image vertically.
+    curve_coords : tuple[int, int]
+        The coordinates of the curve to load.
+    curve_direction : str
+        The direction of the curve to load.
+    curve_targets : dict[str, tuple[int, float]]
+        A dictionary mapping curve channels to their expected size and sum, used for validating the loaded curve data.
+    """
     _, _, _, result_curve_data = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)
     all_curves, _, _ = result_curve_data
     curve_at_coords = all_curves[curve_coords[0]][curve_coords[1]]

@@ -11,6 +11,7 @@ BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
 
 
+@pytest.mark.skip(reason="Test files are too large to store in the repo; a remote storage solution is needed.")
 @pytest.mark.parametrize(
     (
         "file_name",
@@ -150,5 +151,5 @@ def test_load_jpk_data_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
         jpk_qi_loader = jpk_qi.jpk_qi_loader("noexistant_file.jpk-qi-data", "TP")
-        jpk_qi_loader.load()  # type: ignore
-        jpk_qi_loader.close()  # type: ignore
+    jpk_qi_loader.load()  # type: ignore
+    jpk_qi_loader.close()  # type: ignore
