@@ -1,9 +1,11 @@
 """Module to decode and load .bin AFM files into Python Numpy arrays."""
 
-import numpy as np
 import math
-from .logging import logger
 from pathlib import Path
+
+import numpy as np
+
+from .logging import logger
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,fixme
 
@@ -79,6 +81,8 @@ def load_bin(
     if None in [shape_x, shape_y]:
         dimension = int(math.sqrt(len(flat_data)))
         shape_x, shape_y = dimension, dimension
+    assert shape_x is not None and shape_y is not None  # noqa: PT018
+    assert size_x is not None and size_y is not None  # noqa: PT018
     if shape_x * shape_y != len(flat_data):
         logger.error(f"Loading binary file {filepath.stem} did not receive a shape and is not square")
     image = flat_data.reshape((shape_x, shape_y))

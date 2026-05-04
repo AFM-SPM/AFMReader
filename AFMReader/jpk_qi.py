@@ -21,13 +21,30 @@ import javaproperties
 import h5py
 import psutil
 
-from AFMReader.jpk_utils import LazyMetadata, LazyMetaProxy, LazyQiData
+from AFMReader.lazy_data_classes import LazyMetadata, LazyMetaProxy, LazyQiData
 from AFMReader.logging import logger
 from AFMReader import jpk
 
 
 class LazyJpkQiData(LazyQiData):
-    """A proxy class that behaves like a 2D list of shape (shape_y, shape_x) but fetches .dat file data on demand."""
+    """
+    A proxy class that behaves like a 2D list of shape (shape_y, shape_x) but fetches .dat file data on demand.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the .jpk file.
+    shape_x : int
+        Number of columns in the image.
+    shape_y : int
+        Number of rows in the image.
+    channel_scaling : dict
+        Dictionary containing scaling information for each channel.
+    archive : zipfile.ZipFile
+        The opened ZIP archive containing the .dat files.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is ``True``.
+    """
 
     def __init__(self, filepath, shape_x: int, shape_y: int, channel_scaling, archive, flip_image: bool = True):
         """
@@ -72,7 +89,7 @@ class LazyJpkQiData(LazyQiData):
 
         Returns
         -------
-        curve_data : dict
+        dict
             Dictionary containing the curve data for the specified pixel.
         """
         if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
@@ -108,7 +125,7 @@ class LazyJpkQiData(LazyQiData):
 
         Returns
         -------
-        all_curve_data : list
+        list
             A 2D list containing dictionaries with curve data for each pixel.
         """
         all_curve_data = [[None for _ in range(self.shape_x)] for _ in range(self.shape_y)]
@@ -130,6 +147,21 @@ class LazyQiMetadata(LazyMetadata):
 
     It behaves like a 2D array of shape (shape_y, shape_x) where each element
     is a dictionary containing the requested metadata for that pixel.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the .jpk file.
+    top_level_meta : dict
+        Dictionary containing the top-level metadata extracted from the header files.
+    archive : zipfile.ZipFile
+        The opened ZIP archive containing the JPK file contents.
+    shape_x : int
+        The number of columns in the image.
+    shape_y : int
+        The number of rows in the image.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
     """
 
     def __init__(self, filepath, top_level_meta, archive, shape_x: int, shape_y: int, flip_image: bool = True):
@@ -185,8 +217,25 @@ class LazyQiMetadata(LazyMetadata):
 
 class LazyQiMetaProxy(LazyMetaProxy):
     """
-    A proxy class that behaves like a 2D array of shape (shape_y, shape_x)
-    but fetches header.properties files on demand for curves or segments.
+    A proxy class to represent curve and segment metadata.
+
+    It behaves like a 2D list of shape (shape_y, shape_x) but fetches header.properties files on demand for
+    curves or segments.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the .jpk file.
+    meta_type : str
+        The type of metadata to fetch ('curve' or 'segment').
+    archive : zipfile.ZipFile
+        The opened ZIP archive containing the JPK file contents.
+    shape_x : int
+        The number of columns in the image.
+    shape_y : int
+        The number of rows in the image.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
     """
 
     def __init__(self, filepath, meta_type, archive, shape_x: int, shape_y: int, flip_image: bool = True):
@@ -314,7 +363,22 @@ def _get_channel_scaling(props, channel_index):
 
 
 class jpk_qi_loader:
-    """Class for readability and improving modularity in the load jpk qi data function."""
+    """
+    Class for readability and improving modularity in the load jpk qi data function.
+
+    Parameters
+    ----------
+    filepath : Path | str
+        The path to the .jpk-qi file to be loaded.
+    channel : str | None, optional
+        The specific channel to be extracted (e.g., "measuredHeight"). Default is None.
+    config_path : Path | str | None, optional
+        The path to the configuration file, if any. Default is None.
+    flip_image : bool | None, optional
+        Whether to flip the image vertically. Default is True.
+    save_as_h5 : bool, optional
+        Whether to save the loaded data as an H5 file. Default is False.
+    """
 
     def __init__(
         self,
@@ -347,7 +411,7 @@ class jpk_qi_loader:
         self.save_as_h5 = save_as_h5
 
         # Open the ZIP archive once and keep it open for the duration of the loading process
-        self.qi_archive = zipfile.ZipFile(self.filepath, "r")
+        self.qi_archive = zipfile.ZipFile(self.filepath, "r")  # pylint: disable=consider-using-with
         logger.info(f"Opened JPK QI archive at {self.filepath}")
         self.namelist = self.qi_archive.namelist()
         # Set path to the .jpk-qi-image file within the archive for later use
@@ -368,8 +432,8 @@ class jpk_qi_loader:
 
         # Just the top level metadata extracted from the header files
         self.top_level_meta: dict[str, Any] = {}
-        # A dictionary containing all metadata
-        self.full_metadata: dict[str, Any] = {}
+        # A lazy reference containing all metadata
+        self.full_metadata: LazyQiMetadata | None = None
         # A 2D list of curve data dictionaries
         self.curve_data: Any = None
         # A lookup for channel name to unit to be returned
@@ -378,6 +442,7 @@ class jpk_qi_loader:
         self.segment_channels: list[dict[str, Any]] = []
         self.curve_meta: dict[str, Any] = {}
         self.segment_meta: dict[str, Any] = {}
+
         # Define the image shape and size attributes
         self.size_x: float | None = None
         self.size_y: float | None = None
@@ -665,8 +730,10 @@ class jpk_qi_loader:
 
     def predict_total_points(self):
         """
-        Predict the total number of points for each channel and segment by sampling a subset of curves and
-        extrapolating based on the maximum number of points found in the sample.
+        Predict the total number of points for each channel and segment.
+
+        This is done by sampling a subset of curves and extrapolating based on the maximum number
+        of points found in the sample.
 
         Returns
         -------
@@ -710,10 +777,10 @@ class jpk_qi_loader:
 
     def get_changing_keys(self):  # noqa: C901
         """
-        Check a sample of curves to see which metadata keys change across curves and segments, so we can
-        extract only the changing keys for each curve and segment.
+        Check a sample of curves to see which metadata keys change across curves and segments.
 
-        None changing keys are moved to the top level metadata and not extracted for each curve/segment.
+        This allows us to extract only the changing keys for each curve and segment.
+        Non-changing keys are moved to the top-level metadata and not extracted for each curve/segment.
 
         Returns
         -------
@@ -778,7 +845,7 @@ class jpk_qi_loader:
 
         Returns
         -------
-        collated_meta : dict
+        dict
             A dictionary containing the collated metadata.
         """
         collated_meta = {}
@@ -794,10 +861,19 @@ class jpk_qi_loader:
         """
         Process the flat curve data dictionary into a 2D list structure matching the image dimensions.
 
+        Parameters
+        ----------
+        overide_channel : str | None, optional
+            Channel name to use instead of the instance default. Default is None.
+        convert_to_nm : bool, optional
+            Whether to convert the image data to nanometres. Default is True.
+        flip_image : bool | None, optional
+            Whether to flip the image vertically. Defaults to the instance setting if None.
+
         Returns
         -------
-        image : np.ndarray
-            A 2D array representing the image data.
+        tuple[np.ndarray, float]
+            A 2D array representing the image data and the pixel-to-nm scaling factor.
         """
         # Get channel and flip_image parameters
         channel = str(overide_channel) if overide_channel else str(self.channel)
@@ -876,7 +952,8 @@ class jpk_qi_loader:
                 # Format name and reshape image (flattened frame stack)
                 dataset_name = h5_channel.split("_")[0].capitalize()
                 # Include all the channels including the calculated channel
-                # TODO make this slightly faster by remembering we have load a channel already but difficult cause of scaling
+                # TODO make this slightly faster by remembering we have load a channel already but
+                # difficult cause of scaling
                 channel_image, _ = self.get_image(overide_channel=h5_channel, convert_to_nm=False, flip_image=False)
                 frame_stack = channel_image.flatten().reshape(-1, 1)
 
@@ -887,14 +964,18 @@ class jpk_qi_loader:
 
     def extract_dat_file(self, h5_datasets, h5_datasets_buffer, curve_num: int, direction: int, chan_name: str):
         """
-        Extract the data from a .dat file in the JPK QI archive, applies the appropriate scaling, and saves it to the internal data structure and h5 dataset if required.
+        Extract the data from a .dat file in the JPK QI archive.
+
+        Applies the appropriate scaling and saves it to the internal data structure and h5 dataset if required.
 
         Parameters
         ----------
         h5_datasets : dict
-            A dictionary containing the h5 datasets for each channel and segment direction, used for saving the data
+            A dictionary containing the h5 datasets for each channel and segment direction, used for saving the
+            data.
         h5_datasets_buffer : dict
-            A dictionary containing the buffer for each h5 dataset, used for temporary storage before writing to the dataset
+            A dictionary containing the buffer for each h5 dataset, used for temporary storage before writing to
+            the dataset.
         curve_num : int
             The curve number associated with the .dat file, parsed from the filename.
         direction : int
@@ -1008,7 +1089,6 @@ class jpk_qi_loader:
                 logger.warning("Lots of missing files, further warnings will be suppressed. View summary at the end.")
 
         for search_term, meta_set, meta_buffer in curve_work:
-            start_time = time.perf_counter()
             # Find the location of the metadata value in the raw bytes
             start = raw_bytes.find(search_term)
             # If found, extract the actual value
@@ -1255,13 +1335,27 @@ class jpk_qi_loader:
         self.curve_meta = {}
         self.segment_meta = {}
         self.top_level_meta = {}
-        self.full_metadata = {}
         self.failed_curves = set()
         self.points_for_channel_segment = {}
         self.namelist = []
 
 
 def _make_num_min_characters(num: int, min_chars: int = 3):
+    """
+    Zero-pad an integer to a minimum number of characters.
+
+    Parameters
+    ----------
+    num : int
+        The integer to pad.
+    min_chars : int
+        The minimum number of characters the resulting string should have. Default is 3.
+
+    Returns
+    -------
+    str
+        The zero-padded string.
+    """
     string_num = str(num)
     if len(string_num) >= min_chars:
         return string_num

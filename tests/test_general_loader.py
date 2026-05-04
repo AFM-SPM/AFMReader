@@ -1,5 +1,6 @@
 """Test the general loader module."""
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -129,14 +130,13 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 def test_load(capsys: pytest.CaptureFixture, filepath: Path, channel: str, error: bool, message: str) -> None:
     """Test loading of all (asd, gwy, ibw, jpk, spm, stp, top, topostats) filetypes."""
     loader = general_loader.LoadFile(filepath, channel)
-    try:
-        image, px2nm = loader.load()
-        # check array and px2nm returned
+    if error:
+        with pytest.raises(ValueError, match=re.escape(message)):
+            loader.load()
+    else:
+        image, px2nm = loader.load()  # type: ignore[misc]
         assert isinstance(image, np.ndarray)
         assert isinstance(px2nm, float)
-    except ValueError as e:
-        if error:
-            assert message in str(e)
     # check output logs
     captured = capsys.readouterr()
     assert message in captured.err
@@ -156,5 +156,5 @@ def test_load_filenotfounderror(filepath: Path) -> None:
     loader = general_loader.LoadFile(filepath, "channel")
 
     with pytest.raises(FileNotFoundError) as execinfo:  # noqa: PT012
-        _, _ = loader.load()
+        _, _ = loader.load()  # type: ignore[misc]
         assert "[not_a_real_file] FileNotFoundError" in execinfo.value

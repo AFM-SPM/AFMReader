@@ -1,5 +1,7 @@
 """Test the loading of .5h-jpk files."""
 
+# mypy: disable-error-code="arg-type,index"
+
 from pathlib import Path
 
 import numpy as np
@@ -127,7 +129,7 @@ def test_load_h5jpk(
     image_sum: float,
 ) -> None:
     """Test the normal operation of loading a .h5-jpk file."""
-    result_image, result_pixel_to_nm_scaling, results_timestamps = h5_jpk.load_h5jpk(
+    result_image, result_pixel_to_nm_scaling, results_timestamps = h5_jpk.load_h5jpk(  # type: ignore[misc]
         RESOURCES / file_name, channel, flip_image
     )
 
@@ -197,7 +199,7 @@ def test_load_h5jpk_curves(
     curve_targets : dict[str, tuple[int, float]]
         A dictionary mapping curve channels to their expected size and sum, used for validating the loaded curve data.
     """
-    _, _, _, result_curve_data = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)
+    _, _, _, result_curve_data = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)  # type: ignore[misc]
     all_curves, _, _ = result_curve_data
     curve_at_coords = all_curves[curve_coords[0]][curve_coords[1]]
     for curve_channel, (expected_size, expected_sum) in curve_targets.items():

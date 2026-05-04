@@ -112,7 +112,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         ),
     ],
 )
-def test_load_jpk_qi_data(
+def test_load_jpk_qi_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     file_name: str,
     channel: str,
     pixel_to_nm_scaling: float,
@@ -150,6 +150,4 @@ def test_load_jpk_qi_data(
 def test_load_jpk_data_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
-        jpk_qi_loader = jpk_qi.jpk_qi_loader("noexistant_file.jpk-qi-data", "TP")
-    jpk_qi_loader.load()  # type: ignore
-    jpk_qi_loader.close()  # type: ignore
+        jpk_qi.jpk_qi_loader("noexistant_file.jpk-qi-data", "TP")

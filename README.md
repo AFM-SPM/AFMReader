@@ -156,8 +156,8 @@ from AFMReader.h5_jpk import load_h5jpk
 frames, pixel_to_nanometre_scaling_factor, timestamp_dict = load_h5jpk(file_path="./my_jpk_file.h5-jpk", channel="height_trace")
 ```
 
-If your `.h5-jpk` file was created from a `.jpk-qi-data` file, then the curve data can be read like so. Note that reading force
-curves like this will keep the file open as the force curves are lazy loaded from your hard drive.
+If your `.h5-jpk` file was created from a `.jpk-qi-data` file, then the curve data can be read like so. Note that reading
+force curves like this will keep the file open as the force curves are lazy loaded from your hard drive.
 
 ```python
 from AFMReader.h5_jpk import load_h5jpk
@@ -165,6 +165,7 @@ from AFMReader.h5_jpk import load_h5jpk
 frames, pixel_to_nanometre_scaling_factor, timestamp_dict, force_curves = load_h5jpk(file_path="./my_jpk_file.h5-jpk", channel="height_trace")
 ```
 
+### .stp
 
 You can open `.stp` files using the `load_stp` function. Just pass in the path
 to the file you want to use.

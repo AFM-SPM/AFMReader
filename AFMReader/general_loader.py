@@ -23,7 +23,7 @@ class LoadFile:
         channel : str
             Channel to extract from the AFM image.
         kwargs : dict, optional
-            Additional keyword arguments to pass to the specific loaders
+            Additional keyword arguments to pass to the specific loaders.
     """
 
     def __init__(self, filepath: str | Path, channel: str, kwargs: dict | None = None):
@@ -37,7 +37,7 @@ class LoadFile:
         channel : str
             Channel to extract from the AFM image.
         kwargs : dict, optional
-            Additional keyword arguments to pass to the specific loaders
+            Additional keyword arguments to pass to the specific loaders.
         """
         self.filepath = Path(filepath)
         self.channel = channel
@@ -59,7 +59,7 @@ class LoadFile:
         channel : str, optional
             Overriding channel to extract from the AFM image.
         kwargs : dict, optional
-            Additional keyword arguments to pass to the specific loaders
+            Additional keyword arguments to pass to the specific loaders.
 
         Returns
         -------
@@ -91,9 +91,9 @@ class LoadFile:
             elif self.suffix == ".h5-jpk":
                 h5_returned = h5_jpk.load_h5jpk(self.filepath, self.channel, load_curves=not self.loaded_curves)
                 if len(h5_returned) == 3:
-                    image, pixel_to_nanometre_scaling_factor, _ = h5_returned
+                    image, pixel_to_nanometre_scaling_factor, _ = h5_returned  # type: ignore[misc]
                 elif len(h5_returned) == 4:
-                    image, pixel_to_nanometre_scaling_factor, _, curve_data = h5_returned
+                    image, pixel_to_nanometre_scaling_factor, _, curve_data = h5_returned  # type: ignore[misc]
                     self.loaded_curves = True
                     print(
                         f"Loaded image with shape {image.shape} and pixel to nanometre "

@@ -175,6 +175,26 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
 def _get_jpk_channels(
     file: Path | BytesIO, filename: str, file_path: Path | str, config_path: Path | str | None = None
 ):
+    """
+    Retrieve the list of available channels from a JPK TIFF file.
+
+    Parameters
+    ----------
+    file : Path | BytesIO
+        Path to the JPK TIFF file.
+    filename : str
+        Name of the JPK TIFF file.
+    file_path : Path | str
+        Path to the JPK TIFF file.
+    config_path : Path | str | None, optional
+        Path to a configuration file. If ''None'' (default) then the packages
+        default configuration is loaded from ''default_config.yaml''.
+
+    Returns
+    -------
+    dict
+        Dictionary of available channels with their corresponding page indices.
+    """
     jpk_tags = _load_jpk_tags(config_path)
     try:
         tif = tifffile.TiffFile(file)
@@ -216,7 +236,7 @@ def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = Non
 
 
 def load_jpk(
-    file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool | None = True
+    file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True
 ) -> tuple[np.ndarray, float]:
     """
     Load image from JPK Instruments .jpk files.
@@ -230,7 +250,7 @@ def load_jpk(
     config_path : Path | str | None
         Path to a configuration file. If ''None'' (default) then the packages default configuration is loaded from
         ''default_config.yaml''.
-    flip_image : bool, optional
+    flip_image : bool
         Whether to flip the image vertically. Default is ``True``.
 
     Returns
@@ -277,6 +297,32 @@ def _load_jpk(
     flip_image: bool = True,
     convert_to_nm: bool = True,
 ) -> tuple[np.ndarray, float]:
+    """
+    Load image data and pixel scaling from a JPK TIFF file for a given channel.
+
+    Parameters
+    ----------
+    file : Path | BytesIO
+        Path to the JPK TIFF file.
+    filename : str
+        Name of the JPK TIFF file.
+    channel : str
+        The channel to extract from the JPK TIFF file.
+    file_suffix : str
+        The file suffix of the JPK TIFF file.
+    config_path : Path | str | None, optional
+        Path to a configuration file. If ''None'' (default) then the packages default configuration is
+        loaded from ''default_config.yaml''.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
+    convert_to_nm : bool, optional
+        Whether to convert the image to nanometres. Default is True.
+
+    Returns
+    -------
+    tuple[np.ndarray, float]
+        A tuple containing the image and its pixel to nanometre scaling value.
+    """
     jpk_tags = _load_jpk_tags(config_path)
     try:
         tif = tifffile.TiffFile(file)

@@ -12,7 +12,7 @@ import h5py
 import numpy as np
 
 from AFMReader.logging import logger
-from AFMReader.jpk_utils import (
+from AFMReader.lazy_data_classes import (
     LazyMetaProxy,
     LazyMetadata,
     LazyQiData,
@@ -300,6 +300,17 @@ class LazyH5QiData(LazyQiData):
 
     It behaves like a 2D array of shape (shape_y, shape_x) where each element
     is a dictionary containing the QI curve data for that pixel.
+
+    Parameters
+    ----------
+    qi_data_group : h5py.Group
+        The HDF5 group containing the QI curve data.
+    shape_x : int
+        The number of columns in the image.
+    shape_y : int
+        The number of rows in the image.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is ``True``.
     """
 
     def __init__(self, qi_data_group: h5py.Group, shape_x: int, shape_y: int, flip_image: bool = True):
@@ -349,13 +360,13 @@ class LazyH5QiData(LazyQiData):
                     data[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
             for x in range(self.shape_x):
                 curve_data = {}
-                for channel in data:
+                for channel, channel_data in data.items():
                     curve_data[channel] = {}
-                    for segment in data[channel]:
+                    for segment, segment_data in channel_data.items():
                         indices = indices_map[channel][segment]
                         start_idx = int(indices[self.shape_x * y + x]) - int(indices[self.shape_x * y])
                         end_idx = int(indices[self.shape_x * y + x + 1]) - int(indices[self.shape_x * y])
-                        curve_data[channel][segment] = data[channel][segment][start_idx:end_idx]
+                        curve_data[channel][segment] = segment_data[start_idx:end_idx]
                 yield curve_data
 
     def _fetch_curve(self, y: int, x: int):
@@ -376,7 +387,7 @@ class LazyH5QiData(LazyQiData):
         """
         if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
-        curve_dict = {}
+        curve_dict: dict[str, dict[str, Any]] = {}
         if self.flip_image:
             y = self.shape_y - 1 - y
         curve_num = self.shape_x * y + x
@@ -418,7 +429,22 @@ class LazyH5QiData(LazyQiData):
 
 
 class LazyH5Metadata(LazyMetadata):
-    """A proxy class that fetches header.properties files on demand."""
+    """
+    A proxy class that fetches header.properties files on demand.
+
+    Parameters
+    ----------
+    qi_data_group : h5py.Group
+        The HDF5 group containing the QI curve data.
+    top_level_meta : dict
+        The top-level metadata dictionary.
+    shape_x : int
+        The number of columns in the image.
+    shape_y : int
+        The number of rows in the image.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is ``True``.
+    """
 
     def __init__(
         self, qi_data_group: h5py.Group, top_level_meta: dict, shape_x: int, shape_y: int, flip_image: bool = True
@@ -471,6 +497,19 @@ class LazyH5MetaProxy(LazyMetaProxy):
 
     It behaves like a 2D array of shape (shape_y, shape_x) where each element
     is a dictionary containing the requested metadata for that pixel.
+
+    Parameters
+    ----------
+    qi_data_group : h5py.Group
+        The HDF5 group containing the QI curve data.
+    meta_type : str
+        The type of metadata to fetch ("curve" or "segment").
+    shape_x : int
+        The number of columns in the image.
+    shape_y : int
+        The number of rows in the image.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is ``True``.
     """
 
     def __init__(self, qi_data_group: h5py.Group, meta_type: str, shape_x: int, shape_y: int, flip_image: bool = True):
@@ -547,6 +586,8 @@ def load_h5jpk(
         The channel to extract from the .h5-jpk file.
     flip_image : bool, optional
         Whether to flip the images vertically. Default is ``True``.
+    load_curves : bool, optional
+        Whether to load QI curve data if present. Default is ``True``.
 
     Returns
     -------
@@ -627,7 +668,6 @@ def load_h5jpk(
 
     if load_curves:
         f = h5py.File(file_path, "r")
-        logger.debug(f"QI_Curve_Data group keys: {list(f.keys())}")
         logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
         qi_data_group = f["QI_Curve_Data"]
         channels_units = {}
