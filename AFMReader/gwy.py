@@ -36,7 +36,7 @@ def get_gwy_channels(file_path):
     return list(channel_ids)
 
 
-def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.float64], float]:
+def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.float64], float, str]:
     """
     Extract image and pixel to nm scaling from the .gwy file.
 
@@ -49,8 +49,8 @@ def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.fl
 
     Returns
     -------
-    tuple(np.ndarray, float)
-        A tuple containing the image and its pixel to nanometre scaling value.
+    tuple(np.ndarray, float, str)
+        A tuple containing the image, its pixel to nanometre scaling value, and the z-axis units.
 
     Raises
     ------
@@ -96,9 +96,13 @@ def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.fl
         # currently only support equal pixel sizes in x and y
         px_to_nm = image_data_dict[f"/{channel_ids[channel]}/data"]["xreal"] / image.shape[1]
 
+        z_units = image_data_dict[f"/{channel_ids[channel]}/data"]["si_unit_z"]["unitstr"]
+        if z_units == "m":
+            image = image * 1e9
+            z_units = "nm"
+
         # Convert image heights to nanometresQ
         if units == "m":
-            image = image * 1e9
             px_to_nm = px_to_nm * 1e9
         else:
             raise ValueError(f"Units '{units}' have not been added for .gwy files. Please add \
@@ -113,7 +117,7 @@ def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.fl
         raise ValueError(f"'{channel}' not found in {file_path.suffix} channel list: {channel_ids}") from e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return (image, px_to_nm)
+    return (image, px_to_nm, z_units)
 
 
 def gwy_read_object(open_file: BinaryIO, data_dict: dict) -> None:
