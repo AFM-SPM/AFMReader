@@ -213,6 +213,33 @@ def _get_jpk_channels(
     return channel_list
 
 
+def _get_z_unit(tif: tifffile.TiffFile, channel_idx: int, jpk_tags: dict[str, int], default_slot_idx: int) -> str:
+    """
+    Extract the unit string (e.g., 'm', 'V', 'deg') for the active slot.
+
+    Parameters
+    ----------
+    tif : tifffile.TiffFile
+        The TIFF file object.
+    channel_idx : int
+        Index of the channel page.
+    jpk_tags : dict[str, int]
+        Dictionary of JPK tag IDs.
+    default_slot_idx : int
+        Index of the default slot.
+
+    Returns
+    -------
+    str
+        The unit string for the active slot.
+    """
+    unit_tag_id = int(jpk_tags["first_unit_name"]) + (jpk_tags["slot_size"] * default_slot_idx)
+    try:
+        return str(_get_tag_value(tif.pages[channel_idx], str(unit_tag_id)))
+    except KeyError:
+        return "unknown"
+
+
 def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = None) -> list[str]:
     """
     Get the list of channels available in the .jpk file.
@@ -237,7 +264,7 @@ def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = Non
 
 def load_jpk(
     file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True
-) -> tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, float, str]:
     """
     Load image from JPK Instruments .jpk files.
 
@@ -255,8 +282,8 @@ def load_jpk(
 
     Returns
     -------
-    tuple[npt.NDArray, float]
-        A tuple containing the image and its pixel to nanometre scaling value.
+    tuple[npt.NDArray, float, str]
+        A tuple containing the image, its pixel to nanometre scaling value, and the z-axis units.
 
     Raises
     ------
@@ -270,14 +297,14 @@ def load_jpk(
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_jpk
-    >>> image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk",
-    >>>                                                     channel="height_trace",
-    >>>                                                     flip_image=True)
+    >>> image, pixel_to_nanometre_scaling_factor, units = load_jpk(file_path="./my_jpk_file.jpk",
+    >>>                                                           channel="height_trace",
+    >>>                                                           flip_image=True)
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
     filename = file_path.stem
-    image, px2nm = _load_jpk(
+    image, px2nm, units = _load_jpk(
         file=file_path,
         filename=filename,
         channel=channel,
@@ -285,7 +312,7 @@ def load_jpk(
         config_path=config_path,
         flip_image=flip_image,
     )
-    return (image, px2nm)
+    return (image, px2nm, units)
 
 
 def _load_jpk(
@@ -296,7 +323,7 @@ def _load_jpk(
     config_path: Path | str | None = None,
     flip_image: bool = True,
     convert_to_nm: bool = True,
-) -> tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, float, str]:
     """
     Load image data and pixel scaling from a JPK TIFF file for a given channel.
 
@@ -320,8 +347,8 @@ def _load_jpk(
 
     Returns
     -------
-    tuple[np.ndarray, float]
-        A tuple containing the image and its pixel to nanometre scaling value.
+    tuple[np.ndarray, float, str]
+        A tuple containing the image, its pixel to nanometre scaling value, and the z-axis units.
     """
     jpk_tags = _load_jpk_tags(config_path)
     try:
@@ -352,14 +379,17 @@ def _load_jpk(
     if flip_image is True:
         image = np.flipud(image)
 
-    if convert_to_nm and channel_page.tags[jpk_tags["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
+    units = _get_z_unit(tif, channel_idx, jpk_tags, int(channel_idx))
+    logger.debug(f"Unit: {units}")
+
+    if convert_to_nm and units == "m":
         image = image * 1e9
 
     # Get page for common metadata between scans
     metadata_page = tif.pages[0]
 
     logger.info(f"[{filename}] : Extracted image.")
-    return (image, _jpk_pixel_to_nm_scaling(metadata_page, jpk_tags))
+    return (image, _jpk_pixel_to_nm_scaling(metadata_page, jpk_tags), units)
 
 
 def _load_jpk_tags(config_path: str | Path | None = None) -> dict[str, int]:
