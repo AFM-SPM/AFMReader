@@ -182,6 +182,7 @@ def calculate_scaling_factor(
     raise ValueError(f"channel {channel} not known for .asd file type.")
 
 
+# pylint: disable=too-many-locals
 def load_asd(file_path: str | Path, channel: str):
     """
     Load a .asd file.
@@ -285,7 +286,11 @@ def load_asd(file_path: str | Path, channel: str):
         frames = np.array(frames)
 
         logger.info(f"[{filename}] : Extracted image.")
-        return frames, pixel_to_nanometre_scaling_factor, header_dict
+        if channel == "PH":
+            unit = "deg"
+        else:
+            unit = "nm"
+        return frames, pixel_to_nanometre_scaling_factor, header_dict, unit
 
 
 def get_asd_channels(file_path: Path):
