@@ -125,9 +125,9 @@ def _jpk_pixel_to_nm_scaling_h5(measurement_group: h5py.Group) -> float:
         raise KeyError(f"Missing required attribute '{missing}' in HDF5 measurement group.") from e
 
 
-def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
+def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float, str]:
     """
-    Extract the Z scaling multiplier and offset from an HDF5 channel group.
+    Extract the Z scaling multiplier, offset, and unit from an HDF5 channel group.
 
     Parameters
     ----------
@@ -136,17 +136,21 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
 
     Returns
     -------
-    tuple[float, float]
-        A tuple containing the scaling multiplier and offset.
+    tuple[float, float, str]
+        A tuple containing the scaling multiplier, offset, and unit.
 
     Notes
     -----
-    Defaults to (1.0, 0.0) if attributes are not present.
+    Defaults to (1.0, 0.0, 'm') if attributes are not present.
     """
     multiplier = float(channel_group.attrs.get("net-encoder.scaling.multiplier", 1.0))
     offset = float(channel_group.attrs.get("net-encoder.scaling.offset", 0.0))
+    unit = channel_group.attrs.get("net-encoder.scaling.unit.unit")
+    if unit is None:
+        logger.warning("Z scaling unit not found; defaulting to 'm'.")
+        unit = "m"
 
-    return multiplier, offset
+    return multiplier, offset, unit
 
 
 def _decode_attr(attr: bytes | str) -> str:
@@ -574,7 +578,7 @@ class LazyH5MetaProxy(LazyMetaProxy):
 
 def load_h5jpk(
     file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True
-) -> tuple[np.ndarray, float, dict[str, float]] | tuple[np.ndarray, float, dict[str, float], Any]:
+) -> tuple[np.ndarray, float, dict[str, float], str] | tuple[np.ndarray, float, dict[str, float], str, Any]:
     """
     Load image from JPK Instruments .h5-jpk files.
 
@@ -597,6 +601,8 @@ def load_h5jpk(
         Scaling factor converting pixels to nanometers.
     timestamps : dict[str, float]
         Dictionary mapping frame labels (e.g., "frame 0") to timestamp values in seconds.
+    z_units : str
+        The physical unit of the Z data (e.g., 'm' for meters).
     curves_data : tuple(LazyH5QiData, dict, LazyH5Metadata), optional
         Tuple containing lazy-loaded QI curve data, channel units, and metadata.
         Returned only if load_curves is True and QI curve data is present in the file.
@@ -613,7 +619,7 @@ def load_h5jpk(
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_h5jpk
-    >>> frames, pixel_to_nanometre_scaling_factor, timestamps = load_h5jpk(file_path="./my_jpk_file.jpk",
+    >>> frames, pixel_to_nanometre_scaling_factor, timestamps, z_units = load_h5jpk(file_path="./my_jpk_file.jpk",
     >>>                                                         channel="height_trace",
     >>>                                                         flip_image=True)
     """
@@ -628,7 +634,7 @@ def load_h5jpk(
 
         # Load images and scaling factors from channel dataset
         images = channel_group[dataset_name][:]
-        scaling, offset = _get_z_scaling_h5(channel_group)
+        scaling, offset, z_units = _get_z_scaling_h5(channel_group)
         images = (images * scaling) + offset
 
         # Select and reshape a flattened frame
@@ -681,6 +687,6 @@ def load_h5jpk(
 
         all_curve_data = LazyH5QiData(qi_data_group, shape_x, shape_y, flip_image)
 
-        return (image_stack, px2nm, timestamps, (all_curve_data, channels_units, full_metadata))
+        return (image_stack, px2nm, timestamps, z_units, (all_curve_data, channels_units, full_metadata))
 
-    return (image_stack, px2nm, timestamps)
+    return (image_stack, px2nm, timestamps, z_units)
