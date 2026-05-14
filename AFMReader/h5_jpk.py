@@ -145,7 +145,11 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float, str]:
     """
     multiplier = float(channel_group.attrs.get("net-encoder.scaling.multiplier", 1.0))
     offset = float(channel_group.attrs.get("net-encoder.scaling.offset", 0.0))
-    unit = channel_group.attrs.get("net-encoder.scaling.unit.unit")
+    unit = (
+        channel_group.attrs.get("net-encoder.scaling.unit.unit").decode("utf-8")
+        if "net-encoder.scaling.unit.unit" in channel_group.attrs
+        else None
+    )
     if unit is None:
         logger.warning("Z scaling unit not found; defaulting to 'm'.")
         unit = "m"
@@ -659,8 +663,9 @@ def load_h5jpk(
                 image_stack[i] = frame
 
         # Convert to nm
-        if dataset_name.lower() in ("height", "error", "measuredheight", "amplitude"):
+        if z_units == "m":
             image_stack = image_stack * 1e9
+            z_units = "nm"
 
         # Generate a dictionary of timestamps
         line_rate = _get_line_rate(measurement_group)

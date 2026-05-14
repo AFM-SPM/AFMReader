@@ -28,7 +28,7 @@ def get_gwy_channels(file_path):
     with Path.open(file_path, "rb") as open_file:  # pylint: disable=unspecified-encoding
         # Read header
         header = open_file.read(4)
-        logger.debug(f"Gwy file header: {header.decode}")
+        logger.debug(f"Gwy file header: {header.decode()}")
 
         gwy_read_object(open_file, data_dict=image_data_dict)
     channel_ids = gwy_get_channels(gwy_file_structure=image_data_dict)
@@ -75,9 +75,6 @@ def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.fl
         image_data_dict: dict[Any, Any] = {}
         with Path.open(file_path, "rb") as open_file:  # pylint: disable=unspecified-encoding
             # Read header
-            header = open_file.read(4)
-            logger.debug(f"Gwy file header: {header.decode}")
-
             gwy_read_object(open_file, data_dict=image_data_dict)
 
         # For development - uncomment to have an indentation based nested

@@ -100,7 +100,7 @@ def _get_number_of_slots(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dic
     return n_slots
 
 
-def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> tuple[float, float]:
+def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> tuple[float, float, str]:
     """
     Extract the z scaling factor and offset for a JPK image channel.
 
@@ -117,8 +117,8 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
 
     Returns
     -------
-    tuple[float, float]
-        A tuple contains values used to scale and offset raw data.
+    tuple[float, float, str]
+        A tuple contains values used to scale and offset raw data, and the unit of the z-axis.
     """
     # Create a dictionary of list for the differnt slots
     n_slots = _get_number_of_slots(tif, channel_idx, jpk_tags)
@@ -161,15 +161,22 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
             .tags[str(int(jpk_tags["first_offset_name"]) + (jpk_tags["slot_size"] * (_default_slot)))]
             .name
         )
+        unit_name = (
+            tif.pages[channel_idx]
+            .tags[str(int(jpk_tags["first_unit_name"]) + (jpk_tags["slot_size"] * (_default_slot)))]
+            .name
+        )
 
         scaling = float(_get_tag_value(tif.pages[channel_idx], scaling_name))
         offset = float(_get_tag_value(tif.pages[channel_idx], offset_name))
+        z_units = str(_get_tag_value(tif.pages[channel_idx], unit_name))
     elif scaling_type == "NullScaling":
         scaling = 1.0
         offset = 0.0
+        z_units = "raw"
     else:
         raise ValueError(f"Scaling type {scaling_type} is not 'NullScaling' or 'LinearScaling'")
-    return scaling, offset
+    return scaling, offset, z_units
 
 
 def _get_jpk_channels(
@@ -211,33 +218,6 @@ def _get_jpk_channels(
             tr_rt = "retrace"
         channel_list[f"{available_channel}_{tr_rt}"] = i + 1
     return channel_list
-
-
-def _get_z_unit(tif: tifffile.TiffFile, channel_idx: int, jpk_tags: dict[str, int], default_slot_idx: int) -> str:
-    """
-    Extract the unit string (e.g., 'm', 'V', 'deg') for the active slot.
-
-    Parameters
-    ----------
-    tif : tifffile.TiffFile
-        The TIFF file object.
-    channel_idx : int
-        Index of the channel page.
-    jpk_tags : dict[str, int]
-        Dictionary of JPK tag IDs.
-    default_slot_idx : int
-        Index of the default slot.
-
-    Returns
-    -------
-    str
-        The unit string for the active slot.
-    """
-    unit_tag_id = int(jpk_tags["first_unit_name"]) + (jpk_tags["slot_size"] * default_slot_idx)
-    try:
-        return str(_get_tag_value(tif.pages[channel_idx], str(unit_tag_id)))
-    except KeyError:
-        return "unknown"
 
 
 def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = None) -> list[str]:
@@ -374,22 +354,22 @@ def _load_jpk(
     # Get image and if applicable, scale it
     channel_page = tif.pages[channel_idx]
     image = channel_page.asarray()
-    scaling, offset = _get_z_scaling(tif, channel_idx, jpk_tags)
+    scaling, offset, z_units = _get_z_scaling(tif, channel_idx, jpk_tags)
     image = (image * scaling) + offset
     if flip_image is True:
         image = np.flipud(image)
 
-    units = _get_z_unit(tif, channel_idx, jpk_tags, int(channel_idx))
-    logger.debug(f"Unit: {units}")
+    logger.debug(f"Unit: {z_units}")
 
-    if convert_to_nm and units == "m":
+    if convert_to_nm and z_units == "m":
         image = image * 1e9
+        z_units = "nm"
 
     # Get page for common metadata between scans
     metadata_page = tif.pages[0]
 
     logger.info(f"[{filename}] : Extracted image.")
-    return (image, _jpk_pixel_to_nm_scaling(metadata_page, jpk_tags), units)
+    return (image, _jpk_pixel_to_nm_scaling(metadata_page, jpk_tags), z_units)
 
 
 def _load_jpk_tags(config_path: str | Path | None = None) -> dict[str, int]:
