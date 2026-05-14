@@ -305,7 +305,7 @@ def _load_jpk(
     convert_to_nm: bool = True,
 ) -> tuple[np.ndarray, float, str]:
     """
-    Load image data and pixel scaling from a JPK TIFF file for a given channel.
+    Load image data, pixel scaling, and z-axis units from a JPK TIFF file for a given channel.
 
     Parameters
     ----------

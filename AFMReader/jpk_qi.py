@@ -483,7 +483,7 @@ class jpk_qi_loader:
         config_path: Path | str | None = None,
         flip_image: bool | None = True,
         save_as_h5: bool | None = None,
-    ) -> tuple[np.ndarray, float, Any] | tuple[np.ndarray, float]:
+    ) -> tuple[np.ndarray, float, str, tuple[LazyJpkQiData, dict[str, str], LazyQiMetadata]]:
         """
         Load the .jpk-qi-data file.
 
@@ -500,8 +500,8 @@ class jpk_qi_loader:
 
         Returns
         -------
-        tuple
-            A tuple containing image data, scaling factor, and optionally curve data.
+        tuple[np.ndarray, float, str, tuple[LazyJpkQiData, dict[str, str], LazyQiMetadata]]
+            A tuple containing image data, scaling factor, z-axis unit, and optionally curve data.
         """
         # Update instance attributes based on provided parameters
         self.channel = channel if channel else self.channel
@@ -545,13 +545,13 @@ class jpk_qi_loader:
         )
 
         # Load the image
-        self.image, _ = self.get_image()
+        self.image, _, self.z_unit = self.get_image()
 
         # Save a lite form of the images (precalculated) if saving to a file
         if self.save_as_h5:
             self.save_lite_data()
 
-        return (self.image, self.px2nm, (self.curve_data, self.channels_units, self.full_metadata))
+        return (self.image, self.px2nm, self.z_unit, (self.curve_data, self.channels_units, self.full_metadata))
 
     def output_summary(self):
         """Output a summary of the loading process, including any failed curve loads and their details."""
@@ -857,7 +857,7 @@ class jpk_qi_loader:
 
     def get_image(
         self, overide_channel: str | None = None, convert_to_nm: bool = True, flip_image: bool | None = None
-    ) -> tuple[np.ndarray, float]:
+    ) -> tuple[np.ndarray, float, str]:
         """
         Process the flat curve data dictionary into a 2D list structure matching the image dimensions.
 
@@ -872,8 +872,8 @@ class jpk_qi_loader:
 
         Returns
         -------
-        tuple[np.ndarray, float]
-            A 2D array representing the image data and the pixel-to-nm scaling factor.
+        tuple[np.ndarray, float, str]
+            A 2D array representing the image data, the pixel-to-nm scaling factor, and the unit of the z-axis.
         """
         # Get channel and flip_image parameters
         channel = str(overide_channel) if overide_channel else str(self.channel)
@@ -954,7 +954,10 @@ class jpk_qi_loader:
                 # Include all the channels including the calculated channel
                 # TODO make this slightly faster by remembering we have load a channel already but
                 # difficult cause of scaling
-                channel_image, _ = self.get_image(overide_channel=h5_channel, convert_to_nm=False, flip_image=False)
+                channel_image, _, z_unit = self.get_image(
+                    overide_channel=h5_channel, convert_to_nm=False, flip_image=False
+                )
+                chan_grp.attrs["net-encoder.scaling.unit.unit"] = z_unit.encode("utf-8")
                 frame_stack = channel_image.flatten().reshape(-1, 1)
 
                 # Update/ replace the channels dataset
