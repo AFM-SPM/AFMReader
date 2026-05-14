@@ -79,21 +79,21 @@ class LoadFile:
             self.kwargs = kwargs
         try:
             if self.suffix == ".asd":
-                image, pixel_to_nanometre_scaling_factor, _ = asd.load_asd(self.filepath, self.channel)
+                image, pixel_to_nanometre_scaling_factor, _, _ = asd.load_asd(self.filepath, self.channel)
             elif self.suffix == ".gwy":
-                image, pixel_to_nanometre_scaling_factor = gwy.load_gwy(self.filepath, self.channel)
+                image, pixel_to_nanometre_scaling_factor, _ = gwy.load_gwy(self.filepath, self.channel)
             elif self.suffix == ".ibw":
                 image, pixel_to_nanometre_scaling_factor = ibw.load_ibw(self.filepath, self.channel)
             elif self.suffix in [".jpk", ".jpk-qi-image"]:
-                image, pixel_to_nanometre_scaling_factor = jpk.load_jpk(self.filepath, self.channel)
+                image, pixel_to_nanometre_scaling_factor, _ = jpk.load_jpk(self.filepath, self.channel)
             elif self.suffix == ".spm":
-                image, pixel_to_nanometre_scaling_factor = spm.load_spm(self.filepath, self.channel)
+                image, pixel_to_nanometre_scaling_factor, _ = spm.load_spm(self.filepath, self.channel)
             elif self.suffix == ".h5-jpk":
                 h5_returned = h5_jpk.load_h5jpk(self.filepath, self.channel, load_curves=not self.loaded_curves)
-                if len(h5_returned) == 3:
-                    image, pixel_to_nanometre_scaling_factor, _ = h5_returned  # type: ignore[misc]
-                elif len(h5_returned) == 4:
-                    image, pixel_to_nanometre_scaling_factor, _, curve_data = h5_returned  # type: ignore[misc]
+                if len(h5_returned) == 4:
+                    image, pixel_to_nanometre_scaling_factor, _, z_units = h5_returned  # type: ignore[misc]
+                elif len(h5_returned) == 5:
+                    image, pixel_to_nanometre_scaling_factor, _, z_units, curve_data = h5_returned  # type: ignore[misc]
                     self.loaded_curves = True
                     print(
                         f"Loaded image with shape {image.shape} and pixel to nanometre "
@@ -103,6 +103,7 @@ class LoadFile:
                     return image, pixel_to_nanometre_scaling_factor, curve_data
                 else:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
+                    raise ValueError(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
             elif self.suffix == ".jpk-qi-data":
                 if "jpk_qi_loader" not in self.cached_data:
                     self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(

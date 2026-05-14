@@ -26,6 +26,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         "image_dtype",
         "timestamps_dtype",
         "image_sum",
+        "unit",
     ),
     [
         pytest.param(
@@ -37,6 +38,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             float,
             dict,
             48525583.047271535,
+            "nm",
             id="test image 0",
         ),
         pytest.param(
@@ -48,6 +50,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             float,
             dict,
             48517762.77380567,
+            "nm",
             id="test image 0",
         ),
         pytest.param(
@@ -59,6 +62,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             float,
             dict,
             -360.7100517131785,
+            "nm",
             id="test image 0",
         ),
         pytest.param(
@@ -70,6 +74,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             float,
             dict,
             367.81162274907103,
+            "nm",
             id="test image 0",
         ),
         pytest.param(
@@ -81,6 +86,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             float,
             dict,
             1741828.7412469066,
+            "deg",
             id="test image 0",
         ),
         pytest.param(
@@ -92,6 +98,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             float,
             dict,
             1734511.5577225098,
+            "deg",
             id="test image 0",
         ),
         pytest.param(
@@ -103,6 +110,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             float,
             dict,
             275567.73614739266,
+            "nm",
             id="test image 0",
         ),
         pytest.param(
@@ -114,6 +122,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             float,
             dict,
             276296.25732934737,
+            "nm",
             id="test image 0",
         ),
     ],
@@ -127,9 +136,10 @@ def test_load_h5jpk(
     image_dtype: type[np.floating],
     timestamps_dtype: type,
     image_sum: float,
+    unit: str,
 ) -> None:
     """Test the normal operation of loading a .h5-jpk file."""
-    result_image, result_pixel_to_nm_scaling, results_timestamps = h5_jpk.load_h5jpk(  # type: ignore[misc]
+    result_image, result_pixel_to_nm_scaling, results_timestamps, result_unit = h5_jpk.load_h5jpk(  # type: ignore[misc]
         RESOURCES / file_name, channel, flip_image
     )
 
@@ -144,6 +154,7 @@ def test_load_h5jpk(
         results_timestamps[f"frame {i}"] < results_timestamps[f"frame {i + 1}"]
         for i in range(len(results_timestamps) - 1)
     )
+    assert result_unit == unit
 
 
 @pytest.mark.skip(reason="Test files are too large to store in the repo; a remote storage solution is needed.")
