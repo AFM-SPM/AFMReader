@@ -122,7 +122,7 @@ class LoadFile:
             elif self.suffix == ".stp":
                 image, pixel_to_nanometre_scaling_factor, _ = stp.load_stp(self.filepath)
             elif self.suffix == ".top":
-                image, pixel_to_nanometre_scaling_factor = top.load_top(self.filepath)
+                image, pixel_to_nanometre_scaling_factor, _ = top.load_top(self.filepath)
             elif self.suffix == ".topostats":
                 ts_dict = topostats.load_topostats(self.filepath)
                 try:
@@ -136,7 +136,7 @@ class LoadFile:
                         f"{[im for im in image_keys if im in topostats_keys]}"
                     ) from exc
             elif self.suffix == ".bin":
-                image, pixel_to_nanometre_scaling_factor = raw_bin.load_bin(self.filepath, **self.kwargs)
+                image, pixel_to_nanometre_scaling_factor, _ = raw_bin.load_bin(self.filepath, **self.kwargs)
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
 
