@@ -120,7 +120,7 @@ class LoadFile:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
                     raise ValueError(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
             elif self.suffix == ".stp":
-                image, pixel_to_nanometre_scaling_factor = stp.load_stp(self.filepath)
+                image, pixel_to_nanometre_scaling_factor, _ = stp.load_stp(self.filepath)
             elif self.suffix == ".top":
                 image, pixel_to_nanometre_scaling_factor = top.load_top(self.filepath)
             elif self.suffix == ".topostats":
