@@ -88,12 +88,27 @@ class LoadFile:
                 image, pixel_to_nanometre_scaling_factor, _ = jpk.load_jpk(self.filepath, self.channel)
             elif self.suffix == ".spm":
                 image, pixel_to_nanometre_scaling_factor, _ = spm.load_spm(self.filepath, self.channel)
+            elif self.suffix == ".jpk-qi-data":
+                if "jpk_qi_loader" not in self.cached_data:
+                    self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(
+                        filepath=self.filepath, channel=self.channel, **self.kwargs
+                    )
+                jpk_qi_returned = self.cached_data["jpk_qi_loader"].load(channel=self.channel, **self.kwargs)
+                image, pixel_to_nanometre_scaling_factor, _, curve_data = jpk_qi_returned
+                print(
+                    f"Loaded image with shape {image.shape} and pixel to nanometre "
+                    f"scaling factor {pixel_to_nanometre_scaling_factor}"
+                )
+                if self.cached_data["jpk_qi_loader"].saved_to_h5:
+                    self.filepath = self.cached_data["jpk_qi_loader"].h5_path
+                    self.suffix = self.filepath.suffix
+                return image, pixel_to_nanometre_scaling_factor, curve_data
             elif self.suffix == ".h5-jpk":
                 h5_returned = h5_jpk.load_h5jpk(self.filepath, self.channel, load_curves=not self.loaded_curves)
                 if len(h5_returned) == 4:
-                    image, pixel_to_nanometre_scaling_factor, _, z_units = h5_returned  # type: ignore[misc]
+                    image, pixel_to_nanometre_scaling_factor, _, _ = h5_returned  # type: ignore[misc]
                 elif len(h5_returned) == 5:
-                    image, pixel_to_nanometre_scaling_factor, _, z_units, curve_data = h5_returned  # type: ignore[misc]
+                    image, pixel_to_nanometre_scaling_factor, _, _, curve_data = h5_returned  # type: ignore[misc]
                     self.loaded_curves = True
                     print(
                         f"Loaded image with shape {image.shape} and pixel to nanometre "
@@ -104,20 +119,6 @@ class LoadFile:
                 else:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
                     raise ValueError(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
-            elif self.suffix == ".jpk-qi-data":
-                if "jpk_qi_loader" not in self.cached_data:
-                    self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(
-                        filepath=self.filepath, channel=self.channel, **self.kwargs
-                    )
-                jpk_qi_returned = self.cached_data["jpk_qi_loader"].load(channel=self.channel, **self.kwargs)
-                if len(jpk_qi_returned) == 2:
-                    image, pixel_to_nanometre_scaling_factor = jpk_qi_returned
-                elif len(jpk_qi_returned) == 3:
-                    image, pixel_to_nanometre_scaling_factor, curve_data = jpk_qi_returned
-                    self.loaded_curves = True
-                    return image, pixel_to_nanometre_scaling_factor, curve_data
-                else:
-                    logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(jpk_qi_returned)}")
             elif self.suffix == ".stp":
                 image, pixel_to_nanometre_scaling_factor = stp.load_stp(self.filepath)
             elif self.suffix == ".top":
@@ -145,15 +146,21 @@ class LoadFile:
             logger.error(f"{e}")
             raise e
 
-    def get_available_channels(self):  # noqa: C901
+    def get_available_channels(self, kwargs: dict | None = None):  # noqa: C901
         """
         Get the available channels for the file type.
+
+        Parameters
+        ----------
+        kwargs : dict | None, optional
+            Additional keyword arguments for channel extraction. Default is None.
 
         Returns
         -------
         list
             List of available channels.
         """
+        self.kwargs = kwargs if kwargs else self.kwargs
         if self.suffix == ".asd":
             available_channels = asd.get_asd_channels(self.filepath)
         elif self.suffix == ".gwy":
@@ -165,17 +172,46 @@ class LoadFile:
         elif self.suffix == ".spm":
             available_channels = spm.get_spm_channels(self.filepath)
         elif self.suffix == ".h5-jpk":
+            logger.debug("Getting available channels for h5-jpk file")
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
         elif self.suffix == ".jpk-qi-data":
             if "jpk_qi_loader" not in self.cached_data:
                 self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(filepath=self.filepath, **self.kwargs)
-            available_channels = self.cached_data["jpk_qi_loader"].get_available_channels()
+            logger.debug(f"Getting available channels for jpk-qi-data file with kwargs: {self.kwargs}")
+            if "save_as_h5" in self.kwargs and self.kwargs["save_as_h5"]:
+                # if saving to h5, the channels will be the keys of the h5 file,
+                # so we need to load the h5 file to get the channels
+                logger.debug("Saving JPK QI data to h5, loading h5 file to get available channels")
+                h5_path = self.cached_data["jpk_qi_loader"].save_to_h5()
+                self.filepath = Path(h5_path)
+                self.suffix = Path(h5_path).suffix
+                self.cached_data["jpk_qi_loader"].close()
+                self.cached_data.pop("jpk_qi_loader")
+                self.kwargs.pop("save_as_h5")
+                available_channels = self.get_available_channels()
+            else:
+                available_channels = self.cached_data["jpk_qi_loader"].get_available_channels()
         elif self.suffix == ".topostats":
             available_channels = ["image", "image_original"]
-        elif self.suffix == ".bin":
-            available_channels = raw_bin.get_bin_channels()
-        elif self.suffix in [".stp", ".top"]:
+        elif self.suffix in [".stp", ".top", ".bin"]:
             return []
         else:
             raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
         return available_channels
+
+    def get_additional_params(self):
+        """
+        Get any additional parameters for the file type.
+
+        Returns
+        -------
+        dict
+            Dictionary of additional parameters.
+        """
+        if self.suffix == ".bin":
+            return raw_bin.get_bin_params()
+        if self.suffix == ".jpk-qi-data":
+            if "jpk_qi_loader" not in self.cached_data:
+                self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(filepath=self.filepath, **self.kwargs)
+            return self.cached_data["jpk_qi_loader"].get_additional_params()
+        return {}

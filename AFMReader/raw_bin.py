@@ -93,22 +93,16 @@ def load_bin(
     return image, px2nm
 
 
-def get_bin_channels():
+def get_bin_params():
     """
-    Get the list of channels available in the binary file.
-
-    Since binary files do not have a standard structure,
-    this function returns an empty list (as no standard channels are available) and the expected keyword
-    arguments for loading a binary file.
+    Get the expected keyword arguments for loading a binary file.
 
     Returns
     -------
-    list
-        Empty list.
     dict
         Dictionary of expected keyword arguments for loading a binary file.
     """
-    kwarg_types = {
+    return {
         "data_type": (str, DTYPE_MAP.keys()),
         "offset_bytes": int,
         "size_x": float,
@@ -117,4 +111,3 @@ def get_bin_channels():
         "shape_y": int,
         "z_scaling": float,
     }
-    return [], kwarg_types

@@ -13,7 +13,6 @@ import io
 import zipfile
 import time
 from pathlib import Path
-from contextlib import nullcontext
 from typing import Any
 
 import numpy as np
@@ -452,6 +451,11 @@ class jpk_qi_loader:
 
         # Instantiate containers for data to be saved (so an exception is not caused if not saving)
         self.curve_groups = None
+        self.saved_to_h5 = False
+
+        self.extract_global_metadata()
+
+        self.parse_dimension_data()
 
     def get_available_channels(self):
         """
@@ -472,18 +476,28 @@ class jpk_qi_loader:
 
         # Add the channels which exist in the jpk-qi-image file
         with self.qi_archive.open(self.path_to_image, "r") as image_file:
-            channels = jpk._get_jpk_channels(
+            return jpk._get_jpk_channels(
                 file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(self.path_to_image)
             )
-        return channels, {"save_as_h5": bool}
+
+    def get_additional_params(self) -> dict[str, type]:
+        """
+        Get additional parameters that can be passed to the load function.
+
+        Returns
+        -------
+        dict
+            A dictionary of additional parameters with their types.
+        """
+        return {"save_as_h5": bool}
 
     def load(
         self,
         channel: str | None = None,
         config_path: Path | str | None = None,
         flip_image: bool | None = True,
-        save_as_h5: bool | None = None,
-    ) -> tuple[np.ndarray, float, str, tuple[LazyJpkQiData, dict[str, str], LazyQiMetadata]]:
+        save_as_h5: bool = False,
+    ) -> tuple[np.ndarray, float, str, tuple[LazyQiData, dict[str, str], LazyMetadata]]:
         """
         Load the .jpk-qi-data file.
 
@@ -496,37 +510,24 @@ class jpk_qi_loader:
         flip_image : bool | None, optional
             Whether to flip the image. Default is True.
         save_as_h5 : bool, optional
-            Whether to save the data as an H5 file. Default is False.
+            Whether to save the loaded data as an H5 file. Default is False.
 
         Returns
         -------
-        tuple[np.ndarray, float, str, tuple[LazyJpkQiData, dict[str, str], LazyQiMetadata]]
-            A tuple containing image data, scaling factor, z-axis unit, and optionally curve data.
+        tuple[np.ndarray, float, str, tuple[LazyQiData, dict[str, str], LazyMetadata]]
+            A tuple containing image data, scaling factor, z-axis unit, and curve data.
         """
         # Update instance attributes based on provided parameters
         self.channel = channel if channel else self.channel
         self.config_path = config_path if config_path else self.config_path
         self.flip_image = flip_image if flip_image is not None else self.flip_image
-        self.save_as_h5 = save_as_h5 if save_as_h5 is not None else self.save_as_h5
+        self.save_as_h5 = save_as_h5
 
-        if self.save_as_h5:
-            self.h5_path = self.filepath.parent / f"{self.filepath.stem}.h5-jpk"
-            i = 0
-            while self.h5_path.exists():
-                self.h5_path = self.filepath.parent / f"{self.filepath.stem}_{i}.h5-jpk"
-                i += 1
+        # TODO add a save to h5 option here?
 
         logger.info(f"Loading JPK QI data from {self.filepath} with channel {self.channel}")
-        self.extract_global_metadata()
 
-        self.parse_dimension_data()
-
-        # Setup H5 Data structures if needed
-        if self.save_as_h5:
-            self.save_to_h5()
-
-        # Establish the lazy loading structures for curve data and metadata. Note how lazy structure is used even if
-        # all the data has been accessed and saved to H5 to prevent excessive memory usage
+        # Establish the lazy loading structures for curve data and metadata.
         self.full_metadata = LazyQiMetadata(
             self.filepath,
             self.top_level_meta,
@@ -546,10 +547,6 @@ class jpk_qi_loader:
 
         # Load the image
         self.image, _, self.z_unit = self.get_image()
-
-        # Save a lite form of the images (precalculated) if saving to a file
-        if self.save_as_h5:
-            self.save_lite_data()
 
         return (self.image, self.px2nm, self.z_unit, (self.curve_data, self.channels_units, self.full_metadata))
 
@@ -654,7 +651,7 @@ class jpk_qi_loader:
     def save_to_h5(
         self,
         include_metadata: bool = True,
-    ):
+    ) -> Path:
         """
         Save data as an H5 file. If include_metadata is False, only curve data is saved.
 
@@ -662,7 +659,19 @@ class jpk_qi_loader:
         ----------
         include_metadata : bool, optional
             If True, metadata will be included in the saved H5 file. Default is True.
+
+        Returns
+        -------
+        Path
+            The path to the saved H5 file.
         """
+        # Determine the path for the H5 file, ensuring it does not overwrite an existing file
+        self.h5_path = self.filepath.parent / f"{self.filepath.stem}.h5-jpk"
+        i = 0
+        while self.h5_path.exists():
+            self.h5_path = self.filepath.parent / f"{self.filepath.stem}_{i}.h5-jpk"
+            i += 1
+
         with self.get_saving_context() as file:
 
             t0 = time.perf_counter()
@@ -709,7 +718,10 @@ class jpk_qi_loader:
                 for key, value in self.get_collated_metadata().items():
                     global_meta_group.attrs[key] = str(value).encode("utf-8")
 
+            self.save_lite_data()
+
             logger.info(f"QI data copied to h5 data {file.filename}")
+            return self.h5_path
 
     def get_curves_sample(self):
         """
@@ -918,7 +930,6 @@ class jpk_qi_loader:
 
             logger.info(f"Saving a hdf5 copy of the data {self.h5_path}")
 
-            h5_channels = [self.channel]
             # Look for the jpk-qi-image file in the archive
             path_to_image = None
             for file_name in self.namelist:
@@ -926,11 +937,19 @@ class jpk_qi_loader:
                     path_to_image = file_name
                     break
             # Add the channels which exist in the jpk-qi-image file
+            h5_channels = []
             if path_to_image:
                 with self.qi_archive.open(path_to_image, "r") as image_file:
-                    h5_channels += jpk._get_jpk_channels(
+                    h5_channels = jpk._get_jpk_channels(
                         file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(path_to_image)
                     )
+            else:
+                logger.warning(
+                    f"No image data found in {self.filepath}. Cannot save image data to H5."
+                    f"Please check the file and channel name."
+                )
+                return
+
             for i, h5_channel in enumerate(h5_channels):
                 # For each available channel, save the required data to the h5 file
                 # TODO make sure this metadata is accurate for the channels coming from the .jpk-qi-image file
@@ -1254,9 +1273,7 @@ class jpk_qi_loader:
         contextlib.AbstractContextManager
             The context manager for saving the data.
         """
-        if self.save_as_h5:
-            return h5py.File(self.h5_path, "a")
-        return nullcontext()
+        return h5py.File(self.h5_path, "a")
 
     def parse_dimension_data(self):
         """Parse dimension data and calculate the pixel to nanometer scaling factor."""
@@ -1333,13 +1350,6 @@ class jpk_qi_loader:
     def close(self):
         """Close the ZIP archive when done to free up system resources."""
         self.qi_archive.close()
-        self.image = None
-        self.curve_data = None
-        self.curve_meta = {}
-        self.segment_meta = {}
-        self.top_level_meta = {}
-        self.failed_curves = set()
-        self.points_for_channel_segment = {}
         self.namelist = []
 
 

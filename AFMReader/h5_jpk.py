@@ -145,8 +145,9 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float, str]:
     """
     multiplier = float(channel_group.attrs.get("net-encoder.scaling.multiplier", 1.0))
     offset = float(channel_group.attrs.get("net-encoder.scaling.offset", 0.0))
+
     unit = (
-        channel_group.attrs.get("net-encoder.scaling.unit.unit").decode("utf-8")
+        _decode_attr(channel_group.attrs.get("net-encoder.scaling.unit.unit"))
         if "net-encoder.scaling.unit.unit" in channel_group.attrs
         else None
     )
