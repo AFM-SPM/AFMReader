@@ -10,6 +10,7 @@ from AFMReader import jpk
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
 
+
 # pylint: disable=too-many-arguments, too-many-positional-arguments
 @pytest.mark.parametrize(
     ("file_name", "channel", "pixel_to_nm_scaling", "image_shape", "image_dtype", "image_sum", "unit"),

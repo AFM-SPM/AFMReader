@@ -35,6 +35,7 @@ def load_bin(
     shape_x: int | None = None,
     shape_y: int | None = None,
     z_scaling: float = 1.0,
+    z_unit: str = "nm",
 ):
     """
     Load image from binary file. Parameters to interpret the binary file must be provided.
@@ -57,6 +58,8 @@ def load_bin(
         Number of pixels in the y direction (default is None).
     z_scaling : float, optional
         Scaling factor for the z values (default is 1.0).
+    z_unit : str, optional
+        Unit of the z values (default is "nm").
 
     Returns
     -------
@@ -64,6 +67,8 @@ def load_bin(
         2D array of shape (height, width) with image data.
     px2nm : float
         Scaling factor converting pixels to nanometers.
+    z_unit : str
+        Unit of the z values.
     """
     filepath = Path(filepath)
     dt_key = str(data_type).strip()
@@ -90,7 +95,7 @@ def load_bin(
     pixel_to_nm_scaling_factor_x = size_x / shape_x if shape_x > 0 else 1.0
     pixel_to_nm_scaling_factor_y = size_y / shape_y if shape_y > 0 else 1.0
     px2nm = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
-    return image, px2nm
+    return image, px2nm, z_unit
 
 
 def get_bin_params():
@@ -110,4 +115,5 @@ def get_bin_params():
         "shape_x": int,
         "shape_y": int,
         "z_scaling": float,
+        "z_unit": str,
     }

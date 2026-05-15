@@ -61,8 +61,6 @@ def load_stp(  # noqa: C901 (ignore too complex)
             # decode the header bytes
             header_decoded = header.decode(header_encoding)
 
-            logger.debug(f"[{filename}] : Header decoded: {header_decoded}")
-
             # find num rows
             rows_match = re.search(r"Number of rows: (\d+)", header_decoded)
             if rows_match is None:
