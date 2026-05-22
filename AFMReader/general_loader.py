@@ -95,11 +95,6 @@ class LoadFile:
                 elif len(h5_returned) == 4:
                     image, pixel_to_nanometre_scaling_factor, _, curve_data = h5_returned  # type: ignore[misc]
                     self.loaded_curves = True
-                    print(
-                        f"Loaded image with shape {image.shape} and pixel to nanometre "
-                        f"scaling factor {pixel_to_nanometre_scaling_factor}"
-                    )
-                    print(f"Image has max value {image.max()} and min value {image.min()}")
                     return image, pixel_to_nanometre_scaling_factor, curve_data
                 else:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
