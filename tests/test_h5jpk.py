@@ -212,3 +212,31 @@ def test_load_h5jpk_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
         h5_jpk.load_h5jpk("nonexistant_file.h5-jpk", channel="TP")
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected_channels"),
+    [
+        pytest.param(
+            "sample_0.h5-jpk",
+            [
+                "error_trace",
+                "height_trace",
+                "phase_retrace",
+                "height_retrace",
+                "measuredheight_trace",
+                "error_retrace",
+                "amplitude_trace",
+                "amplitude_retrace",
+                "phase_trace",
+            ],
+            id="sample_0.h5-jpk",
+        ),
+    ],
+)
+def test_get_h5jpk_channels(file_name: str, expected_channels: list[str]) -> None:
+    """Test get_h5jpk_channels."""
+    file_path = RESOURCES / file_name
+    channels = h5_jpk.get_h5jpk_channels(file_path)
+    # The order might not be guaranteed, so sort before comparing
+    assert sorted(channels) == sorted(expected_channels)
