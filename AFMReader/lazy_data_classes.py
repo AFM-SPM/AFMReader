@@ -38,6 +38,48 @@ class LazyQiData:
         self.dims = (shape_y, shape_x)
         self.flip_image = flip_image
 
+    class _RowProxy:
+        """
+        A proxy class for a single row of the QI data that fetches curve data on demand.
+
+        Parameters
+        ----------
+        parent : LazyQiData
+            The parent LazyQiData instance.
+        y : int
+            The row index.
+        """
+
+        def __init__(self, parent, y):
+            """
+            Initialize _RowProxy with parent LazyQiData and row index.
+
+            Parameters
+            ----------
+            parent : LazyQiData
+                The parent LazyQiData instance.
+            y : int
+                The row index.
+            """
+            self.parent = parent
+            self.y = y
+
+        def __getitem__(self, x: int):
+            """
+            Fetch curve data for column x in this row.
+
+            Parameters
+            ----------
+            x : int
+                The column index.
+
+            Returns
+            -------
+            dict
+                The QI curve data for the specified pixel.
+            """
+            return self.parent._fetch_curve(self.y, x)
+
     def __getitem__(self, y: int):
         """
         Return a proxy object for the specified row that can be indexed to fetch curve data for each pixel in that row.
@@ -51,53 +93,10 @@ class LazyQiData:
 
         Returns
         -------
-        RowProxy
+        _RowProxy
             A proxy object for the specified row.
         """
-
-        class RowProxy:
-            """
-            A proxy class for a single row of the QI data that fetches curve data on demand.
-
-            Parameters
-            ----------
-            parent : LazyQiData
-                The parent LazyQiData instance.
-            y : int
-                The row index.
-            """
-
-            def __init__(self, parent, y):
-                """
-                Initialize RowProxy with parent LazyQiData and row index.
-
-                Parameters
-                ----------
-                parent : LazyQiData
-                    The parent LazyQiData instance.
-                y : int
-                    The row index.
-                """
-                self.parent = parent
-                self.y = y
-
-            def __getitem__(self, x: int):
-                """
-                Fetch curve data for column x in this row.
-
-                Parameters
-                ----------
-                x : int
-                    The column index.
-
-                Returns
-                -------
-                dict
-                    The QI curve data for the specified pixel.
-                """
-                return self.parent._fetch_curve(self.y, x)
-
-        return RowProxy(self, y)
+        return self._RowProxy(self, y)
 
     def _fetch_curve(self, y: int, x: int):
         """
@@ -196,6 +195,87 @@ class LazyMetaProxy:
         self.shape_y = shape_y
         self.flip_image = flip_image
 
+    class _RowProxy:
+        """
+        A proxy class for a single row of the metadata that fetches metadata on demand.
+
+        Parameters
+        ----------
+        parent : LazyMetaProxy
+            The parent LazyMetaProxy instance.
+        y : int
+            The row index.
+        """
+
+        class _SegmentMetaProxy:
+            """
+            A proxy class for a single pixel's segment metadata that fetches metadata on demand.
+
+            Parameters
+            ----------
+            parent : _RowProxy
+                The parent _RowProxy instance.
+            y : int
+                The row index.
+            x : int
+                The column index.
+            """
+
+            def __init__(self, parent, y, x):
+                self.parent = parent
+                self.y = y
+                self.x = x
+
+            def __getitem__(self, direction):
+                """
+                Fetch metadata for the specified segment direction.
+
+                Parameters
+                ----------
+                direction : int
+                    The direction of the segment ("approach" or "retract").
+
+                Returns
+                -------
+                dict
+                    The metadata for the specified segment direction.
+                """
+                return self.parent.parent._fetch_meta(self.y, self.x, direction)
+
+        def __init__(self, parent, y):
+            """
+            Initialize _RowProxy with parent LazyMetaProxy and row index.
+
+            Parameters
+            ----------
+            parent : LazyMetaProxy
+                The parent LazyMetaProxy instance.
+            y : int
+                The row index.
+            """
+            self.parent = parent
+            self.y = y
+
+        def __getitem__(self, x):
+            """
+            Fetch metadata for column x in this row.
+
+            Parameters
+            ----------
+            x : int
+                The column index.
+
+            Returns
+            -------
+            dict or _SegmentMetaProxy
+                The metadata for the specified column, or a proxy for segment metadata.
+            """
+            if self.parent.meta_type == "curve":
+                return self.parent._fetch_meta(self.y, x)
+            if self.parent.meta_type == "segment":
+                return self._SegmentMetaProxy(self, self.y, x)
+            raise IndexError(f"Unknown metadata type '{self.parent.meta_type}'. Expected 'curve' or 'segment'.")
+
     def __getitem__(self, y: int):
         """
         Return a proxy object for the specified row that can be indexed to fetch metadata for each pixel in that row.
@@ -211,92 +291,10 @@ class LazyMetaProxy:
 
         Returns
         -------
-        RowProxy
+        _RowProxy
             A proxy object for the specified row.
         """
-
-        class RowProxy:
-            """
-            A proxy class for a single row of the metadata that fetches metadata on demand.
-
-            Parameters
-            ----------
-            parent : LazyMetaProxy
-                The parent LazyMetaProxy instance.
-            y : int
-                The row index.
-            """
-
-            def __init__(self, parent, y):
-                """
-                Initialize RowProxy with parent LazyMetaProxy and row index.
-
-                Parameters
-                ----------
-                parent : LazyMetaProxy
-                    The parent LazyMetaProxy instance.
-                y : int
-                    The row index.
-                """
-                self.parent = parent
-                self.y = y
-
-            def __getitem__(self, x):
-                """
-                Fetch metadata for column x in this row.
-
-                Parameters
-                ----------
-                x : int
-                    The column index.
-
-                Returns
-                -------
-                dict or SegmentMetaProxy
-                    The metadata for the specified column, or a proxy for segment metadata.
-                """
-                if self.parent.meta_type == "curve":
-                    return self.parent._fetch_meta(self.y, x)
-                if self.parent.meta_type == "segment":
-
-                    class SegmentMetaProxy:
-                        """A proxy class for a single pixel's segment metadata that fetches metadata on demand.
-
-                        Parameters
-                        ----------
-                        parent : RowProxy
-                            The parent RowProxy instance.
-                        y : int
-                            The row index.
-                        x : int
-                            The column index.
-                        """
-
-                        def __init__(self, parent, y, x):
-                            self.parent = parent
-                            self.y = y
-                            self.x = x
-
-                        def __getitem__(self, direction):
-                            """
-                            Fetch metadata for the specified segment direction.
-
-                            Parameters
-                            ----------
-                            direction : int
-                                The direction of the segment ("approach" or "retract").
-
-                            Returns
-                            -------
-                            dict
-                                The metadata for the specified segment direction.
-                            """
-                            return self.parent.parent._fetch_meta(self.y, self.x, direction)
-
-                    return SegmentMetaProxy(self, self.y, x)
-                raise IndexError(f"Unknown metadata type '{self.parent.meta_type}'. Expected 'curve' or 'segment'.")
-
-        return RowProxy(self, y)
+        return self._RowProxy(self, y)
 
     def _fetch_meta(self, y: int, x: int, direction: int | None = None):
         """
