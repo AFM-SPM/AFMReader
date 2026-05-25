@@ -12,28 +12,31 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 
 
 @pytest.mark.parametrize(
-    ("file_name", "channel", "pixel_to_nm_scaling", "image_shape", "image_dtype", "image_sum"),
-    [pytest.param("sample_0.ibw", "HeightTracee", 1.5625, (512, 512), "f4", -218091520.0, id="test image 0")],
+    ("file_name", "channel", "pixel_to_nm_scaling", "image_shape", "image_dtype", "image_sum", "expected_z_units"),
+    [pytest.param("sample_0.ibw", "HeightTracee", 1.5625, (512, 512), "f4", -218091520.0, "nm", id="test image 0")],
 )
-def test_load_ibw(
+def test_load_ibw(  # pylint: disable=too-many-positional-arguments
     file_name: str,
     channel: str,
     pixel_to_nm_scaling: float,
     image_shape: tuple[int, int],
     image_dtype: type,
     image_sum: float,
+    expected_z_units: str,
 ) -> None:
     """Test the normal operation of loading an .ibw file."""
     result_image = np.ndarray
     result_pixel_to_nm_scaling = float
+    result_z_units = str
 
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling = ibw.load_ibw(file_path, channel)  # type: ignore
+    result_image, result_pixel_to_nm_scaling, result_z_units = ibw.load_ibw(file_path, channel)  # type: ignore
 
     assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
     assert isinstance(result_image, np.ndarray)
     assert result_image.shape == image_shape
     assert result_image.dtype == image_dtype
+    assert result_z_units == expected_z_units
     assert result_image.sum() == pytest.approx(image_sum)
 
 
