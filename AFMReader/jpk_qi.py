@@ -8,7 +8,6 @@ and supports exporting to HDF5 format.
 # pylint: disable=too-many-lines,too-many-positional-arguments,too-few-public-methods,too-many-instance-attributes
 # pylint: disable=too-many-locals,too-many-branches,protected-access,attribute-defined-outside-init,fixme
 
-import os
 import io
 import zipfile
 import time
@@ -18,7 +17,7 @@ from typing import Any
 import numpy as np
 import javaproperties
 import h5py
-import psutil
+from tqdm import tqdm
 
 from AFMReader.lazy_data_classes import LazyMetadata, LazyMetaProxy, LazyQiData
 from AFMReader.logging import logger
@@ -599,8 +598,6 @@ class jpk_qi_loader:
             f"Loading all curve data from JPK QI archive with {len(self.namelist)} files "
             f"{'' if include_metadata else 'not '}including metadata"
         )
-        progress_counter = 0
-        process = psutil.Process(os.getpid())
         if include_metadata:
             # Prepare keys for metadata to speed up processing
             curve_work = [
@@ -611,14 +608,7 @@ class jpk_qi_loader:
                 (f"{k}=".encode(), h5_meta_datasets[f"segment.{k}"], h5_meta_datasets_buffer[f"segment.{k}"])
                 for k in self.changing_segment_keys
             ]
-        for curve_num in range(self.num_of_curves):
-            # Output progress every 1000 curves to give some indication of how long the loading is taking
-            if progress_counter % 1000 == 0:
-                mem = process.memory_info().rss / 1024 / 1024
-                logger.info(
-                    f"Progress: {progress_counter}/{self.num_of_curves} curves processed, Memory usage: {mem:.2f} MB"
-                )
-            progress_counter += 1
+        for curve_num in tqdm(range(self.num_of_curves)):
 
             for direction in range(2):
                 for chan in self.segment_channels:
