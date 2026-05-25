@@ -359,8 +359,6 @@ def _load_jpk(
     if flip_image is True:
         image = np.flipud(image)
 
-    logger.debug(f"Unit: {z_units}")
-
     if convert_to_nm and z_units == "m":
         image = image * 1e9
         z_units = "nm"
