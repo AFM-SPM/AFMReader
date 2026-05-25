@@ -38,6 +38,17 @@ class LazyQiData:
         self.dims = (shape_y, shape_x)
         self.flip_image = flip_image
 
+    def __len__(self):
+        """
+        Return the total number of pixels in the image.
+
+        Returns
+        -------
+        int
+            The total number of pixels in the image.
+        """
+        return self.shape_x * self.shape_y
+
     def __getitem__(self, y: int):
         """
         Return a proxy object for the specified row that can be indexed to fetch curve data for each pixel in that row.
