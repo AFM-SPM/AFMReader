@@ -100,7 +100,7 @@ class LoadFile:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
             elif self.suffix == ".jpk-qi-data":
                 if "jpk_qi_loader" not in self.cached_data:
-                    self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(
+                    self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(
                         filepath=self.filepath, channel=self.channel, **self.kwargs
                     )
                 jpk_qi_returned = self.cached_data["jpk_qi_loader"].load(channel=self.channel, **self.kwargs)
@@ -162,7 +162,7 @@ class LoadFile:
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
         elif self.suffix == ".jpk-qi-data":
             if "jpk_qi_loader" not in self.cached_data:
-                self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(filepath=self.filepath, **self.kwargs)
+                self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(filepath=self.filepath, **self.kwargs)
             available_channels = self.cached_data["jpk_qi_loader"].get_available_channels()
         elif self.suffix == ".topostats":
             available_channels = ["image", "image_original"]

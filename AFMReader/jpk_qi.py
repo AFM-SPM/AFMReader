@@ -362,7 +362,7 @@ def _get_channel_scaling(props, channel_index):
     return final_multiplier, final_offset, unit
 
 
-class jpk_qi_loader:
+class JPKQILoader:
     """
     Class for readability and improving modularity in the load jpk qi data function.
 
@@ -413,8 +413,9 @@ class jpk_qi_loader:
         # Open the ZIP archive once and keep it open for the duration of the loading process
         self.qi_archive = zipfile.ZipFile(self.filepath, "r")  # pylint: disable=consider-using-with
         logger.info(f"Opened JPK QI archive at {self.filepath}")
-        self.namelist = self.qi_archive.namelist()
-        # Set path to the .jpk-qi-image file within the archive for later use
+        # Store the list of all paths in the archive to avoid having to call namelist() multiple times
+        self.list_of_all_paths = self.qi_archive.namelist()
+        # For holding the reference to where the actual .jqk-qi image is (not the metadata).
         self.path_to_image = None
 
         # Chunk size for H5 datasets
@@ -466,7 +467,7 @@ class jpk_qi_loader:
         """
         # Look for the jpk-qi-image file in the archive
         if self.path_to_image is None:
-            for file_name in self.namelist:
+            for file_name in self.list_of_all_paths:
                 if file_name.endswith(".jpk-qi-image"):
                     self.path_to_image = file_name
 
@@ -599,7 +600,7 @@ class jpk_qi_loader:
             Whether to include metadata in the loading process, by default True.
         """
         logger.info(
-            f"Loading all curve data from JPK QI archive with {len(self.namelist)} files "
+            f"Loading all curve data from JPK QI archive with {len(self.list_of_all_paths)} files "
             f"{'' if include_metadata else 'not '}including metadata"
         )
         progress_counter = 0
@@ -883,7 +884,7 @@ class jpk_qi_loader:
 
         # Search through the namelist to find the .jpk-qi-image file
         path_to_image = None
-        for file_name in self.namelist:
+        for file_name in self.list_of_all_paths:
             if file_name.endswith(".jpk-qi-image"):
                 path_to_image = file_name
         if path_to_image is None:
@@ -921,7 +922,7 @@ class jpk_qi_loader:
             h5_channels = [self.channel]
             # Look for the jpk-qi-image file in the archive
             path_to_image = None
-            for file_name in self.namelist:
+            for file_name in self.list_of_all_paths:
                 if file_name.endswith(".jpk-qi-image"):
                     path_to_image = file_name
                     break
@@ -1283,7 +1284,7 @@ class jpk_qi_loader:
     def extract_global_metadata(self):
         """Extract global metadata and populate top level metadata dictionary and segment channels list."""
         # Load the metadata from the global properties file
-        if "header.properties" in self.namelist:
+        if "header.properties" in self.list_of_all_paths:
             with self.qi_archive.open("header.properties") as archive_meta_file:
                 props = javaproperties.load(archive_meta_file)
 
@@ -1294,7 +1295,7 @@ class jpk_qi_loader:
             logger.error(f"File {self.filepath} does not contain essential metadata and cannot be loaded")
 
         # Load the metadata from the shared header
-        if "shared-data/header.properties" in self.namelist:
+        if "shared-data/header.properties" in self.list_of_all_paths:
             with self.qi_archive.open("shared-data/header.properties") as shared_data_file:
                 shared_meta = javaproperties.load(shared_data_file)
                 channel_idx = 0
@@ -1337,7 +1338,7 @@ class jpk_qi_loader:
         self.top_level_meta = {}
         self.failed_curves = set()
         self.points_for_channel_segment = {}
-        self.namelist = []
+        self.list_of_all_paths = []
 
 
 def _make_num_min_characters(num: int, min_chars: int = 3):

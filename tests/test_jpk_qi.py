@@ -127,7 +127,7 @@ def test_load_jpk_qi_data(  # pylint: disable=too-many-arguments,too-many-positi
     result_image = np.ndarray
     result_pixel_to_nm_scaling = float
     file_path = RESOURCES / file_name
-    jpk_qi_loader = jpk_qi.jpk_qi_loader(file_path, channel)
+    jpk_qi_loader = jpk_qi.JPKQILoader(file_path, channel)
     result_image, result_pixel_to_nm_scaling, result_curve_data = jpk_qi_loader.load()  # type: ignore
 
     assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
@@ -150,4 +150,4 @@ def test_load_jpk_qi_data(  # pylint: disable=too-many-arguments,too-many-positi
 def test_load_jpk_data_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
-        jpk_qi.jpk_qi_loader("noexistant_file.jpk-qi-data", "TP")
+        jpk_qi.JPKQILoader("noexistant_file.jpk-qi-data", "TP")
