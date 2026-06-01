@@ -433,7 +433,7 @@ class JPKQILoader:
         config_path: Path | str | None = None,
         flip_image: bool | None = True,
         save_as_h5: bool | None = None,
-    ) -> tuple[np.ndarray, float, Any] | tuple[np.ndarray, float]:
+    ) -> tuple[np.ndarray, float, CurvesJPKDataset]:
         """
         Load the .jpk-qi-data file.
 
@@ -451,7 +451,7 @@ class JPKQILoader:
         Returns
         -------
         tuple
-            A tuple containing image data, scaling factor, and optionally curve data.
+            A tuple containing image data, scaling factor, and curve data.
         """
         # Update instance attributes based on provided parameters
         self.channel = channel if channel else self.channel
