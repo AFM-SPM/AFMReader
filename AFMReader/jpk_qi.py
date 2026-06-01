@@ -115,7 +115,7 @@ class CurvesJPKMetadata(CurvesMetadata):
         super().__init__(toplevel, shape_x, shape_y, channel_units, flip_image)
         self.archive = archive
 
-    def get_pixel_metadata(self, y: int, x: int, direction: int | None = None):
+    def get_point_metadata(self, y: int, x: int, direction: int | None = None):
         """
         Fetch the metadata for a specific pixel or direction.
 

@@ -482,7 +482,7 @@ class CurvesH5Metadata(CurvesMetadata):
         super().__init__(toplevel, shape_x, shape_y, channel_units, flip_image)
         self.qi_data_group = qi_data_group
 
-    def get_pixel_metadata(self, y: int, x: int, direction: int | None = None):
+    def get_point_metadata(self, y: int, x: int, direction: int | None = None):
         """
         Fetch metadata for a specific pixel (x, y) on demand.
 

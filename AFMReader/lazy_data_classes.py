@@ -76,17 +76,17 @@ class CurvesMetadata:
         """
         if isinstance(keys, tuple) and len(keys) == 2:
             y, x = keys
-            return self.get_pixel_metadata(y, x)
+            return self.get_point_metadata(y, x)
         if isinstance(keys, tuple) and len(keys) == 3:
             y, x, direction = keys
-            return self.get_pixel_metadata(y, x, direction)
+            return self.get_point_metadata(y, x, direction)
         raise IndexError(
             f"Invalid indexing. Expected (y, x) or (y, x, direction) for pixel metadata indexing. Got {keys}."
         )
 
-    def get_pixel_metadata(self, y: int, x: int, direction: int | None = None):
+    def get_point_metadata(self, y: int, x: int, direction: int | None = None):
         """
-        Fetch the metadata for a specific pixel, optionally for a specific direction.
+        Fetch the metadata for a specific pixel/ point, optionally for a specific direction.
 
         Should be implemented by subclasses to define how the metadata is retrieved from the underlying data source.
 
