@@ -105,3 +105,42 @@ def test_load_jpk_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
         jpk.load_jpk("nonexistant_file.jpk", channel="TP")
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected"),
+    [
+        pytest.param(
+            "sample_0.jpk",
+            {
+                "height_retrace": 1,
+                "measuredHeight_retrace": 2,
+                "amplitude_retrace": 3,
+                "phase_retrace": 4,
+                "error_retrace": 5,
+                "height_trace": 6,
+                "measuredHeight_trace": 7,
+                "amplitude_trace": 8,
+                "phase_trace": 9,
+                "error_trace": 10,
+            },
+            id="sample_0.jpk",
+        ),
+        pytest.param(
+            "sample_0.jpk-qi-image",
+            {
+                "measuredHeight_trace": 3,
+                "vDeflection_trace": 2,
+                "adhesion_trace": 4,
+                "height_trace": 5,
+                "slope_trace": 6,
+            },
+            id="sample_0.jpk-qi-image",
+        ),
+    ],
+)
+def test_get_jpk_channels(file_name: str, expected: dict[str, int]) -> None:
+    """Test get_jpk_channels."""
+    file_path = RESOURCES / file_name
+    channels = jpk.get_jpk_channels(file_path)
+    assert channels == expected

@@ -90,7 +90,7 @@ class LoadFile:
                 image, pixel_to_nanometre_scaling_factor, z_units = spm.load_spm(self.filepath, self.channel)
             elif self.suffix == ".jpk-qi-data":
                 if "jpk_qi_loader" not in self.cached_data:
-                    self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(
+                    self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(
                         filepath=self.filepath, channel=self.channel, **self.kwargs
                     )
                 jpk_qi_returned = self.cached_data["jpk_qi_loader"].load(channel=self.channel, **self.kwargs)
@@ -166,7 +166,7 @@ class LoadFile:
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
         elif self.suffix == ".jpk-qi-data":
             if "jpk_qi_loader" not in self.cached_data:
-                self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(filepath=self.filepath, **self.kwargs)
+                self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(filepath=self.filepath, **self.kwargs)
             if "save_as_h5" in self.kwargs and self.kwargs["save_as_h5"]:
                 # if saving to h5, the channels will be the keys of the h5 file,
                 # so we need to load the h5 file to get the channels
@@ -200,6 +200,6 @@ class LoadFile:
             return raw_bin.get_bin_params()
         if self.suffix == ".jpk-qi-data":
             if "jpk_qi_loader" not in self.cached_data:
-                self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(filepath=self.filepath, **self.kwargs)
+                self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(filepath=self.filepath, **self.kwargs)
             return self.cached_data["jpk_qi_loader"].get_additional_params()
         return {}

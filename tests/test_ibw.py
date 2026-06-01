@@ -44,3 +44,30 @@ def test_load_ibw_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
         ibw.load_ibw("nonexistant_file.ibw", channel="TP")
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected_channels"),
+    [
+        pytest.param(
+            "sample_0.ibw",
+            [
+                "HeightTracee",
+                "HeightRetrace",
+                "ZSensorTrace",
+                "ZSensorRetrace",
+                "UserIn0Trace",
+                "UserIn0Retrace",
+                "UserIn1Trace",
+                "UserIn1Retrace",
+            ],
+            id="sample_0.ibw",
+        ),
+    ],
+)
+def test_get_ibw_channels(file_name: str, expected_channels: list[str]) -> None:
+    """Test get_ibw_channels."""
+    file_path = RESOURCES / file_name
+    channels = ibw.get_ibw_channels(file_path)
+    # The order might not be guaranteed, so sort before comparing
+    assert sorted(channels) == sorted(expected_channels)

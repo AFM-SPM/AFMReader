@@ -37,3 +37,18 @@ def test_load_asd_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
         asd.load_asd("nonexistant_file.asd", channel="TP")
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected_channels"),
+    [
+        pytest.param("sample_0.asd", ["TP", "PH"], id="sample_0.asd"),
+        pytest.param("sample_1.asd", ["TP", "PH"], id="sample_1.asd"),
+        pytest.param("extra_sample.asd", ["TP", "PH"], id="extra_sample.asd"),
+    ],
+)
+def test_get_asd_channels(file_name: str, expected_channels: list[str]) -> None:
+    """Test get_asd_channels."""
+    file_path = RESOURCES / file_name
+    channels = asd.get_asd_channels(file_path)
+    assert sorted(channels) == sorted(expected_channels)

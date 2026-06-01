@@ -127,8 +127,8 @@ def test_load_jpk_qi_data(  # pylint: disable=too-many-arguments,too-many-positi
     result_image = np.ndarray
     result_pixel_to_nm_scaling = float
     file_path = RESOURCES / file_name
-    jpk_qi_loader = jpk_qi.jpk_qi_loader(file_path, channel)
-    result_image, result_pixel_to_nm_scaling, result_curve_data = jpk_qi_loader.load()  # type: ignore
+    jpk_qi_loader = jpk_qi.JPKQILoader(file_path, channel)
+    result_image, result_pixel_to_nm_scaling, curve_dataset = jpk_qi_loader.load()  # type: ignore
 
     assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
     assert isinstance(result_image, np.ndarray)
@@ -137,8 +137,7 @@ def test_load_jpk_qi_data(  # pylint: disable=too-many-arguments,too-many-positi
     assert result_image.sum() == pytest.approx(image_sum)
 
     # Test curve data for all targets
-    all_curves, _, _ = result_curve_data
-    curve_at_coords = all_curves[curve_coords[0]][curve_coords[1]]
+    curve_at_coords = curve_dataset.get_default_volume()[curve_coords[0], curve_coords[1]]
     for curve_channel, (expected_size, expected_sum) in curve_targets.items():
         curve = curve_at_coords[curve_channel][curve_direction]
         assert curve.shape == (expected_size,)
@@ -150,4 +149,4 @@ def test_load_jpk_qi_data(  # pylint: disable=too-many-arguments,too-many-positi
 def test_load_jpk_data_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
-        jpk_qi.jpk_qi_loader("noexistant_file.jpk-qi-data", "TP")
+        jpk_qi.JPKQILoader("noexistant_file.jpk-qi-data", "TP")
