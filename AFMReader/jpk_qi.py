@@ -7,6 +7,7 @@ and supports exporting to HDF5 format.
 
 # pylint: disable=too-many-lines,too-many-positional-arguments,too-few-public-methods,too-many-instance-attributes
 # pylint: disable=too-many-locals,too-many-branches,protected-access,attribute-defined-outside-init,fixme
+# pylint: disable=too-many-arguments
 
 import os
 import io
@@ -79,8 +80,6 @@ class CurvesJPKMetadata(CurvesMetadata):
         Number of columns in the image.
     shape_y : int
         Number of rows in the image.
-    channel_units : dict[str, str]
-        A dictionary mapping channel names to their units.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
     """
@@ -91,7 +90,6 @@ class CurvesJPKMetadata(CurvesMetadata):
         archive: zipfile.ZipFile,
         shape_x: int,
         shape_y: int,
-        channel_units: dict[str, str],
         flip_image: bool = True,
     ):
         """
@@ -107,12 +105,10 @@ class CurvesJPKMetadata(CurvesMetadata):
             Number of columns in the image.
         shape_y : int
             Number of rows in the image.
-        channel_units : dict[str, str]
-            Dictionary mapping channel names to their units.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is ``True``.
         """
-        super().__init__(toplevel, shape_x, shape_y, channel_units, flip_image)
+        super().__init__(toplevel, shape_x, shape_y, flip_image)
         self.archive = archive
 
     def get_point_metadata(self, y: int, x: int, direction: int | None = None):
@@ -168,6 +164,8 @@ class CurvesJPKVolume(CurvesVolume):
         The ZIP archive containing the JPK data.
     channel_scaling : dict[str, dict[str, float]]
         A dictionary mapping channel names to their scaling factors.
+    channel_units : dict[str, str]
+        A dictionary mapping channel names to their units.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
     """
@@ -179,6 +177,7 @@ class CurvesJPKVolume(CurvesVolume):
         shape_y: int,
         archive: zipfile.ZipFile,
         channel_scaling: dict[str, dict[str, float]],
+        channel_units: dict[str, str],
         flip_image: bool = True,
     ):
         """
@@ -196,10 +195,18 @@ class CurvesJPKVolume(CurvesVolume):
             The ZIP archive containing the JPK data.
         channel_scaling : dict[str, dict[str, float]]
             A dictionary mapping channel names to their scaling factors.
+        channel_units : dict[str, str]
+            A dictionary mapping channel names to their units.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
         """
-        super().__init__(name, shape_x, shape_y, flip_image)
+        super().__init__(
+            name=name,
+            shape_x=shape_x,
+            shape_y=shape_y,
+            channel_units=channel_units,
+            flip_image=flip_image,
+        )
         self.archive = archive
         self.channel_scaling = channel_scaling
 
@@ -482,7 +489,6 @@ class JPKQILoader:
             self.qi_archive,
             self.shape_x or 0,
             self.shape_y or 0,
-            channel_units=self.channels_units,
             flip_image=bool(self.flip_image),
         )
         self.curves_volume = CurvesJPKVolume(
@@ -491,6 +497,7 @@ class JPKQILoader:
             shape_y=self.shape_y or 0,
             archive=self.qi_archive,
             channel_scaling=self.channel_scaling,
+            channel_units=self.channels_units,
             flip_image=bool(self.flip_image),
         )
         self.curves_dataset = CurvesJPKDataset(
