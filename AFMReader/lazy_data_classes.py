@@ -95,6 +95,10 @@ class LazyQiData:
                 dict
                     The QI curve data for the specified pixel.
                 """
+                if self.y < 0 or self.y >= self.parent.shape_y or x < 0 or x >= self.parent.shape_x:
+                    raise IndexError(
+                        f"Pixel index ({self.y}, {x}) is out of bounds for image of shape {self.parent.dims}."
+                    )
                 return self.parent._fetch_curve(self.y, x)
 
         return RowProxy(self, y)
@@ -194,6 +198,7 @@ class LazyMetaProxy:
         self.meta_type = meta_type
         self.shape_x = shape_x
         self.shape_y = shape_y
+        self.dims = (shape_y, shape_x)
         self.flip_image = flip_image
 
     def __getitem__(self, y: int):
@@ -255,6 +260,10 @@ class LazyMetaProxy:
                 dict or SegmentMetaProxy
                     The metadata for the specified column, or a proxy for segment metadata.
                 """
+                if self.y < 0 or self.y >= self.parent.shape_y or x < 0 or x >= self.parent.shape_x:
+                    raise IndexError(
+                        f"Pixel index ({self.y}, {x}) is out of bounds for image of shape {self.parent.dims}."
+                    )
                 if self.parent.meta_type == "curve":
                     return self.parent._fetch_meta(self.y, x)
                 if self.parent.meta_type == "segment":

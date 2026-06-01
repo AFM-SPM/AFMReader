@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy.typing as npt
 
-from AFMReader import asd, gwy, h5_jpk, ibw, jpk, raw_bin, spm, stp, top, topostats, jpk_qi
+from AFMReader import ardf, asd, gwy, h5_jpk, ibw, jpk, raw_bin, spm, stp, top, topostats, jpk_qi
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -41,7 +41,7 @@ class LoadFile:
         """
         self.filepath = Path(filepath)
         self.channel = channel
-        self.suffix = self.filepath.suffix
+        self.suffix = self.filepath.suffix.lower()
         self.loaded_curves = False
         self.kwargs = kwargs if kwargs else {}
 
@@ -77,9 +77,16 @@ class LoadFile:
             self.channel = channel
         if kwargs:
             self.kwargs = kwargs
+        logger.debug(f"Suffix is {self.suffix}")
         try:
             if self.suffix == ".asd":
                 image, pixel_to_nanometre_scaling_factor, _ = asd.load_asd(self.filepath, self.channel)
+            elif self.suffix == ".ardf":
+                if "ardf_reader" not in self.cached_data:
+                    self.cached_data["ardf_reader"] = ardf.ARDFReader(self.filepath, self.channel)
+                ardf_reader = self.cached_data["ardf_reader"]
+                image, pixel_to_nanometre_scaling_factor, _, curve_data = ardf_reader.load_ardf(self.channel)
+                return image, pixel_to_nanometre_scaling_factor, curve_data
             elif self.suffix == ".gwy":
                 image, pixel_to_nanometre_scaling_factor = gwy.load_gwy(self.filepath, self.channel)
             elif self.suffix == ".ibw":
@@ -153,8 +160,13 @@ class LoadFile:
         list
             List of available channels.
         """
+        logger.debug(f"Getting available channels for suffix {self.suffix}")
         if self.suffix == ".asd":
             available_channels = asd.get_asd_channels(self.filepath)
+        elif self.suffix == ".ardf":
+            if "ardf_reader" not in self.cached_data:
+                self.cached_data["ardf_reader"] = ardf.ARDFReader(self.filepath, self.channel)
+            available_channels = self.cached_data["ardf_reader"].get_available_channels()
         elif self.suffix == ".gwy":
             available_channels = gwy.get_gwy_channels(self.filepath)
         elif self.suffix == ".ibw":

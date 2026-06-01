@@ -24,6 +24,7 @@ import struct
 from bisect import bisect_left
 from collections.abc import Collection, Iterable
 from typing import Protocol, TypeAlias, Any
+from AFMReader.lazy_data_classes import LazyMetaProxy, LazyQiData, LazyMetadata
 
 try:
     from collections.abc import Buffer
@@ -802,9 +803,13 @@ class ARDFFFMReader:
     seg_offsets: tuple
     up: bool
     trace: bool
+    vtype: int
+    vchns: list[ARDFVchan]
 
     @classmethod
-    def parse(cls, first_vset_header: ARDFHeader, points: int, lines: int, channels: Any) -> "ARDFFFMReader":
+    def parse(
+        cls, first_vset_header: ARDFHeader, points: int, lines: int, channels: Any, vchns: list[ARDFVchan]
+    ) -> "ARDFFFMReader":
         """
         Parse FFM metadata.
 
@@ -818,6 +823,8 @@ class ARDFFFMReader:
             Number of lines.
         channels : Any
             The channel mapping.
+        vchns : list[ARDFVchan]
+            The list of channel definitions.
 
         Returns
         -------
@@ -828,12 +835,11 @@ class ARDFFFMReader:
         # just walk past these first headers to find our data_offset
         first_vset = ARDFVset.unpack(first_vset_header)
         vset_stride = first_vset.next_vset_offset - first_vset_header.offset
-        if first_vset.vtype == 5:
-            line_stride = vset_stride * points
+        if first_vset.vtype & 0x2:
+            line_stride = vset_stride * points * 2
         else:
             # better be "both" setting see ARDFVset
-            assert first_vset.vtype in {10, 11}, first_vset
-            line_stride = vset_stride * points * 2
+            line_stride = vset_stride * points
         up = first_vset.line == 0
         trace = first_vset.point == 0
 
@@ -861,10 +867,12 @@ class ARDFFFMReader:
                 # match up array and image coordinates
             )[:: 1 if up else -1, :: 1 if trace else -1],
             array_offset=first_vdat.array_offset,
-            channels=[channels["Raw"][0], channels["Defl"][0]],
+            channels=[channel[0] for channel in channels.values()],
             seg_offsets=first_vdat.seg_offsets,
             up=up,
             trace=trace,
+            vtype=first_vset.vtype,
+            vchns=vchns,
         )
 
     def get_curve(self, r: int, c: int) -> ZDArrays:
@@ -887,7 +895,23 @@ class ARDFFFMReader:
             x = self.array_view[r, c, self.channels]  # advanced indexing copies
         x = x.astype("f4", copy=False)
         x *= NANOMETER_UNIT_CONVERSION
-        return x.reshape((len(self.channels), 2, -1))
+        num_phases = 2 if (self.vtype & 0x2) else 1
+        reshaped = x.reshape((len(self.channels), num_phases, -1))
+
+        if num_phases == 2:
+            seg_keys = ["Segment_0", "Segment_1"]
+        else:
+            seg_keys = ["Segment_1"] if self.is_retrace else ["Segment_0"]
+
+        curve_dict = {}
+        for idx, chan_idx in enumerate(self.channels):
+            chan_name = self.vchns[chan_idx].name
+            curve_dict[chan_name] = {}
+            for phase_idx, seg_name in enumerate(seg_keys):
+                # Map channel and segment name to its respective slice
+                curve_dict[chan_name][seg_name] = reshaped[idx, phase_idx]
+
+        return curve_dict
 
     def iter_indices(self) -> Iterable[Index]:
         """
@@ -1166,6 +1190,7 @@ class ARDFVolume:
     xdef: ARDFXdef
     _reader: ARDFForceMapReader | ARDFFFMReader
     _struct = struct.Struct("<LL24sddd32s32s32s32sQ")
+    channels: ChanMap
 
     @classmethod
     def parse_volm(cls, volm_header: ARDFHeader) -> "ARDFVolume":
@@ -1215,17 +1240,18 @@ class ARDFVolume:
         # Implicit table of channels here smh
         offset = vdef_header.offset + vdef_header.size
         channels: ChanMap = {}
+        vchn_list: list[ARDFVchan] = []
         for i in range(5):
             header = ARDFHeader.unpack(data, offset)
             if header.name != b"VCHN":
                 break
             vchn = ARDFVchan.unpack(header)
             offset = header.offset + header.size
-            # TODO: apply NANOMETER_UNIT_CONVERSION depending on this
-            assert vchn.unit == "m"
-            channels[vchn.name] = (i, vchn)
+            vchn_list.append(vchn)
         else:
             raise RuntimeError("Got too many channels.", channels)
+
+        channels: ChanMap = {vchn.name: (i, vchn) for i, vchn in enumerate(vchn_list)}
 
         xdef = ARDFXdef.unpack(header)
         vtoc_header = ARDFHeader.unpack(data, xdef.offset + xdef.size)
@@ -1240,7 +1266,7 @@ class ARDFVolume:
         # optimize for LARGE regular case (FMaps are SMALL)
         first_vset_header = ARDFHeader.unpack(data, vtoc.pointers[0])
         if complete and not np.any(np.diff(np.diff(vtoc.pointers))):
-            reader = ARDFFFMReader.parse(first_vset_header, points, lines, channels)
+            reader = ARDFFFMReader.parse(first_vset_header, points, lines, channels, vchn_list)
             name = "Trace" if reader.trace else "Retrace"
         else:
             first_vset = ARDFVset.unpack(first_vset_header)
@@ -1251,6 +1277,7 @@ class ARDFVolume:
                 points,
                 first_vset.vtype,
                 channels,
+                vchn_list,
             )
             name = "FMAP"
 
@@ -1261,6 +1288,7 @@ class ARDFVolume:
             ((x_step, x_unit), (y_step, y_unit), (t_step, t_unit)),
             xdef,
             reader,
+            channels,
         )
 
     def get_curve(self, r: int, c: int) -> ZDArrays:
@@ -1409,6 +1437,147 @@ class ARDFFile:
         return cls(notes, images, volumes, k, defl_sens, t_step, scansize, trace)
 
 
-SUFFIX_FVFILE_MAP = {
-    ".ardf": (ARDFFile, mmap_path_read_only),
-}
+class ARDFMetadata(LazyMetadata):
+    """
+    A lazy wrapper for ARDF file metadata.
+
+    Implements the QiMetadata protocol to provide lazy access to ARDF file metadata.
+    """
+
+    def __init__(self, top_level_meta: dict, shape_x: int, shape_y: int, flip_image: bool = True):
+        super().__init__(top_level_meta, shape_x, shape_y, flip_image)
+
+    def __getitem__(self, key):
+        if key == "top_level":
+            return self.top_level
+        if key in ("curves", "segments"):
+            return ARDFMetaProxy(key[:-1], self.shape_x, self.shape_y, self.flip_image)
+        raise KeyError(key)
+
+
+class ARDFMetaProxy(LazyMetaProxy):
+    """
+    A proxy for ARDF metadata.
+
+    Provides access to curve and segment metadata on demand.
+    """
+
+    def __init__(self, meta_type: str, shape_x: int, shape_y: int, flip_image: bool = True):
+        super().__init__(meta_type, shape_x, shape_y, flip_image)
+
+    def _fetch_meta(self, y: int, x: int, direction: int | None = None) -> dict:
+        if self.flip_image:
+            y = self.shape_y - 1 - y
+        return {}
+
+
+class ARDFData(LazyQiData):
+    """
+    A lazy wrapper for ARDF file data.
+
+    Implements the QiData protocol to provide lazy access to ARDF file contents.
+    """
+
+    def __init__(
+        self,
+        ardf_volume: Volume | None = None,
+        shape_x: int | None = None,
+        shape_y: int | None = None,
+        flip_image: bool = True,
+    ):
+        self.volume: Volume | None = ardf_volume
+        super().__init__(shape_x, shape_y, flip_image)
+
+    def set_volume(self, ardf_volume: Volume):
+        """
+        Set the volume to read data from.
+
+        Parameters
+        ----------
+        ardf_volume : Volume
+            The ARDF volume to read from.
+        """
+        self.volume = ardf_volume
+
+    def _fetch_curve(self, y, x):
+        if self.flip_image:
+            y = self.shape_y - 1 - y
+        return self.volume.get_curve(y, x)
+
+    def __iter__(self):
+        yield from self.volume.iter_curves()
+
+
+class ARDFReader:
+    """
+    A reader for ARDF files.
+    """
+
+    def __init__(self, filepath: str, channel: str, flip_image: bool = True):
+        self.filepath = filepath
+        self.channel = channel
+        self.flip_image = flip_image
+        mmap = mmap_path_read_only(filepath)
+        self.fv_file = ARDFFile.parse(mmap)
+        shape_x, shape_y = self.fv_file.volumes[0].shape
+        size_x, size_y = self.fv_file.scansize[0:2]
+        self.px2nm = size_x / shape_x
+
+    def load_ardf(self, channel: str = None, flip_image: bool = True) -> ARDFFile:
+        """
+        Load the ARDF file data.
+
+        Parameters
+        ----------
+        filepath : str
+            The path to the ARDF file.
+        channel : str
+            The channel to load.
+
+        Returns
+        -------
+        ARDFFile
+            The loaded ARDF file object.
+        """
+        if channel is not None:
+            self.channel = channel
+        if flip_image is not None:
+            self.flip_image = flip_image
+        self.trace = "retrace" not in self.channel.lower()
+        logger.info(
+            f"Loading ARDF file: {self.filepath}, channel: {self.channel}, trace: {self.trace}, flip_image: {self.flip_image}"
+        )
+        if self.trace:
+            self.volume = (
+                self.fv_file.volumes[0] if self.fv_file.volumes[0].name == "Trace" else self.fv_file.volumes[1]
+            )
+        else:
+            self.volume = (
+                self.fv_file.volumes[0] if self.fv_file.volumes[0].name == "Retrace" else self.fv_file.volumes[1]
+            )
+
+        channel_units = {channel_name: channel.unit for channel_name, (i, channel) in self.volume.channels.items()}
+
+        ardf_data = ARDFData(
+            self.volume, shape_x=self.volume.shape[0], shape_y=self.volume.shape[1], flip_image=self.flip_image
+        )
+        image = self.fv_file.images[self.channel].get_image()
+        z_units = self.fv_file.images[self.channel].units
+        if self.flip_image:
+            image = np.flipud(image)
+        full_metadata = ARDFMetadata(
+            self.fv_file.headers, shape_x=self.volume.shape[0], shape_y=self.volume.shape[1], flip_image=self.flip_image
+        )
+
+        return image, self.px2nm, z_units, (ardf_data, channel_units, full_metadata)
+
+    def get_available_channels(self) -> list[str]:
+        """
+        Get a list of available channels in the ARDF file.
+
+        Returns
+        -------
+        list[str]
+            A list of channel names.
+        """
+        return list(self.fv_file.images.keys())
