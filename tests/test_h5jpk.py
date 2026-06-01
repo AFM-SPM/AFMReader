@@ -199,9 +199,8 @@ def test_load_h5jpk_curves(
     curve_targets : dict[str, tuple[int, float]]
         A dictionary mapping curve channels to their expected size and sum, used for validating the loaded curve data.
     """
-    _, _, _, result_curve_data = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)  # type: ignore[misc]
-    all_curves, _, _ = result_curve_data
-    curve_at_coords = all_curves[curve_coords[0]][curve_coords[1]]
+    _, _, _, curve_dataset = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)  # type: ignore[misc]
+    curve_at_coords = curve_dataset.get_default_volume()[curve_coords[0], curve_coords[1]]
     for curve_channel, (expected_size, expected_sum) in curve_targets.items():
         curve = curve_at_coords[curve_channel][curve_direction]
         assert curve.shape == (expected_size,)
@@ -212,3 +211,31 @@ def test_load_h5jpk_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
         h5_jpk.load_h5jpk("nonexistant_file.h5-jpk", channel="TP")
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected_channels"),
+    [
+        pytest.param(
+            "sample_0.h5-jpk",
+            [
+                "error_trace",
+                "height_trace",
+                "phase_retrace",
+                "height_retrace",
+                "measuredheight_trace",
+                "error_retrace",
+                "amplitude_trace",
+                "amplitude_retrace",
+                "phase_trace",
+            ],
+            id="sample_0.h5-jpk",
+        ),
+    ],
+)
+def test_get_h5jpk_channels(file_name: str, expected_channels: list[str]) -> None:
+    """Test get_h5jpk_channels."""
+    file_path = RESOURCES / file_name
+    channels = h5_jpk.get_h5jpk_channels(file_path)
+    # The order might not be guaranteed, so sort before comparing
+    assert sorted(channels) == sorted(expected_channels)

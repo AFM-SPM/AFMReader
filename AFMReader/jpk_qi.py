@@ -21,62 +21,195 @@ import javaproperties
 import h5py
 import psutil
 
-from AFMReader.lazy_data_classes import LazyMetadata, LazyMetaProxy, LazyQiData
+from AFMReader.lazy_data_classes import CurvesMetadata, CurvesVolume, CurvesDataset
 from AFMReader.logging import logger
 from AFMReader import jpk
 
 
-class LazyJpkQiData(LazyQiData):
+class CurvesJPKDataset(CurvesDataset):
     """
-    A proxy class that behaves like a 2D list of shape (shape_y, shape_x) but fetches .dat file data on demand.
+    A dataset class for JPK QI data that holds the raw data as well as metadata.
 
     Parameters
     ----------
-    filepath : str
-        Path to the .jpk file.
+    volumes : dict[str, CurvesVolume]
+        A dictionary mapping curve names to CurvesVolume instances that
+        provide access to the curve data for each pixel.
+    metadata : CurvesMetadata
+        An instance of CurvesMetadata that provides access to the metadata
+        for each curve.
+    archive : zipfile.ZipFile
+        The ZIP archive containing the JPK data.
+    """
+
+    def __init__(self, volumes: dict[str, CurvesVolume], metadata: CurvesMetadata, archive: zipfile.ZipFile):
+        """
+        Initialise CurvesJPKDataset.
+
+        Parameters
+        ----------
+        volumes : dict[str, CurvesVolume]
+            A dictionary mapping curve names to CurvesVolume instances that
+            provide access to the curve data for each pixel.
+        metadata : CurvesMetadata
+            An instance of CurvesMetadata that provides access to the metadata
+            for each curve.
+        archive : zipfile.ZipFile
+            The ZIP archive containing the JPK data.
+        """
+        super().__init__(volumes, metadata)
+        self.archive = archive
+
+    def close(self):
+        """Close the ZIP archive when done to free up resources."""
+        self.archive.close()
+
+
+class CurvesJPKMetadata(CurvesMetadata):
+    """
+    A metadata class for JPK QI data that provides lazy loading of pixel metadata.
+
+    Parameters
+    ----------
+    toplevel : dict
+        A dictionary containing the top-level metadata for the dataset.
+    archive : zipfile.ZipFile
+        The ZIP archive containing the JPK data.
     shape_x : int
         Number of columns in the image.
     shape_y : int
         Number of rows in the image.
-    channel_scaling : dict
-        Dictionary containing scaling information for each channel.
-    archive : zipfile.ZipFile
-        The opened ZIP archive containing the .dat files.
+    channel_units : dict[str, str]
+        A dictionary mapping channel names to their units.
     flip_image : bool, optional
-        Whether to flip the image vertically. Default is ``True``.
+        Whether to flip the image vertically. Default is True.
     """
 
-    def __init__(self, filepath, shape_x: int, shape_y: int, channel_scaling, archive, flip_image: bool = True):
+    def __init__(
+        self,
+        toplevel: dict,
+        archive: zipfile.ZipFile,
+        shape_x: int,
+        shape_y: int,
+        channel_units: dict[str, str],
+        flip_image: bool = True,
+    ):
         """
-        Initialize the LazyJpkQiData instance.
+        Initialize the CurvesJPKMetadata instance.
 
         Parameters
         ----------
-        filepath : str
-            Path to the .jpk file.
+        toplevel : dict
+            A dictionary containing the top-level metadata for the dataset.
+        archive : zipfile.ZipFile
+            The ZIP archive containing the JPK data.
         shape_x : int
             Number of columns in the image.
         shape_y : int
             Number of rows in the image.
-        channel_scaling : dict
-            Dictionary containing scaling information for each channel.
-        archive : zipfile.ZipFile
-            The opened ZIP archive containing the .dat files.
+        channel_units : dict[str, str]
+            Dictionary mapping channel names to their units.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is ``True``.
         """
-        super().__init__(shape_x, shape_y, flip_image)
-        self.filepath = filepath
-        self.channel_scaling = channel_scaling
+        super().__init__(toplevel, shape_x, shape_y, channel_units, flip_image)
         self.archive = archive
+
+    def get_pixel_metadata(self, y: int, x: int, direction: int | None = None):
+        """
+        Fetch the metadata for a specific pixel or direction.
+
+        Parameters
+        ----------
+        y : int
+            Row index of the pixel.
+        x : int
+            Column index of the pixel.
+        direction : int, optional
+            The index of the direction to fetch metadata for. If None, returns metadata for the entire pixel.
+
+        Returns
+        -------
+        dict
+            The metadata for the specified pixel (or direction, if provided).
+        """
+        if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
+            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
+        if self.flip_image:
+            y = self.shape_y - 1 - y
+        idx = (y * self.shape_x) + x
+        if direction is None:
+            path = f"index/{idx}/header.properties"
+        else:
+            path = f"index/{idx}/segments/{direction}/segment-header.properties"
+
+        try:
+            with self.archive.open(path) as f:
+                meta_dict = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+        except KeyError:
+            meta_dict = {}
+
+        return meta_dict
+
+
+class CurvesJPKVolume(CurvesVolume):
+    """
+    A CurvesVolume implementation for JPK QI curve data that provides lazy loading of curve data for each pixel.
+
+    Parameters
+    ----------
+    name : str
+        The name of the curve volume.
+    shape_x : int
+        The number of columns in the image.
+    shape_y : int
+        The number of rows in the image.
+    archive : zipfile.ZipFile
+        The ZIP archive containing the JPK data.
+    channel_scaling : dict[str, dict[str, float]]
+        A dictionary mapping channel names to their scaling factors.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        shape_x: int,
+        shape_y: int,
+        archive: zipfile.ZipFile,
+        channel_scaling: dict[str, dict[str, float]],
+        flip_image: bool = True,
+    ):
+        """
+        Initialise CurvesJPKVolume.
+
+        Parameters
+        ----------
+        name : str
+            The name of the curve volume.
+        shape_x : int
+            The number of columns in the image.
+        shape_y : int
+            The number of rows in the image.
+        archive : zipfile.ZipFile
+            The ZIP archive containing the JPK data.
+        channel_scaling : dict[str, dict[str, float]]
+            A dictionary mapping channel names to their scaling factors.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is True.
+        """
+        super().__init__(name, shape_x, shape_y, flip_image)
+        self.archive = archive
+        self.channel_scaling = channel_scaling
 
     def __iter__(self):
         """Yield the curve data for each pixel in the image, iterating in row-major order (y first, then x)."""
         for y in range(self.shape_y):
             for x in range(self.shape_x):
-                yield self._fetch_curve(y, x)
+                yield self.get_curve(y, x)
 
-    def _fetch_curve(self, y: int, x: int):
+    def get_curve(self, y: int, x: int):
         """
         Fetch the curve data for a specific pixel.
 
@@ -114,190 +247,6 @@ class LazyJpkQiData(LazyQiData):
                     pass  # File doesn't exist for this segment
 
         return curve_data
-
-    def load_all_curves(self):
-        """
-        Eagerly loads all curve data into a 2D list structure matching the image dimensions.
-
-        This can be used if the user wants to have all the curve data available at once, but it is not recommended
-        for large datasets as it will consume a lot of memory. In this case, it is not notably faster as the zip
-        structure means each curve is effectively loaded individually anyway
-
-        Returns
-        -------
-        list
-            A 2D list containing dictionaries with curve data for each pixel.
-        """
-        all_curve_data = [[None for _ in range(self.shape_x)] for _ in range(self.shape_y)]
-        for y in range(self.shape_y):
-            for x in range(self.shape_x):
-                all_curve_data[y][x] = self._fetch_curve(y, x)
-        # TODO may be good to just return self here as not faster and lots of memory
-        # return self
-        return all_curve_data
-
-    def close(self):
-        """Close the ZIP archive when done to free up resources."""
-        self.archive.close()
-
-
-class LazyQiMetadata(LazyMetadata):
-    """
-    A proxy class that fetches header.properties files on demand.
-
-    It behaves like a 2D array of shape (shape_y, shape_x) where each element
-    is a dictionary containing the requested metadata for that pixel.
-
-    Parameters
-    ----------
-    filepath : str
-        Path to the .jpk file.
-    top_level_meta : dict
-        Dictionary containing the top-level metadata extracted from the header files.
-    archive : zipfile.ZipFile
-        The opened ZIP archive containing the JPK file contents.
-    shape_x : int
-        The number of columns in the image.
-    shape_y : int
-        The number of rows in the image.
-    flip_image : bool, optional
-        Whether to flip the image vertically. Default is True.
-    """
-
-    def __init__(self, filepath, top_level_meta, archive, shape_x: int, shape_y: int, flip_image: bool = True):
-        """
-        Initialize the LazyQiMetadata instance.
-
-        Parameters
-        ----------
-        filepath : str
-            Path to the .jpk file.
-        top_level_meta : dict
-            Dictionary containing the top-level metadata extracted from the header files.
-        archive : zipfile.ZipFile
-            The opened ZIP archive containing the JPK file contents.
-        shape_x : int
-            The number of columns in the image.
-        shape_y : int
-            The number of rows in the image.
-        flip_image : bool, optional
-            Whether to flip the image vertically. Default is True.
-        """
-        self.filepath = filepath
-        # Expose top_level so the frontend can still do `raw_metadata["top_level"]`
-        self.archive = archive
-        super().__init__(top_level_meta, shape_x, shape_y, flip_image)
-
-    def __getitem__(self, key):
-        """
-        Fetch requested metadata based on key.
-
-        If the key is 'top_level', it returns the top-level metadata.
-        If the key is 'curves' or 'segments', it returns a LazyQiMetaProxy
-        that can be used to fetch curve or segment metadata on demand.
-
-        Parameters
-        ----------
-        key : str
-            The key to fetch metadata for.
-
-        Returns
-        -------
-        dict or LazyQiMetaProxy
-            The requested metadata.
-        """
-        if key == "top_level":
-            return self.top_level
-        if key == "curves":
-            return LazyQiMetaProxy(self.filepath, "curve", self.archive, self.shape_x, self.shape_y, self.flip_image)
-        if key == "segments":
-            return LazyQiMetaProxy(self.filepath, "segment", self.archive, self.shape_x, self.shape_y, self.flip_image)
-        raise KeyError(key)
-
-
-class LazyQiMetaProxy(LazyMetaProxy):
-    """
-    A proxy class to represent curve and segment metadata.
-
-    It behaves like a 2D list of shape (shape_y, shape_x) but fetches header.properties files on demand for
-    curves or segments.
-
-    Parameters
-    ----------
-    filepath : str
-        Path to the .jpk file.
-    meta_type : str
-        The type of metadata to fetch ('curve' or 'segment').
-    archive : zipfile.ZipFile
-        The opened ZIP archive containing the JPK file contents.
-    shape_x : int
-        The number of columns in the image.
-    shape_y : int
-        The number of rows in the image.
-    flip_image : bool, optional
-        Whether to flip the image vertically. Default is True.
-    """
-
-    def __init__(self, filepath, meta_type, archive, shape_x: int, shape_y: int, flip_image: bool = True):
-        """
-        Initialize the LazyQiMetaProxy instance.
-
-        Parameters
-        ----------
-        filepath : str
-            Path to the .jpk file.
-        meta_type : str
-            The type of metadata to fetch ('curve' or 'segment').
-        archive : zipfile.ZipFile
-            The opened ZIP archive containing the JPK file contents.
-        shape_x : int
-            The number of columns in the image.
-        shape_y : int
-            The number of rows in the image.
-        flip_image : bool, optional
-            Whether to flip the image vertically. Default is True.
-        """
-        self.filepath = filepath
-        self.archive = archive
-        super().__init__(meta_type, shape_x, shape_y, flip_image)
-
-    def _fetch_meta(self, y: int, x: int, direction: int | None = None):
-        """
-        Fetch the metadata for a specific curve or segment.
-
-        Parameters
-        ----------
-        y : int
-            Row index of the curve or segment.
-        x : int
-            Column index of the curve or segment.
-        direction : int, optional
-            The direction index for segment metadata. Required if meta_type is 'segment'.
-
-        Returns
-        -------
-        dict
-            The metadata dictionary for the specified curve or segment.
-        """
-        if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
-            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
-        if self.flip_image:
-            y = self.shape_y - 1 - y
-        idx = (y * self.shape_x) + x
-        if self.meta_type == "curve":
-            path = f"index/{idx}/header.properties"
-        else:
-            if direction is None:
-                raise ValueError("Direction must be provided for segment metadata")
-            path = f"index/{idx}/segments/{direction}/segment-header.properties"
-
-        try:
-            with self.archive.open(path) as f:
-                meta_dict = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
-        except KeyError:
-            meta_dict = {}
-
-        return meta_dict
 
 
 def _get_channel_scaling(props, channel_index):
@@ -362,7 +311,7 @@ def _get_channel_scaling(props, channel_index):
     return final_multiplier, final_offset, unit
 
 
-class jpk_qi_loader:
+class JPKQILoader:
     """
     Class for readability and improving modularity in the load jpk qi data function.
 
@@ -413,8 +362,9 @@ class jpk_qi_loader:
         # Open the ZIP archive once and keep it open for the duration of the loading process
         self.qi_archive = zipfile.ZipFile(self.filepath, "r")  # pylint: disable=consider-using-with
         logger.info(f"Opened JPK QI archive at {self.filepath}")
-        self.namelist = self.qi_archive.namelist()
-        # Set path to the .jpk-qi-image file within the archive for later use
+        # Store the list of all paths in the archive to avoid having to call namelist() multiple times
+        self.list_of_all_paths = self.qi_archive.namelist()
+        # For holding the reference to where the actual .jqk-qi image is (not the metadata).
         self.path_to_image = None
 
         # Chunk size for H5 datasets
@@ -433,9 +383,9 @@ class jpk_qi_loader:
         # Just the top level metadata extracted from the header files
         self.top_level_meta: dict[str, Any] = {}
         # A lazy reference containing all metadata
-        self.full_metadata: LazyQiMetadata | None = None
+        self.full_metadata: CurvesJPKMetadata | None = None
         # A 2D list of curve data dictionaries
-        self.curve_data: Any = None
+        self.curves_volume: CurvesJPKVolume | None = None
         # A lookup for channel name to unit to be returned
         self.channels_units: dict[str, str] = {}
         # The list of channels for the segments with their scaling information extracted from the shared header
@@ -466,7 +416,7 @@ class jpk_qi_loader:
         """
         # Look for the jpk-qi-image file in the archive
         if self.path_to_image is None:
-            for file_name in self.namelist:
+            for file_name in self.list_of_all_paths:
                 if file_name.endswith(".jpk-qi-image"):
                     self.path_to_image = file_name
 
@@ -483,7 +433,7 @@ class jpk_qi_loader:
         config_path: Path | str | None = None,
         flip_image: bool | None = True,
         save_as_h5: bool | None = None,
-    ) -> tuple[np.ndarray, float, Any] | tuple[np.ndarray, float]:
+    ) -> tuple[np.ndarray, float, CurvesJPKDataset]:
         """
         Load the .jpk-qi-data file.
 
@@ -501,7 +451,7 @@ class jpk_qi_loader:
         Returns
         -------
         tuple
-            A tuple containing image data, scaling factor, and optionally curve data.
+            A tuple containing image data, scaling factor, and curve data.
         """
         # Update instance attributes based on provided parameters
         self.channel = channel if channel else self.channel
@@ -527,21 +477,24 @@ class jpk_qi_loader:
 
         # Establish the lazy loading structures for curve data and metadata. Note how lazy structure is used even if
         # all the data has been accessed and saved to H5 to prevent excessive memory usage
-        self.full_metadata = LazyQiMetadata(
-            self.filepath,
+        self.full_metadata = CurvesJPKMetadata(
             self.top_level_meta,
             self.qi_archive,
             self.shape_x or 0,
             self.shape_y or 0,
+            channel_units=self.channels_units,
             flip_image=bool(self.flip_image),
         )
-        self.curve_data = LazyJpkQiData(
-            self.filepath,
-            self.shape_x or 0,
-            self.shape_y or 0,
-            self.channel_scaling,
-            self.qi_archive,
+        self.curves_volume = CurvesJPKVolume(
+            name="Trace",
+            shape_x=self.shape_x or 0,
+            shape_y=self.shape_y or 0,
+            archive=self.qi_archive,
+            channel_scaling=self.channel_scaling,
             flip_image=bool(self.flip_image),
+        )
+        self.curves_dataset = CurvesJPKDataset(
+            volumes={"Trace": self.curves_volume}, metadata=self.full_metadata, archive=self.qi_archive
         )
 
         # Load the image
@@ -551,7 +504,7 @@ class jpk_qi_loader:
         if self.save_as_h5:
             self.save_lite_data()
 
-        return (self.image, self.px2nm, (self.curve_data, self.channels_units, self.full_metadata))
+        return (self.image, self.px2nm, self.curves_dataset)
 
     def output_summary(self):
         """Output a summary of the loading process, including any failed curve loads and their details."""
@@ -599,7 +552,7 @@ class jpk_qi_loader:
             Whether to include metadata in the loading process, by default True.
         """
         logger.info(
-            f"Loading all curve data from JPK QI archive with {len(self.namelist)} files "
+            f"Loading all curve data from JPK QI archive with {len(self.list_of_all_paths)} files "
             f"{'' if include_metadata else 'not '}including metadata"
         )
         progress_counter = 0
@@ -883,7 +836,7 @@ class jpk_qi_loader:
 
         # Search through the namelist to find the .jpk-qi-image file
         path_to_image = None
-        for file_name in self.namelist:
+        for file_name in self.list_of_all_paths:
             if file_name.endswith(".jpk-qi-image"):
                 path_to_image = file_name
         if path_to_image is None:
@@ -921,7 +874,7 @@ class jpk_qi_loader:
             h5_channels = [self.channel]
             # Look for the jpk-qi-image file in the archive
             path_to_image = None
-            for file_name in self.namelist:
+            for file_name in self.list_of_all_paths:
                 if file_name.endswith(".jpk-qi-image"):
                     path_to_image = file_name
                     break
@@ -1283,7 +1236,7 @@ class jpk_qi_loader:
     def extract_global_metadata(self):
         """Extract global metadata and populate top level metadata dictionary and segment channels list."""
         # Load the metadata from the global properties file
-        if "header.properties" in self.namelist:
+        if "header.properties" in self.list_of_all_paths:
             with self.qi_archive.open("header.properties") as archive_meta_file:
                 props = javaproperties.load(archive_meta_file)
 
@@ -1294,7 +1247,7 @@ class jpk_qi_loader:
             logger.error(f"File {self.filepath} does not contain essential metadata and cannot be loaded")
 
         # Load the metadata from the shared header
-        if "shared-data/header.properties" in self.namelist:
+        if "shared-data/header.properties" in self.list_of_all_paths:
             with self.qi_archive.open("shared-data/header.properties") as shared_data_file:
                 shared_meta = javaproperties.load(shared_data_file)
                 channel_idx = 0
@@ -1337,7 +1290,7 @@ class jpk_qi_loader:
         self.top_level_meta = {}
         self.failed_curves = set()
         self.points_for_channel_segment = {}
-        self.namelist = []
+        self.list_of_all_paths = []
 
 
 def _make_num_min_characters(num: int, min_chars: int = 3):

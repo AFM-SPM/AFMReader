@@ -145,3 +145,29 @@ def test_load_spm_channel_not_found(
         spm.load_spm(RESOURCES / "sample_0.spm", channel)
     captured = capsys.readouterr()
     assert message in captured.err
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected_channels"),
+    [
+        pytest.param(
+            "sample_0.spm",
+            [
+                "Height Sensor",
+                "Peak Force Error",
+                "DMTModulus",
+                "LogDMTModulus",
+                "Adhesion",
+                "Deformation",
+                "Dissipation",
+                "Height",
+            ],
+            id="sample_0.spm",
+        ),
+    ],
+)
+def test_get_spm_channels(file_name: str, expected_channels: list[str]) -> None:
+    """Test get_spm_channels."""
+    file_path = RESOURCES / file_name
+    channels = spm.get_spm_channels(file_path)
+    assert channels == expected_channels

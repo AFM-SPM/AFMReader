@@ -102,17 +102,12 @@ class LoadFile:
                 elif len(h5_returned) == 4:
                     image, pixel_to_nanometre_scaling_factor, _, curve_data = h5_returned  # type: ignore[misc]
                     self.loaded_curves = True
-                    print(
-                        f"Loaded image with shape {image.shape} and pixel to nanometre "
-                        f"scaling factor {pixel_to_nanometre_scaling_factor}"
-                    )
-                    print(f"Image has max value {image.max()} and min value {image.min()}")
                     return image, pixel_to_nanometre_scaling_factor, curve_data
                 else:
                     logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
             elif self.suffix == ".jpk-qi-data":
                 if "jpk_qi_loader" not in self.cached_data:
-                    self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(
+                    self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(
                         filepath=self.filepath, channel=self.channel, **self.kwargs
                     )
                 jpk_qi_returned = self.cached_data["jpk_qi_loader"].load(channel=self.channel, **self.kwargs)
@@ -179,7 +174,7 @@ class LoadFile:
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
         elif self.suffix == ".jpk-qi-data":
             if "jpk_qi_loader" not in self.cached_data:
-                self.cached_data["jpk_qi_loader"] = jpk_qi.jpk_qi_loader(filepath=self.filepath, **self.kwargs)
+                self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(filepath=self.filepath, **self.kwargs)
             available_channels = self.cached_data["jpk_qi_loader"].get_available_channels()
         elif self.suffix == ".topostats":
             available_channels = ["image", "image_original"]

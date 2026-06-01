@@ -117,3 +117,30 @@ def test_load_gwy_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
         gwy.load_gwy("nonexistant_file.gwy", channel="TP")
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected_channels"),
+    [
+        pytest.param(
+            "sample_0.gwy",
+            [
+                "ZSensor",
+                "Peak Force Error",
+                "Stiffness",
+                "LogStiffness",
+                "Adhesion",
+                "Deformation",
+                "Dissipation",
+                "Height",
+            ],
+            id="sample_0.gwy",
+        ),
+    ],
+)
+def test_get_gwy_channels(file_name: str, expected_channels: list[str]) -> None:
+    """Test get_gwy_channels."""
+    file_path = RESOURCES / file_name
+    channels = gwy.get_gwy_channels(file_path)
+    # The order might not be guaranteed, so sort before comparing
+    assert sorted(channels) == sorted(expected_channels)
