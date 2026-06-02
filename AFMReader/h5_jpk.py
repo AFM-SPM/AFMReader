@@ -20,7 +20,7 @@ from AFMReader.lazy_data_classes import (
 
 logger.enable(__package__)
 
-# pylint: disable=too-few-public-methods,too-many-locals,fixme
+# pylint: disable=too-few-public-methods,too-many-locals,fixme,too-many-positional-arguments
 
 
 def _parse_channel_name(channel: str) -> tuple[str, str]:
@@ -319,11 +319,21 @@ class CurvesH5Volume(CurvesVolume):
         The number of rows in the image.
     qi_data_group : h5py.Group
         The HDF5 group containing the QI curve data.
+    channel_units : dict[str, str]
+        A dictionary mapping channel names to their units.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
     """
 
-    def __init__(self, name: str, shape_x: int, shape_y: int, qi_data_group: h5py.Group, flip_image: bool = True):
+    def __init__(
+        self,
+        name: str,
+        shape_x: int,
+        shape_y: int,
+        qi_data_group: h5py.Group,
+        channel_units: dict[str, str],
+        flip_image: bool = True,
+    ):
         """
         Initialize the CurvesH5Volume instance.
 
@@ -337,10 +347,18 @@ class CurvesH5Volume(CurvesVolume):
             The number of rows in the image.
         qi_data_group : h5py.Group
             The HDF5 group containing the QI curve data.
+        channel_units : dict[str, str]
+            A dictionary mapping channel names to their units.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
         """
-        super().__init__(name, shape_x, shape_y, flip_image)
+        super().__init__(
+            name=name,
+            shape_x=shape_x,
+            shape_y=shape_y,
+            channel_units=channel_units,
+            flip_image=flip_image,
+        )
         self.qi_data_group = qi_data_group
 
     def __iter__(self):  # noqa: C901
@@ -454,8 +472,6 @@ class CurvesH5Metadata(CurvesMetadata):
         The number of columns in the image.
     shape_y : int
         The number of rows in the image.
-    channel_units : dict[str, str]
-        A dictionary mapping channel names to their units.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is ``True``.
     """
@@ -467,7 +483,6 @@ class CurvesH5Metadata(CurvesMetadata):
         toplevel: dict[str, Any],
         shape_x: int,
         shape_y: int,
-        channel_units: dict[str, str],
         flip_image: bool = True,
     ):
         """
@@ -483,15 +498,13 @@ class CurvesH5Metadata(CurvesMetadata):
             The number of columns in the image.
         shape_y : int
             The number of rows in the image.
-        channel_units : dict[str, str]
-            A dictionary mapping channel names to their units.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is ``True``.
         """
-        super().__init__(toplevel, shape_x, shape_y, channel_units, flip_image)
+        super().__init__(toplevel, shape_x, shape_y, flip_image)
         self.qi_data_group = qi_data_group
 
-    def get_pixel_metadata(self, y: int, x: int, direction: int | None = None):
+    def get_point_metadata(self, y: int, x: int, direction: int | None = None):
         """
         Fetch metadata for a specific pixel (x, y) on demand.
 
@@ -640,14 +653,18 @@ def load_h5jpk(
             top_level_meta[key] = value
 
         curves_volume = CurvesH5Volume(
-            name="Trace", shape_x=shape_x, shape_y=shape_y, qi_data_group=qi_data_group, flip_image=flip_image
+            name="Trace",
+            shape_x=shape_x,
+            shape_y=shape_y,
+            qi_data_group=qi_data_group,
+            channel_units=channels_units,
+            flip_image=flip_image,
         )
         curves_metadata = CurvesH5Metadata(
             qi_data_group=qi_data_group,
             toplevel=top_level_meta,
             shape_x=shape_x,
             shape_y=shape_y,
-            channel_units=channels_units,
             flip_image=flip_image,
         )
 

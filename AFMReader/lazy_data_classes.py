@@ -25,15 +25,11 @@ class CurvesMetadata:
         The number of columns in the image.
     shape_y : int
         The number of rows in the image.
-    channel_units : dict[str, str]
-        A dictionary mapping channel names to their units.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
     """
 
-    def __init__(
-        self, toplevel: dict, shape_x: int, shape_y: int, channel_units: dict[str, str], flip_image: bool = True
-    ):
+    def __init__(self, toplevel: dict, shape_x: int, shape_y: int, flip_image: bool = True):
         """
         Initialise CurvesMetadata.
 
@@ -45,15 +41,12 @@ class CurvesMetadata:
             The number of columns in the image.
         shape_y : int
             The number of rows in the image.
-        channel_units : dict[str, str]
-            A dictionary mapping channel names to their units.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
         """
         self.toplevel = toplevel
         self.shape_x = shape_x
         self.shape_y = shape_y
-        self.channel_units = channel_units
         self.flip_image = flip_image
 
     def __getitem__(self, keys):
@@ -76,19 +69,21 @@ class CurvesMetadata:
         """
         if isinstance(keys, tuple) and len(keys) == 2:
             y, x = keys
-            return self.get_pixel_metadata(y, x)
+            return self.get_point_metadata(y, x)
         if isinstance(keys, tuple) and len(keys) == 3:
             y, x, direction = keys
-            return self.get_pixel_metadata(y, x, direction)
+            return self.get_point_metadata(y, x, direction)
         raise IndexError(
-            f"Invalid indexing. Expected (y, x) or (y, x, direction) for pixel metadata indexing. Got {keys}."
+            f"Invalid indexing. Expected (y, x) or (y, x, direction) for point metadata indexing. Got {keys}."
         )
 
-    def get_pixel_metadata(self, y: int, x: int, direction: int | None = None):
+    # pylint: disable=unused-argument
+    def get_point_metadata(self, y: int, x: int, direction: int | None = None):
         """
-        Fetch the metadata for a specific pixel, optionally for a specific direction.
+        Fetch the metadata for a specific pixel/ point, optionally for a specific direction.
 
-        Should be implemented by subclasses to define how the metadata is retrieved from the underlying data source.
+        Should be implemented by subclasses if there exists per point metadata to define how the metadata is retrieved
+        from the underlying data source. If there is no per point metadata, this can simply return an empty dict.
 
         Parameters
         ----------
@@ -104,7 +99,7 @@ class CurvesMetadata:
         dict
             The metadata for the specified pixel (or direction, if provided).
         """
-        raise NotImplementedError("This method should be implemented by subclasses to fetch pixel metadata on demand.")
+        return {}
 
 
 class CurvesVolume:
@@ -121,11 +116,13 @@ class CurvesVolume:
         The number of columns in the image.
     shape_y : int
         The number of rows in the image.
+    channel_units : dict[str, str]
+        A dictionary mapping channel names to their units.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
     """
 
-    def __init__(self, name: str, shape_x: int, shape_y: int, flip_image: bool = True):
+    def __init__(self, name: str, shape_x: int, shape_y: int, channel_units: dict[str, str], flip_image: bool = True):
         """
         Initialise CurvesVolume.
 
@@ -137,6 +134,8 @@ class CurvesVolume:
             The number of columns in the image.
         shape_y : int
             The number of rows in the image.
+        channel_units : dict[str, str]
+            A dictionary mapping channel names to their units.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
         """
@@ -145,6 +144,7 @@ class CurvesVolume:
         self.dims = (shape_y, shape_x)
         self.flip_image = flip_image
         self.name = name
+        self.channel_units = channel_units
 
     def __len__(self):
         """
