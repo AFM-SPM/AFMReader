@@ -204,6 +204,8 @@ def load_asd(file_path: str | Path, channel: str):
         The number of nanometres per pixel for the .asd file. (AKA the resolution).
         Enables converting between pixels and nanometres when working with the data, in order to use real-world length
         scales.
+    str
+        The unit of the data in the frames. Either 'nm' or 'deg' depending on the channel.
     dict
         Metadata for the .asd file. The number of entries is too long to list here, and changes based on the file
         version please either look into the `read_header_file_version_x` functions or print the keys too see what

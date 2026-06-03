@@ -67,7 +67,7 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
 
     Returns
     -------
-    tuple(np.ndarray, float, float)
+    tuple(np.ndarray, float, str)
         A tuple containing the image, its pixel to nanometre scaling value, and the unit.
 
     Raises
