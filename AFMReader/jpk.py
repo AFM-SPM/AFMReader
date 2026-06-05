@@ -9,6 +9,7 @@ import tifffile
 
 from AFMReader.io import read_yaml
 from AFMReader.logging import logger
+from AFMReader.data_classes import AFMLoad
 
 logger.enable(__package__)
 
@@ -237,7 +238,7 @@ def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = Non
 
 def load_jpk(
     file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True
-) -> tuple[np.ndarray, float]:
+) -> AFMLoad:
     """
     Load image from JPK Instruments .jpk files.
 
@@ -255,8 +256,8 @@ def load_jpk(
 
     Returns
     -------
-    tuple[npt.NDArray, float]
-        A tuple containing the image and its pixel to nanometre scaling value.
+    AFMLoad
+        An AFMLoad object containing the image and its pixel to nanometre scaling value.
 
     Raises
     ------
@@ -270,9 +271,9 @@ def load_jpk(
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_jpk
-    >>> image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk",
-    >>>                                                     channel="height_trace",
-    >>>                                                     flip_image=True)
+    >>> afm_load = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
+    >>> image = afm_load.image
+    >>> pixel_to_nanometre_scaling_factor = afm_load.px2nm
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
@@ -285,7 +286,7 @@ def load_jpk(
         config_path=config_path,
         flip_image=flip_image,
     )
-    return (image, px2nm)
+    return AFMLoad(image=image, px2nm=px2nm)
 
 
 def _load_jpk(

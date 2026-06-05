@@ -12,7 +12,8 @@ import h5py
 import numpy as np
 
 from AFMReader.logging import logger
-from AFMReader.lazy_data_classes import (
+from AFMReader.data_classes import (
+    AFMLoad,
     CurvesDataset,
     CurvesMetadata,
     CurvesVolume,
@@ -535,9 +536,7 @@ class CurvesH5Metadata(CurvesMetadata):
         return meta_dict
 
 
-def load_h5jpk(
-    file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True
-) -> tuple[np.ndarray, float, dict[str, float]] | tuple[np.ndarray, float, dict[str, float], CurvesDataset]:
+def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True) -> AFMLoad:
     """
     Load image from JPK Instruments .h5-jpk files.
 
@@ -554,15 +553,10 @@ def load_h5jpk(
 
     Returns
     -------
-    image : np.ndarray
-        3D array of shape (frames, height, width) with image data.
-    pixel_to_nm_scaling : float
-        Scaling factor converting pixels to nanometers.
-    timestamps : dict[str, float]
-        Dictionary mapping frame labels (e.g., "frame 0") to timestamp values in seconds.
-    curves_data : CurvesDataset, optional
-        An instance of CurvesDataset containing lazy-loaded curve data, channel units, and metadata.
-        Returned only if load_curves is True and curve data is present in the file.
+    AFMLoad
+        An AFMLoad object containing the image, its pixel to nanometre scaling value, timestamps, and
+        optionally the curves dataset. Curves dataset only if load_curves is True and curve data is
+        present in the file.
 
     Raises
     ------
@@ -576,9 +570,9 @@ def load_h5jpk(
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_h5jpk
-    >>> frames, pixel_to_nanometre_scaling_factor, timestamps = load_h5jpk(file_path="./my_jpk_file.jpk",
-    >>>                                                         channel="height_trace",
-    >>>                                                         flip_image=True)
+    >>> afm_load = load_h5jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
+    >>> image = afm_load.image
+    >>> pixel_to_nm_scaling = afm_load.px2nm
     """
     logger.info(f"Loading H5-JPK file from : {file_path}")
     file_path = Path(file_path)
@@ -658,6 +652,6 @@ def load_h5jpk(
 
         curves_data = CurvesDataset(volumes={"Trace": curves_volume}, metadata=curves_metadata)
 
-        return (image_stack, px2nm, timestamps, curves_data)
+        return AFMLoad(image=image_stack, px2nm=px2nm, timestamps=timestamps, curves_dataset=curves_data)
 
-    return (image_stack, px2nm, timestamps)
+    return AFMLoad(image=image_stack, px2nm=px2nm, timestamps=timestamps)

@@ -5,6 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
+from AFMReader.data_classes import AFMLoad
+
 from .logging import logger
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,fixme
@@ -35,7 +37,7 @@ def load_bin(
     shape_x: int | None = None,
     shape_y: int | None = None,
     z_scaling: float = 1.0,
-):
+) -> AFMLoad:
     """
     Load image from binary file. Parameters to interpret the binary file must be provided.
 
@@ -60,10 +62,8 @@ def load_bin(
 
     Returns
     -------
-    image : np.ndarray
-        2D array of shape (height, width) with image data.
-    px2nm : float
-        Scaling factor converting pixels to nanometers.
+    AFMLoad
+        An AFMLoad object containing the image and its pixel to nanometre scaling value.
     """
     filepath = Path(filepath)
     dt_key = str(data_type).strip()
@@ -90,7 +90,7 @@ def load_bin(
     pixel_to_nm_scaling_factor_x = size_x / shape_x if shape_x > 0 else 1.0
     pixel_to_nm_scaling_factor_y = size_y / shape_y if shape_y > 0 else 1.0
     px2nm = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
-    return image, px2nm
+    return AFMLoad(image=image, px2nm=px2nm)
 
 
 def get_bin_channels():

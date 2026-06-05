@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 from matplotlib import animation
 
+from AFMReader.data_classes import AFMLoad
 from AFMReader.io import (
     read_ascii,
     read_bool,
@@ -182,7 +183,7 @@ def calculate_scaling_factor(
     raise ValueError(f"channel {channel} not known for .asd file type.")
 
 
-def load_asd(file_path: str | Path, channel: str):
+def load_asd(file_path: str | Path, channel: str) -> AFMLoad:
     """
     Load a .asd file.
 
@@ -196,17 +197,16 @@ def load_asd(file_path: str | Path, channel: str):
 
     Returns
     -------
-    npt.NDArray
-        The .asd file frames data as a numpy 3D array N x W x H
-        (Number of frames x Width of each frame x height of each frame).
-    float
-        The number of nanometres per pixel for the .asd file. (AKA the resolution).
-        Enables converting between pixels and nanometres when working with the data, in order to use real-world length
-        scales.
-    dict
-        Metadata for the .asd file. The number of entries is too long to list here, and changes based on the file
-        version please either look into the `read_header_file_version_x` functions or print the keys too see what
-        metadata is available.
+    AFMLoad
+        An AFMLoad object containing:
+        - image : npt.NDArray
+            Shape (Number of frames x Width of each frame x height of each frame).
+        - px2nm : float
+            The number of nanometres per pixel for the .asd file.
+        - metadata : dict
+            Metadata for the .asd file. The number of entries is too long to list here, and changes based on the file
+            version please either look into the `read_header_file_version_x` functions or print the keys too see what
+            metadata is available.
     """
     # Ensure the file path is a Path object
     file_path = Path(file_path)
@@ -285,7 +285,7 @@ def load_asd(file_path: str | Path, channel: str):
         frames = np.array(frames)
 
         logger.info(f"[{filename}] : Extracted image.")
-        return frames, pixel_to_nanometre_scaling_factor, header_dict
+        return AFMLoad(image=frames, px2nm=pixel_to_nanometre_scaling_factor, metadata=header_dict)
 
 
 def get_asd_channels(file_path: Path):

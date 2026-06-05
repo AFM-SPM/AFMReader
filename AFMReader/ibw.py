@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 from igor2 import binarywave
 
+from AFMReader.data_classes import AFMLoad
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -65,7 +66,7 @@ def get_ibw_channels(file_path: Path | str):
     return labels
 
 
-def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
+def load_ibw(file_path: Path | str, channel: str) -> AFMLoad:
     """
     Load image from Asylum Research (Igor) .ibw files.
 
@@ -78,8 +79,8 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
 
     Returns
     -------
-    tuple[np.ndarray, float]
-        A tuple containing the image and its pixel to nanometre scaling value.
+    AFMLoad
+        An AFMLoad object containing the image and its pixel to nanometre scaling value.
 
     Raises
     ------
@@ -94,7 +95,9 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
     not a typo!).
 
     >>> from AFMReader.ibw import load_ibw
-    >>> image, pixel_to_nanometre_scaling_factor = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
+    >>> afm_load = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
+    >>> image = afm_load.image
+    >>> pixel_to_nanometre_scaling_factor = afm_load.px2nm
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
@@ -126,4 +129,4 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
         raise e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return (image, _ibw_pixel_to_nm_scaling(scan))
+    return AFMLoad(image=image, px2nm=_ibw_pixel_to_nm_scaling(scan))

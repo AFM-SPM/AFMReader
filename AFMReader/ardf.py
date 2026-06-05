@@ -24,7 +24,7 @@ import struct
 from bisect import bisect_left
 from collections.abc import Collection, Iterable
 from typing import Protocol, TypeAlias, Any
-from AFMReader.lazy_data_classes import LazyMetaProxy, LazyQiData, LazyMetadata
+from AFMReader.data_classes import LazyMetaProxy, LazyQiData, LazyMetadata
 
 try:
     from collections.abc import Buffer

@@ -22,7 +22,7 @@ import javaproperties
 import h5py
 import psutil
 
-from AFMReader.lazy_data_classes import CurvesMetadata, CurvesVolume, CurvesDataset
+from AFMReader.data_classes import AFMLoad, CurvesMetadata, CurvesVolume, CurvesDataset
 from AFMReader.logging import logger
 from AFMReader import jpk
 
@@ -318,6 +318,28 @@ def _get_channel_scaling(props, channel_index):
     return final_multiplier, final_offset, unit
 
 
+def _make_num_min_characters(num: int, min_chars: int = 3):
+    """
+    Zero-pad an integer to a minimum number of characters.
+
+    Parameters
+    ----------
+    num : int
+        The integer to pad.
+    min_chars : int
+        The minimum number of characters the resulting string should have. Default is 3.
+
+    Returns
+    -------
+    str
+        The zero-padded string.
+    """
+    string_num = str(num)
+    if len(string_num) >= min_chars:
+        return string_num
+    return "0" * (min_chars - len(string_num)) + string_num
+
+
 class JPKQILoader:
     """
     Class for readability and improving modularity in the load jpk qi data function.
@@ -409,6 +431,7 @@ class JPKQILoader:
 
         # Instantiate containers for data to be saved (so an exception is not caused if not saving)
         self.curve_groups = None
+        self.saved_to_h5 = False
 
     def get_available_channels(self):
         """
@@ -440,7 +463,7 @@ class JPKQILoader:
         config_path: Path | str | None = None,
         flip_image: bool | None = True,
         save_as_h5: bool | None = None,
-    ) -> tuple[np.ndarray, float, CurvesJPKDataset]:
+    ) -> AFMLoad:
         """
         Load the .jpk-qi-data file.
 
@@ -457,8 +480,8 @@ class JPKQILoader:
 
         Returns
         -------
-        tuple
-            A tuple containing image data, scaling factor, and curve data.
+        AFMLoad
+            An AFMLoad object containing the image, its pixel to nanometre scaling value, and curves dataset.
         """
         # Update instance attributes based on provided parameters
         self.channel = channel if channel else self.channel
@@ -479,7 +502,7 @@ class JPKQILoader:
         self.parse_dimension_data()
 
         # Setup H5 Data structures if needed
-        if self.save_as_h5:
+        if self.save_as_h5 and not self.saved_to_h5:
             self.save_to_h5()
 
         # Establish the lazy loading structures for curve data and metadata. Note how lazy structure is used even if
@@ -507,11 +530,7 @@ class JPKQILoader:
         # Load the image
         self.image, _ = self.get_image()
 
-        # Save a lite form of the images (precalculated) if saving to a file
-        if self.save_as_h5:
-            self.save_lite_data()
-
-        return (self.image, self.px2nm, self.curves_dataset)
+        return AFMLoad(image=self.image, px2nm=self.px2nm, curves_dataset=self.curves_dataset)
 
     def output_summary(self):
         """Output a summary of the loading process, including any failed curve loads and their details."""
@@ -670,6 +689,9 @@ class JPKQILoader:
                     global_meta_group.attrs[key] = str(value).encode("utf-8")
 
             logger.info(f"QI data copied to h5 data {file.filename}")
+            # Save a lite form of the images (precalculated) if saving to a file
+            self.save_lite_data()
+            self.saved_to_h5 = True
 
     def get_curves_sample(self):
         """
@@ -1300,23 +1322,47 @@ class JPKQILoader:
         self.list_of_all_paths = []
 
 
-def _make_num_min_characters(num: int, min_chars: int = 3):
+def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict, save_as_h5: bool = False) -> AFMLoad:
     """
-    Zero-pad an integer to a minimum number of characters.
+    Load the JPK QI data using the JPKQILoader.
 
     Parameters
     ----------
-    num : int
-        The integer to pad.
-    min_chars : int
-        The minimum number of characters the resulting string should have. Default is 3.
+    filepath : str | Path
+        Path to the JPK QI file.
+    channel : str
+        The channel to load from the file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+    save_as_h5 : bool, optional
+        Whether to save the loaded data as an h5 file for faster future loading. Default is False.
 
     Returns
     -------
-    str
-        The zero-padded string.
+    AFMLoad
+        The loaded JPK QI data.
     """
-    string_num = str(num)
-    if len(string_num) >= min_chars:
-        return string_num
-    return "0" * (min_chars - len(string_num)) + string_num
+    if "jpk_qi_loader" not in cached_data:
+        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath, channel=channel, save_as_h5=save_as_h5)
+    return cached_data["jpk_qi_loader"].load(channel=channel, save_as_h5=save_as_h5)
+
+
+def get_jpk_data_channels(filepath: str | Path, cached_data: dict) -> list[str]:
+    """
+    Get the available channels in the JPK QI data.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the JPK QI file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+
+    Returns
+    -------
+    list[str]
+        A list of available channels in the JPK QI data.
+    """
+    if "jpk_qi_loader" not in cached_data:
+        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath)
+    return cached_data["jpk_qi_loader"].get_available_channels()

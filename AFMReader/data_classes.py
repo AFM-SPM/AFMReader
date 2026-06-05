@@ -6,6 +6,8 @@ lazy manner (i.e. loading data on demand rather than all at once) across differe
 formats. This is necessary for handling large datasets with massive memory consumption.
 """
 
+import numpy as np
+
 # pylint: disable=too-few-public-methods,fixme
 
 
@@ -146,6 +148,17 @@ class CurvesVolume:
         self.name = name
         self.channel_units = channel_units
 
+    def __len__(self):
+        """
+        Return the total number of pixels in the image.
+
+        Returns
+        -------
+        int
+            The total number of pixels in the image.
+        """
+        return self.shape_x * self.shape_y
+
     def __getitem__(self, keys):
         """
         Allow numpy style indexing to fetch curve data for a specific pixel.
@@ -256,3 +269,58 @@ class CurvesDataset:
             The default CurvesVolume instance for this dataset.
         """
         return self.volumes[self.default_volume_name]
+
+
+class AFMLoad:
+    """
+    A class representing the loaded AFM data, including the image and scaling factors.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        The image data.
+    px2nm : float
+        The pixel to nanometer scaling factor.
+    timestamps : dict | None, optional
+        Timestamps associated with the data. Default is None.
+    metadata : dict | None, optional
+        Metadata associated with the data. Default is None.
+    curves_dataset : CurvesDataset | None, optional
+        Curves dataset associated with the data. Default is None.
+    """
+
+    image: np.ndarray
+    px2nm: float
+    timestamps: dict | None = None
+    metadata: dict | None = None
+    curves_dataset: CurvesDataset | None = None
+
+    def __init__(
+        self,
+        image: np.ndarray,
+        px2nm: float,
+        timestamps: dict | None = None,
+        metadata: dict | None = None,
+        curves_dataset: CurvesDataset | None = None,
+    ):
+        """
+        Initialise AFMLoad.
+
+        Parameters
+        ----------
+        image : np.ndarray
+            The image data.
+        px2nm : float
+            The pixel to nanometer scaling factor.
+        timestamps : dict | None, optional
+            Timestamps associated with the data. Default is None.
+        metadata : dict | None, optional
+            Metadata associated with the data. Default is None.
+        curves_dataset : CurvesDataset | None, optional
+            Curves dataset associated with the data. Default is None.
+        """
+        self.image = image
+        self.px2nm = px2nm
+        self.timestamps = timestamps
+        self.metadata = metadata
+        self.curves_dataset = curves_dataset
