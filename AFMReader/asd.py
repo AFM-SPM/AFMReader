@@ -291,7 +291,7 @@ def load_asd(file_path: str | Path, channel: str):
             unit = "deg"
         else:
             unit = "nm"
-        return frames, pixel_to_nanometre_scaling_factor, header_dict, unit
+        return frames, pixel_to_nanometre_scaling_factor, unit, header_dict
 
 
 def get_asd_channels(file_path: Path):

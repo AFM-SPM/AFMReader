@@ -79,7 +79,7 @@ class LoadFile:
             self.kwargs = kwargs
         try:
             if self.suffix == ".asd":
-                image, pixel_to_nanometre_scaling_factor, _, z_units = asd.load_asd(self.filepath, self.channel)
+                image, pixel_to_nanometre_scaling_factor, z_units, _ = asd.load_asd(self.filepath, self.channel)
             elif self.suffix == ".gwy":
                 image, pixel_to_nanometre_scaling_factor, z_units = gwy.load_gwy(self.filepath, self.channel)
             elif self.suffix == ".ibw":
