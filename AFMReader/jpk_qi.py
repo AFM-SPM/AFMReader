@@ -431,6 +431,7 @@ class JPKQILoader:
 
         # Instantiate containers for data to be saved (so an exception is not caused if not saving)
         self.curve_groups = None
+        self.saved_to_h5 = False
 
     def get_available_channels(self):
         """
@@ -501,7 +502,7 @@ class JPKQILoader:
         self.parse_dimension_data()
 
         # Setup H5 Data structures if needed
-        if self.save_as_h5:
+        if self.save_as_h5 and not self.saved_to_h5:
             self.save_to_h5()
 
         # Establish the lazy loading structures for curve data and metadata. Note how lazy structure is used even if
@@ -528,10 +529,6 @@ class JPKQILoader:
 
         # Load the image
         self.image, _ = self.get_image()
-
-        # Save a lite form of the images (precalculated) if saving to a file
-        if self.save_as_h5:
-            self.save_lite_data()
 
         return AFMLoad(image=self.image, px2nm=self.px2nm, curves_dataset=self.curves_dataset)
 
@@ -692,6 +689,9 @@ class JPKQILoader:
                     global_meta_group.attrs[key] = str(value).encode("utf-8")
 
             logger.info(f"QI data copied to h5 data {file.filename}")
+            # Save a lite form of the images (precalculated) if saving to a file
+            self.save_lite_data()
+            self.saved_to_h5 = True
 
     def get_curves_sample(self):
         """
@@ -1320,3 +1320,49 @@ class JPKQILoader:
         self.failed_curves = set()
         self.points_for_channel_segment = {}
         self.list_of_all_paths = []
+
+
+def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict, save_as_h5: bool = False) -> AFMLoad:
+    """
+    Load the JPK QI data using the JPKQILoader.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the JPK QI file.
+    channel : str
+        The channel to load from the file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+    save_as_h5 : bool, optional
+        Whether to save the loaded data as an h5 file for faster future loading. Default is False.
+
+    Returns
+    -------
+    AFMLoad
+        The loaded JPK QI data.
+    """
+    if "jpk_qi_loader" not in cached_data:
+        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath, channel=channel, save_as_h5=save_as_h5)
+    return cached_data["jpk_qi_loader"].load(channel=channel, save_as_h5=save_as_h5)
+
+
+def get_jpk_data_channels(filepath: str | Path, cached_data: dict) -> list[str]:
+    """
+    Get the available channels in the JPK QI data.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the JPK QI file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+
+    Returns
+    -------
+    list[str]
+        A list of available channels in the JPK QI data.
+    """
+    if "jpk_qi_loader" not in cached_data:
+        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath)
+    return cached_data["jpk_qi_loader"].get_available_channels()

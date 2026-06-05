@@ -85,17 +85,11 @@ class LoadFile:
             elif self.suffix == ".spm":
                 afm_load = spm.load_spm(self.filepath, self.channel)
             elif self.suffix == ".h5-jpk":
-                afm_load = h5_jpk.load_h5jpk(self.filepath, self.channel, load_curves=not self.loaded_curves)
-                if afm_load.curves_dataset is not None:
-                    self.loaded_curves = True
+                afm_load = h5_jpk.load_h5jpk(self.filepath, self.channel)
             elif self.suffix == ".jpk-qi-data":
-                if "jpk_qi_loader" not in self.cached_data:
-                    self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(
-                        filepath=self.filepath, channel=self.channel, **self.kwargs
-                    )
-                afm_load = self.cached_data["jpk_qi_loader"].load(channel=self.channel, **self.kwargs)
-                if afm_load.curves_dataset is not None:
-                    self.loaded_curves = True
+                afm_load = jpk_qi.load_jpk_data(
+                    filepath=self.filepath, channel=self.channel, cached_data=self.cached_data, **self.kwargs
+                )
             elif self.suffix == ".stp":
                 afm_load = stp.load_stp(self.filepath)
             elif self.suffix == ".top":
@@ -135,9 +129,7 @@ class LoadFile:
         elif self.suffix == ".h5-jpk":
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
         elif self.suffix == ".jpk-qi-data":
-            if "jpk_qi_loader" not in self.cached_data:
-                self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(filepath=self.filepath, **self.kwargs)
-            available_channels = self.cached_data["jpk_qi_loader"].get_available_channels()
+            available_channels = jpk_qi.get_jpk_data_channels(filepath=self.filepath, cached_data=self.cached_data)
         elif self.suffix == ".topostats":
             available_channels = ["image", "image_original"]
         elif self.suffix == ".bin":
