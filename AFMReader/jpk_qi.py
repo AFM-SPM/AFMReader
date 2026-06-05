@@ -22,7 +22,7 @@ import javaproperties
 import h5py
 import psutil
 
-from AFMReader.lazy_data_classes import CurvesMetadata, CurvesVolume, CurvesDataset
+from AFMReader.data_classes import AFMLoad, CurvesMetadata, CurvesVolume, CurvesDataset
 from AFMReader.logging import logger
 from AFMReader import jpk
 
@@ -318,6 +318,28 @@ def _get_channel_scaling(props, channel_index):
     return final_multiplier, final_offset, unit
 
 
+def _make_num_min_characters(num: int, min_chars: int = 3):
+    """
+    Zero-pad an integer to a minimum number of characters.
+
+    Parameters
+    ----------
+    num : int
+        The integer to pad.
+    min_chars : int
+        The minimum number of characters the resulting string should have. Default is 3.
+
+    Returns
+    -------
+    str
+        The zero-padded string.
+    """
+    string_num = str(num)
+    if len(string_num) >= min_chars:
+        return string_num
+    return "0" * (min_chars - len(string_num)) + string_num
+
+
 class JPKQILoader:
     """
     Class for readability and improving modularity in the load jpk qi data function.
@@ -440,7 +462,7 @@ class JPKQILoader:
         config_path: Path | str | None = None,
         flip_image: bool | None = True,
         save_as_h5: bool | None = None,
-    ) -> tuple[np.ndarray, float, CurvesJPKDataset]:
+    ) -> AFMLoad:
         """
         Load the .jpk-qi-data file.
 
@@ -457,8 +479,8 @@ class JPKQILoader:
 
         Returns
         -------
-        tuple
-            A tuple containing image data, scaling factor, and curve data.
+        AFMLoad
+            An AFMLoad object containing the image, its pixel to nanometre scaling value, and curves dataset.
         """
         # Update instance attributes based on provided parameters
         self.channel = channel if channel else self.channel
@@ -511,7 +533,7 @@ class JPKQILoader:
         if self.save_as_h5:
             self.save_lite_data()
 
-        return (self.image, self.px2nm, self.curves_dataset)
+        return AFMLoad(image=self.image, px2nm=self.px2nm, curves_dataset=self.curves_dataset)
 
     def output_summary(self):
         """Output a summary of the loading process, including any failed curve loads and their details."""
@@ -1298,25 +1320,3 @@ class JPKQILoader:
         self.failed_curves = set()
         self.points_for_channel_segment = {}
         self.list_of_all_paths = []
-
-
-def _make_num_min_characters(num: int, min_chars: int = 3):
-    """
-    Zero-pad an integer to a minimum number of characters.
-
-    Parameters
-    ----------
-    num : int
-        The integer to pad.
-    min_chars : int
-        The minimum number of characters the resulting string should have. Default is 3.
-
-    Returns
-    -------
-    str
-        The zero-padded string.
-    """
-    string_num = str(num)
-    if len(string_num) >= min_chars:
-        return string_num
-    return "0" * (min_chars - len(string_num)) + string_num

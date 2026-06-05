@@ -3,9 +3,9 @@
 from pathlib import Path
 from typing import Any
 
-import numpy.typing as npt
 
 from AFMReader import asd, gwy, h5_jpk, ibw, jpk, raw_bin, spm, stp, top, topostats, jpk_qi
+from AFMReader.data_classes import AFMLoad
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -48,9 +48,7 @@ class LoadFile:
         # Store heavy loaded data in a dict to avoid having to reload it
         self.cached_data: dict[str, Any] = {}
 
-    def load(  # noqa: C901
-        self, channel: str | None = None, kwargs: dict | None = None
-    ) -> tuple[npt.NDArray | str, float | None] | tuple[npt.NDArray | str, float | None, Any]:
+    def load(self, channel: str | None = None, kwargs: dict | None = None) -> AFMLoad:  # noqa: C901
         """
         Generally loads a file type that can be handled by AFMReader.
 
@@ -63,15 +61,13 @@ class LoadFile:
 
         Returns
         -------
-        tuple
-            The image data (stack if ''.asd'' or ''.h5-jpk'') and the pixel to nanometre scaling ratio.
-            If curve data is found, also return the curve data (a large dict of all the curves).
+        AFMLoad
+            An AFMLoad object containing the loaded AFM image data and metadata.
 
         Raises
         ------
         ValueError
-            Where the channel is not found, returned as a tuple of "error message" and "None" so that this can be
-            propagated to Napari without outright failing.
+            Where the channel is not found.
         """
         if channel:
             self.channel = channel
@@ -79,61 +75,39 @@ class LoadFile:
             self.kwargs = kwargs
         try:
             if self.suffix == ".asd":
-                image, pixel_to_nanometre_scaling_factor, _ = asd.load_asd(self.filepath, self.channel)
+                afm_load = asd.load_asd(self.filepath, self.channel)
             elif self.suffix == ".gwy":
-                image, pixel_to_nanometre_scaling_factor = gwy.load_gwy(self.filepath, self.channel)
+                afm_load = gwy.load_gwy(self.filepath, self.channel)
             elif self.suffix == ".ibw":
-                image, pixel_to_nanometre_scaling_factor = ibw.load_ibw(self.filepath, self.channel)
+                afm_load = ibw.load_ibw(self.filepath, self.channel)
             elif self.suffix in [".jpk", ".jpk-qi-image"]:
-                image, pixel_to_nanometre_scaling_factor = jpk.load_jpk(self.filepath, self.channel)
+                afm_load = jpk.load_jpk(self.filepath, self.channel)
             elif self.suffix == ".spm":
-                image, pixel_to_nanometre_scaling_factor = spm.load_spm(self.filepath, self.channel)
+                afm_load = spm.load_spm(self.filepath, self.channel)
             elif self.suffix == ".h5-jpk":
-                h5_returned = h5_jpk.load_h5jpk(self.filepath, self.channel, load_curves=not self.loaded_curves)
-                if len(h5_returned) == 3:
-                    image, pixel_to_nanometre_scaling_factor, _ = h5_returned  # type: ignore[misc]
-                elif len(h5_returned) == 4:
-                    image, pixel_to_nanometre_scaling_factor, _, curve_data = h5_returned  # type: ignore[misc]
+                afm_load = h5_jpk.load_h5jpk(self.filepath, self.channel, load_curves=not self.loaded_curves)
+                if afm_load.curves_dataset is not None:
                     self.loaded_curves = True
-                    return image, pixel_to_nanometre_scaling_factor, curve_data
-                else:
-                    logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(h5_returned)}")
             elif self.suffix == ".jpk-qi-data":
                 if "jpk_qi_loader" not in self.cached_data:
                     self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(
                         filepath=self.filepath, channel=self.channel, **self.kwargs
                     )
-                jpk_qi_returned = self.cached_data["jpk_qi_loader"].load(channel=self.channel, **self.kwargs)
-                if len(jpk_qi_returned) == 2:
-                    image, pixel_to_nanometre_scaling_factor = jpk_qi_returned
-                elif len(jpk_qi_returned) == 3:
-                    image, pixel_to_nanometre_scaling_factor, curve_data = jpk_qi_returned
+                afm_load = self.cached_data["jpk_qi_loader"].load(channel=self.channel, **self.kwargs)
+                if afm_load.curves_dataset is not None:
                     self.loaded_curves = True
-                    return image, pixel_to_nanometre_scaling_factor, curve_data
-                else:
-                    logger.error(f"Loading h5-jpk file returned unexpected number of items: {len(jpk_qi_returned)}")
             elif self.suffix == ".stp":
-                image, pixel_to_nanometre_scaling_factor = stp.load_stp(self.filepath)
+                afm_load = stp.load_stp(self.filepath)
             elif self.suffix == ".top":
-                image, pixel_to_nanometre_scaling_factor = top.load_top(self.filepath)
+                afm_load = top.load_top(self.filepath)
             elif self.suffix == ".topostats":
-                ts_dict = topostats.load_topostats(self.filepath)
-                try:
-                    image = ts_dict[self.channel]
-                    pixel_to_nanometre_scaling_factor = ts_dict["pixel_to_nm_scaling"]
-                except KeyError as exc:
-                    image_keys = ["image", "image_original"]
-                    topostats_keys = list(ts_dict.keys())
-                    raise ValueError(
-                        f"'{self.channel}' not in available image keys: "
-                        f"{[im for im in image_keys if im in topostats_keys]}"
-                    ) from exc
+                afm_load = topostats.load_topostats(self.filepath, self.channel)
             elif self.suffix == ".bin":
-                image, pixel_to_nanometre_scaling_factor = raw_bin.load_bin(self.filepath, **self.kwargs)
+                afm_load = raw_bin.load_bin(self.filepath, **self.kwargs)
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
 
-            return image, pixel_to_nanometre_scaling_factor
+            return afm_load
 
         except ValueError as e:
             logger.error(f"{e}")

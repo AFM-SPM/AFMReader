@@ -7,6 +7,7 @@ from typing import Any, BinaryIO
 import numpy as np
 from loguru import logger
 
+from AFMReader.data_classes import AFMLoad
 from AFMReader.io import read_char, read_double, read_null_terminated_string, read_uint32
 
 
@@ -36,7 +37,7 @@ def get_gwy_channels(file_path):
     return list(channel_ids)
 
 
-def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.float64], float]:
+def load_gwy(file_path: Path | str, channel: str) -> AFMLoad:
     """
     Extract image and pixel to nm scaling from the .gwy file.
 
@@ -49,8 +50,8 @@ def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.fl
 
     Returns
     -------
-    tuple(np.ndarray, float)
-        A tuple containing the image and its pixel to nanometre scaling value.
+    AFMLoad
+        An AFMLoad object containing the image and its pixel to nanometre scaling value.
 
     Raises
     ------
@@ -65,7 +66,9 @@ def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.fl
     Sensor'.
 
     >>> from AFMReader.gwy import load_gwy
-    >>> image, pixel_to_nm = load_gwy(file_path="path/to/file.gwy", channel="Height")
+    >>> afm_load = load_gwy(file_path="path/to/file.gwy", channel="Height")
+    >>> image = afm_load.image
+    >>> px2nm = afm_load.px2nm
     ```
     """
     logger.info(f"Loading image from : {file_path}")
@@ -113,7 +116,7 @@ def load_gwy(file_path: Path | str, channel: str) -> tuple[np.ndarray[Any, np.fl
         raise ValueError(f"'{channel}' not found in {file_path.suffix} channel list: {channel_ids}") from e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return (image, px_to_nm)
+    return AFMLoad(image=image, px2nm=px_to_nm)
 
 
 def gwy_read_object(open_file: BinaryIO, data_dict: dict) -> None:

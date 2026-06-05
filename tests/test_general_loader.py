@@ -135,9 +135,9 @@ def test_load(capsys: pytest.CaptureFixture, filepath: Path, channel: str, error
         with pytest.raises(ValueError, match=re.escape(message)):
             loader.load()
     else:
-        image, px2nm = loader.load()  # type: ignore[misc]
-        assert isinstance(image, np.ndarray)
-        assert isinstance(px2nm, float)
+        afm_load = loader.load()
+        assert isinstance(afm_load.image, np.ndarray)
+        assert isinstance(afm_load.px2nm, float)
     # check output logs
     captured = capsys.readouterr()
     assert message in captured.err
@@ -157,7 +157,7 @@ def test_load_filenotfounderror(filepath: Path) -> None:
     loader = general_loader.LoadFile(filepath, "channel")
 
     with pytest.raises(FileNotFoundError) as execinfo:  # noqa: PT012
-        _, _ = loader.load()  # type: ignore[misc]
+        loader.load()
         assert "[not_a_real_file] FileNotFoundError" in execinfo.value
 
 

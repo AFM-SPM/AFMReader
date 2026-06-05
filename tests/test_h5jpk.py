@@ -129,20 +129,18 @@ def test_load_h5jpk(
     image_sum: float,
 ) -> None:
     """Test the normal operation of loading a .h5-jpk file."""
-    result_image, result_pixel_to_nm_scaling, results_timestamps = h5_jpk.load_h5jpk(  # type: ignore[misc]
-        RESOURCES / file_name, channel, flip_image
-    )
+    afm_load = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)
 
-    assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
-    assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == image_shape
-    assert result_image.dtype == np.dtype(image_dtype)
-    assert isinstance(results_timestamps, timestamps_dtype)
-    assert result_image.sum() == pytest.approx(image_sum)
-    assert len(results_timestamps) == result_image.shape[0]
+    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert isinstance(afm_load.image, np.ndarray)
+    assert afm_load.image.shape == image_shape
+    assert afm_load.image.dtype == np.dtype(image_dtype)
+    assert isinstance(afm_load.timestamps, timestamps_dtype)
+    assert afm_load.image.sum() == pytest.approx(image_sum)
+    assert len(afm_load.timestamps) == afm_load.image.shape[0]
     assert all(
-        results_timestamps[f"frame {i}"] < results_timestamps[f"frame {i + 1}"]
-        for i in range(len(results_timestamps) - 1)
+        afm_load.timestamps[f"frame {i}"] < afm_load.timestamps[f"frame {i + 1}"]
+        for i in range(len(afm_load.timestamps) - 1)
     )
 
 
@@ -199,7 +197,9 @@ def test_load_h5jpk_curves(
     curve_targets : dict[str, tuple[int, float]]
         A dictionary mapping curve channels to their expected size and sum, used for validating the loaded curve data.
     """
-    _, _, _, curve_dataset = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)  # type: ignore[misc]
+    afm_load = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)
+    curve_dataset = afm_load.curves_dataset
+    assert curve_dataset is not None
     curve_at_coords = curve_dataset.get_default_volume()[curve_coords[0], curve_coords[1]]
     for curve_channel, (expected_size, expected_sum) in curve_targets.items():
         curve = curve_at_coords[curve_channel][curve_direction]

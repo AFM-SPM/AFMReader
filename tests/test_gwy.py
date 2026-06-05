@@ -16,12 +16,12 @@ def test_load_gwy() -> None:
     """Test the normal operation of loading a .gwy file."""
     channel = "ZSensor"
     file_path = RESOURCES / "sample_0.gwy"
-    result_image, result_pixel_to_nm_scaling = gwy.load_gwy(file_path, channel=channel)
-    assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == (512, 512)
-    assert result_image.sum() == pytest.approx(33836850.232917726)
-    assert isinstance(result_pixel_to_nm_scaling, float)
-    assert result_pixel_to_nm_scaling == pytest.approx(0.8468632812499975)
+    afm_load = gwy.load_gwy(file_path, channel=channel)
+    assert isinstance(afm_load.image, np.ndarray)
+    assert afm_load.image.shape == (512, 512)
+    assert afm_load.image.sum() == pytest.approx(33836850.232917726)
+    assert isinstance(afm_load.px2nm, float)
+    assert afm_load.px2nm == pytest.approx(0.8468632812499975)
 
 
 def test_gwy_read_object() -> None:
