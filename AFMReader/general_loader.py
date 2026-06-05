@@ -131,7 +131,7 @@ class LoadFile:
         elif self.suffix == ".jpk-qi-data":
             available_channels = jpk_qi.get_jpk_data_channels(filepath=self.filepath, cached_data=self.cached_data)
         elif self.suffix == ".topostats":
-            available_channels = ["image", "image_original"]
+            available_channels = topostats.get_topostats_channels()
         elif self.suffix == ".bin":
             available_channels = raw_bin.get_bin_channels()
         elif self.suffix in [".stp", ".top"]:
