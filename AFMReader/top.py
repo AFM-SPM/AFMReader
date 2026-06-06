@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 
-from AFMReader.data_classes import AFMLoad
 from AFMReader.io import read_int16
 from AFMReader.logging import logger
 
@@ -15,7 +14,9 @@ logger.enable(__package__)
 # pylint: disable=too-many-locals
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-branches
-def load_top(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad:  # noqa: C901 (ignore too complex)
+def load_top(  # noqa: C901 (ignore too complex)
+    file_path: Path | str, header_encoding: str = "latin-1"
+) -> tuple[np.ndarray, float, str]:
     """
     Load image from TOP files.
 
@@ -28,8 +29,8 @@ def load_top(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image and its pixel to nanometre scaling value.
+    tuple[np.ndarray, float, str]
+        A tuple containing the image, its pixel to nanometre scaling value, and the z units.
 
     Raises
     ------
@@ -87,10 +88,14 @@ def load_top(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad
                     f"[{filename}] : X scan size (nm) does not equal Y scan size (nm) ({x_real_size}, {y_real_size})"
                     "we don't currently support non-square images."
                 )
-            Zrange_match = re.search(r"Z Amplitude: (\d+)", header_decoded)
-            if Zrange_match is None:
+            z_range_match = re.search(r"Z Amplitude: ([\d.]+)\s*([a-zA-Z]+)", header_decoded)
+            if z_range_match is None:
                 raise ValueError(f"[{filename}] : 'Z Amplitude' not found in file header.")
-            Zrange = float(Zrange_match.group(1))
+            z_range = float(z_range_match.group(1))
+            z_units = z_range_match.group(2)
+            if z_units == "µm":
+                z_range = z_range * 1000
+                z_units = "nm"
 
             # Calculate pixel to nm scaling
             pixel_to_nm_scaling = x_real_size / cols
@@ -104,9 +109,9 @@ def load_top(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad
                 image_list.append(row)
             image = np.array(image_list)
             image_int = np.array(image_list)
-            Zmin = 0  # nm
+            z_min = 0  # nm
             norm_image = (image_int - np.min(image_int)) / (np.max(image_int) - np.min(image_int))
-            image = norm_image * (Zrange - Zmin) + Zmin
+            image = norm_image * (z_range - z_min) + z_min
 
     except FileNotFoundError as e:
         logger.error(f"[{filename}] : File not found : {file_path}")
@@ -116,4 +121,4 @@ def load_top(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad
         raise e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return AFMLoad(image=image, px2nm=pixel_to_nm_scaling)
+    return (image, pixel_to_nm_scaling, z_units)

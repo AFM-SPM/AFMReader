@@ -10,7 +10,6 @@ import numpy as np
 import numpy.typing as npt
 from matplotlib import animation
 
-from AFMReader.data_classes import AFMLoad
 from AFMReader.io import (
     read_ascii,
     read_bool,
@@ -183,7 +182,8 @@ def calculate_scaling_factor(
     raise ValueError(f"channel {channel} not known for .asd file type.")
 
 
-def load_asd(file_path: str | Path, channel: str) -> AFMLoad:
+# pylint: disable=too-many-locals
+def load_asd(file_path: str | Path, channel: str):
     """
     Load a .asd file.
 
@@ -231,7 +231,6 @@ def load_asd(file_path: str | Path, channel: str) -> AFMLoad:
             raise ValueError(
                 f"File version {file_version} unknown. Please add support if you know how to decode this file version."
             )
-        logger.debug(f"header dict: \n{header_dict}")
 
         pixel_to_nanometre_scaling_factor_x = header_dict["x_nm"] / header_dict["x_pixels"]
         pixel_to_nanometre_scaling_factor_y = header_dict["y_nm"] / header_dict["y_pixels"]
@@ -285,7 +284,11 @@ def load_asd(file_path: str | Path, channel: str) -> AFMLoad:
         frames = np.array(frames)
 
         logger.info(f"[{filename}] : Extracted image.")
-        return AFMLoad(image=frames, px2nm=pixel_to_nanometre_scaling_factor, metadata=header_dict)
+        if channel == "PH":
+            unit = "deg"
+        else:
+            unit = "nm"
+        return frames, pixel_to_nanometre_scaling_factor, header_dict, unit
 
 
 def get_asd_channels(file_path: Path):

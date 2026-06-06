@@ -5,8 +5,6 @@ from pathlib import Path
 
 import numpy as np
 
-from AFMReader.data_classes import AFMLoad
-
 from .logging import logger
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,fixme
@@ -37,7 +35,8 @@ def load_bin(
     shape_x: int | None = None,
     shape_y: int | None = None,
     z_scaling: float = 1.0,
-) -> AFMLoad:
+    z_unit: str = "nm",
+):
     """
     Load image from binary file. Parameters to interpret the binary file must be provided.
 
@@ -59,11 +58,17 @@ def load_bin(
         Number of pixels in the y direction (default is None).
     z_scaling : float, optional
         Scaling factor for the z values (default is 1.0).
+    z_unit : str, optional
+        Unit of the z values (default is "nm").
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image and its pixel to nanometre scaling value.
+    image : np.ndarray
+        2D array of shape (height, width) with image data.
+    px2nm : float
+        Scaling factor converting pixels to nanometers.
+    z_unit : str
+        Unit of the z values.
     """
     filepath = Path(filepath)
     dt_key = str(data_type).strip()
@@ -90,25 +95,19 @@ def load_bin(
     pixel_to_nm_scaling_factor_x = size_x / shape_x if shape_x > 0 else 1.0
     pixel_to_nm_scaling_factor_y = size_y / shape_y if shape_y > 0 else 1.0
     px2nm = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
-    return AFMLoad(image=image, px2nm=px2nm)
+    return image, px2nm, z_unit
 
 
-def get_bin_channels():
+def get_bin_params():
     """
-    Get the list of channels available in the binary file.
-
-    Since binary files do not have a standard structure,
-    this function returns an empty list (as no standard channels are available) and the expected keyword
-    arguments for loading a binary file.
+    Get the expected keyword arguments for loading a binary file.
 
     Returns
     -------
-    list
-        Empty list.
     dict
         Dictionary of expected keyword arguments for loading a binary file.
     """
-    kwarg_types = {
+    return {
         "data_type": (str, DTYPE_MAP.keys()),
         "offset_bytes": int,
         "size_x": float,
@@ -116,5 +115,5 @@ def get_bin_channels():
         "shape_x": int,
         "shape_y": int,
         "z_scaling": float,
+        "z_unit": str,
     }
-    return [], kwarg_types

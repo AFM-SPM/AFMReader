@@ -9,7 +9,6 @@ import tifffile
 
 from AFMReader.io import read_yaml
 from AFMReader.logging import logger
-from AFMReader.data_classes import AFMLoad
 
 logger.enable(__package__)
 
@@ -101,7 +100,7 @@ def _get_number_of_slots(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dic
     return n_slots
 
 
-def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> tuple[float, float]:
+def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str, int]) -> tuple[float, float, str]:
     """
     Extract the z scaling factor and offset for a JPK image channel.
 
@@ -118,8 +117,8 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
 
     Returns
     -------
-    tuple[float, float]
-        A tuple contains values used to scale and offset raw data.
+    tuple[float, float, str]
+        A tuple contains values used to scale and offset raw data, and the unit of the z-axis.
     """
     # Create a dictionary of list for the differnt slots
     n_slots = _get_number_of_slots(tif, channel_idx, jpk_tags)
@@ -162,15 +161,22 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
             .tags[str(int(jpk_tags["first_offset_name"]) + (jpk_tags["slot_size"] * (_default_slot)))]
             .name
         )
+        unit_name = (
+            tif.pages[channel_idx]
+            .tags[str(int(jpk_tags["first_unit_name"]) + (jpk_tags["slot_size"] * (_default_slot)))]
+            .name
+        )
 
         scaling = float(_get_tag_value(tif.pages[channel_idx], scaling_name))
         offset = float(_get_tag_value(tif.pages[channel_idx], offset_name))
+        z_units = str(_get_tag_value(tif.pages[channel_idx], unit_name))
     elif scaling_type == "NullScaling":
         scaling = 1.0
         offset = 0.0
+        z_units = "raw"
     else:
         raise ValueError(f"Scaling type {scaling_type} is not 'NullScaling' or 'LinearScaling'")
-    return scaling, offset
+    return scaling, offset, z_units
 
 
 def _get_jpk_channels(
@@ -238,7 +244,7 @@ def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = Non
 
 def load_jpk(
     file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True
-) -> AFMLoad:
+) -> tuple[np.ndarray, float, str]:
     """
     Load image from JPK Instruments .jpk files.
 
@@ -256,8 +262,8 @@ def load_jpk(
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image and its pixel to nanometre scaling value.
+    tuple[npt.NDArray, float, str]
+        A tuple containing the image, its pixel to nanometre scaling value, and the z-axis units.
 
     Raises
     ------
@@ -271,14 +277,14 @@ def load_jpk(
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_jpk
-    >>> afm_load = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
-    >>> image = afm_load.image
-    >>> pixel_to_nanometre_scaling_factor = afm_load.px2nm
+    >>> image, pixel_to_nanometre_scaling_factor, units = load_jpk(file_path="./my_jpk_file.jpk",
+    >>>                                                           channel="height_trace",
+    >>>                                                           flip_image=True)
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
     filename = file_path.stem
-    image, px2nm = _load_jpk(
+    image, px2nm, units = _load_jpk(
         file=file_path,
         filename=filename,
         channel=channel,
@@ -286,7 +292,7 @@ def load_jpk(
         config_path=config_path,
         flip_image=flip_image,
     )
-    return AFMLoad(image=image, px2nm=px2nm)
+    return (image, px2nm, units)
 
 
 def _load_jpk(
@@ -297,9 +303,9 @@ def _load_jpk(
     config_path: Path | str | None = None,
     flip_image: bool = True,
     convert_to_nm: bool = True,
-) -> tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, float, str]:
     """
-    Load image data and pixel scaling from a JPK TIFF file for a given channel.
+    Load image data, pixel scaling, and z-axis units from a JPK TIFF file for a given channel.
 
     Parameters
     ----------
@@ -321,8 +327,8 @@ def _load_jpk(
 
     Returns
     -------
-    tuple[np.ndarray, float]
-        A tuple containing the image and its pixel to nanometre scaling value.
+    tuple[np.ndarray, float, str]
+        A tuple containing the image, its pixel to nanometre scaling value, and the z-axis units.
     """
     jpk_tags = _load_jpk_tags(config_path)
     try:
@@ -348,19 +354,20 @@ def _load_jpk(
     # Get image and if applicable, scale it
     channel_page = tif.pages[channel_idx]
     image = channel_page.asarray()
-    scaling, offset = _get_z_scaling(tif, channel_idx, jpk_tags)
+    scaling, offset, z_units = _get_z_scaling(tif, channel_idx, jpk_tags)
     image = (image * scaling) + offset
     if flip_image is True:
         image = np.flipud(image)
 
-    if convert_to_nm and channel_page.tags[jpk_tags["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
+    if convert_to_nm and z_units == "m":
         image = image * 1e9
+        z_units = "nm"
 
     # Get page for common metadata between scans
     metadata_page = tif.pages[0]
 
     logger.info(f"[{filename}] : Extracted image.")
-    return (image, _jpk_pixel_to_nm_scaling(metadata_page, jpk_tags))
+    return (image, _jpk_pixel_to_nm_scaling(metadata_page, jpk_tags), z_units)
 
 
 def _load_jpk_tags(config_path: str | Path | None = None) -> dict[str, int]:

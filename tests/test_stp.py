@@ -18,10 +18,11 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         "expected_image_shape",
         "expected_image_dtype",
         "expected_image_sum",
+        "expected_z_units",
     ),
     [
-        pytest.param("sample_0.stp", 0.9765625, (512, 512), float, -15070620.440757688),
-        pytest.param("sample_1_um_scale.stp", 3.90625, (512, 512), float, -14439959.0625),
+        pytest.param("sample_0.stp", 0.9765625, (512, 512), float, -15070620.440757688, "nm"),
+        pytest.param("sample_1_um_scale.stp", 3.90625, (512, 512), float, -14439959.0625, "nm"),
     ],
 )
 def test_load_stp(
@@ -30,13 +31,15 @@ def test_load_stp(
     expected_image_shape: tuple[int, int],
     expected_image_dtype: type,
     expected_image_sum: float,
+    expected_z_units: str,
 ) -> None:
     """Test the normal operation of loading a .stp file."""
     file_path = RESOURCES / file_name
-    afm_load = load_stp(file_path=file_path)
+    result_image, result_pixel_to_nm_scaling, result_z_units = load_stp(file_path=file_path)
 
-    assert afm_load.px2nm == pytest.approx(expected_pixel_to_nm_scaling)
-    assert isinstance(afm_load.image, np.ndarray)
-    assert afm_load.image.shape == expected_image_shape
-    assert afm_load.image.dtype == expected_image_dtype
-    assert afm_load.image.sum() == pytest.approx(expected_image_sum)
+    assert result_pixel_to_nm_scaling == pytest.approx(expected_pixel_to_nm_scaling)
+    assert isinstance(result_image, np.ndarray)
+    assert result_image.shape == expected_image_shape
+    assert result_image.dtype == expected_image_dtype
+    assert result_image.sum() == pytest.approx(expected_image_sum)
+    assert result_z_units == expected_z_units

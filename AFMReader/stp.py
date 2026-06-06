@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 
-from AFMReader.data_classes import AFMLoad
 from AFMReader.io import read_double
 from AFMReader.logging import logger
 
@@ -14,7 +13,9 @@ logger.enable(__package__)
 
 # pylint: disable=too-many-locals
 # pylint: disable=too-many-statements
-def load_stp(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad:  # noqa: C901 (ignore too complex)
+def load_stp(  # noqa: C901 (ignore too complex)
+    file_path: Path | str, header_encoding: str = "latin-1"
+) -> tuple[np.ndarray, float, str]:
     """
     Load image from STP files.
 
@@ -27,8 +28,8 @@ def load_stp(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image and its pixel to nanometre scaling value.
+    tuple[np.ndarray, float, str]
+        A tuple containing the image, its pixel to nanometre scaling value, and the z units.
 
     Raises
     ------
@@ -86,6 +87,14 @@ def load_stp(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad
                     f"[{filename}] : X scan size (nm) does not equal Y scan size (nm) ({x_real_size}, {y_real_size})"
                     "we don't currently support non-square images."
                 )
+            z_units_match = re.search(r"Z Amplitude:\s*[\d.]+\s*([a-zA-Z]+)", header_decoded)
+            if z_units_match is None:
+                logger.warning(
+                    f"[{filename}] : 'Z Amplitude' not found in file header. Units will be set to 'nm' by default."
+                )
+                z_units = "nm"
+            else:
+                z_units = z_units_match.group(1)
 
             # Calculate pixel to nm scaling
             pixel_to_nm_scaling = x_real_size / cols
@@ -107,4 +116,4 @@ def load_stp(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad
         raise e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return AFMLoad(image=image, px2nm=pixel_to_nm_scaling)
+    return (image, pixel_to_nm_scaling, z_units)

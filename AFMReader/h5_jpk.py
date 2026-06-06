@@ -12,8 +12,7 @@ import h5py
 import numpy as np
 
 from AFMReader.logging import logger
-from AFMReader.data_classes import (
-    AFMLoad,
+from AFMReader.lazy_data_classes import (
     CurvesDataset,
     CurvesMetadata,
     CurvesVolume,
@@ -126,9 +125,9 @@ def _jpk_pixel_to_nm_scaling_h5(measurement_group: h5py.Group) -> float:
         raise KeyError(f"Missing required attribute '{missing}' in HDF5 measurement group.") from e
 
 
-def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
+def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float, str]:
     """
-    Extract the Z scaling multiplier and offset from an HDF5 channel group.
+    Extract the Z scaling multiplier, offset, and unit from an HDF5 channel group.
 
     Parameters
     ----------
@@ -137,17 +136,26 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
 
     Returns
     -------
-    tuple[float, float]
-        A tuple containing the scaling multiplier and offset.
+    tuple[float, float, str]
+        A tuple containing the scaling multiplier, offset, and unit.
 
     Notes
     -----
-    Defaults to (1.0, 0.0) if attributes are not present.
+    Defaults to (1.0, 0.0, 'm') if attributes are not present.
     """
     multiplier = float(channel_group.attrs.get("net-encoder.scaling.multiplier", 1.0))
     offset = float(channel_group.attrs.get("net-encoder.scaling.offset", 0.0))
 
-    return multiplier, offset
+    unit = (
+        _decode_attr(channel_group.attrs.get("net-encoder.scaling.unit.unit"))
+        if "net-encoder.scaling.unit.unit" in channel_group.attrs
+        else None
+    )
+    if unit is None:
+        logger.warning("Z scaling unit not found; defaulting to 'm'.")
+        unit = "m"
+
+    return multiplier, offset, unit
 
 
 def _decode_attr(attr: bytes | str) -> str:
@@ -254,7 +262,7 @@ def _get_line_rate(measurement_group: h5py.Group) -> float:
         raise KeyError(f"Missing required attribute '{missing}' in HDF5 measurement group.") from e
 
 
-def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> dict:
+def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> dict[str, float]:
     """
     Generate timestamps for a sequence of frames based on scan line rate and image size.
 
@@ -536,7 +544,9 @@ class CurvesH5Metadata(CurvesMetadata):
         return meta_dict
 
 
-def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True) -> AFMLoad:
+def load_h5jpk(
+    file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True
+) -> tuple[np.ndarray, float, dict[str, float], str] | tuple[np.ndarray, float, dict[str, float], str, CurvesDataset]:
     """
     Load image from JPK Instruments .h5-jpk files.
 
@@ -553,10 +563,17 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image, its pixel to nanometre scaling value, timestamps, and
-        optionally the curves dataset. Curves dataset only if load_curves is True and curve data is
-        present in the file.
+    image : np.ndarray
+        3D array of shape (frames, height, width) with image data.
+    pixel_to_nm_scaling : float
+        Scaling factor converting pixels to nanometers.
+    timestamps : dict[str, float]
+        Dictionary mapping frame labels (e.g., "frame 0") to timestamp values in seconds.
+    z_units : str
+        The physical unit of the Z data (e.g., 'm' for meters).
+    curves_data : CurvesDataset, optional
+        A CurvesDataset containing the curve data if load_curves is True and curve data is present in the file.
+        CurvesDataset provides lazy access to curve data for curve data and metadata on demand.
 
     Raises
     ------
@@ -570,9 +587,9 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_h5jpk
-    >>> afm_load = load_h5jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
-    >>> image = afm_load.image
-    >>> pixel_to_nm_scaling = afm_load.px2nm
+    >>> frames, pixel_to_nanometre_scaling_factor, timestamps, z_units = load_h5jpk(file_path="./my_jpk_file.jpk",
+    >>>                                                         channel="height_trace",
+    >>>                                                         flip_image=True)
     """
     logger.info(f"Loading H5-JPK file from : {file_path}")
     file_path = Path(file_path)
@@ -585,7 +602,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
 
         # Load images and scaling factors from channel dataset
         images = channel_group[dataset_name][:]
-        scaling, offset = _get_z_scaling_h5(channel_group)
+        scaling, offset, z_units = _get_z_scaling_h5(channel_group)
         images = (images * scaling) + offset
 
         # Select and reshape a flattened frame
@@ -610,8 +627,9 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
                 image_stack[i] = frame
 
         # Convert to nm
-        if dataset_name.lower() in ("height", "error", "measuredheight", "amplitude"):
+        if z_units == "m":
             image_stack = image_stack * 1e9
+            z_units = "nm"
 
         # Generate a dictionary of timestamps
         line_rate = _get_line_rate(measurement_group)
@@ -652,6 +670,6 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
 
         curves_data = CurvesDataset(volumes={"Trace": curves_volume}, metadata=curves_metadata)
 
-        return AFMLoad(image=image_stack, px2nm=px2nm, timestamps=timestamps, curves_dataset=curves_data)
+        return (image_stack, px2nm, timestamps, z_units, curves_data)
 
-    return AFMLoad(image=image_stack, px2nm=px2nm, timestamps=timestamps)
+    return (image_stack, px2nm, timestamps, z_units)

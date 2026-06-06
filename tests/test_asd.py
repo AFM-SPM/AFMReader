@@ -11,20 +11,26 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 
 
 @pytest.mark.parametrize(
-    ("file_name", "channel", "number_of_frames", "pixel_to_nm_scaling"),
+    ("file_name", "channel", "number_of_frames", "pixel_to_nm_scaling", "unit"),
     [
-        pytest.param("sample_0.asd", "TP", 142, 0.78125, id="file type 0"),
-        pytest.param("sample_1.asd", "TP", 197, 2.0, id="file type 1"),
+        pytest.param("sample_0.asd", "TP", 142, 0.78125, "nm", id="file type 0"),
+        pytest.param("sample_1.asd", "TP", 197, 2.0, "nm", id="file type 1"),
     ],
 )
-def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_nm_scaling: float) -> None:
+def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_nm_scaling: float, unit: str) -> None:
     """Test the normal operation of loading a .asd file."""
-    file_path = RESOURCES / file_name
-    afm_load = asd.load_asd(file_path, channel)
+    result_frames = list
+    result_pixel_to_nm_scaling = float
+    result_metadata = dict
+    result_unit = str
 
-    assert len(afm_load.image) == number_of_frames  # type: ignore
-    assert afm_load.px2nm == pixel_to_nm_scaling
-    assert isinstance(afm_load.metadata, dict)
+    file_path = RESOURCES / file_name
+    result_frames, result_pixel_to_nm_scaling, result_metadata, result_unit = asd.load_asd(file_path, channel)
+
+    assert len(result_frames) == number_of_frames  # type: ignore
+    assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
+    assert isinstance(result_metadata, dict)
+    assert result_unit == unit
 
 
 def test_load_asd_file_not_found() -> None:

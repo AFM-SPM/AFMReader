@@ -5,7 +5,6 @@ from pathlib import Path
 import numpy as np
 import pySPM
 
-from AFMReader.data_classes import AFMLoad
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -55,7 +54,7 @@ def spm_pixel_to_nm_scaling(filename: str, channel_data: pySPM.SPM.SPM_image) ->
     return pixel_to_nm_scaling
 
 
-def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
+def load_spm(file_path: Path | str, channel: str) -> tuple:
     """
     Extract image and pixel to nm scaling from the Bruker .spm file.
 
@@ -68,8 +67,8 @@ def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image and its pixel to nanometre scaling value.
+    tuple(np.ndarray, float, float)
+        A tuple containing the image, its pixel to nanometre scaling value, and the unit.
 
     Raises
     ------
@@ -84,9 +83,7 @@ def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
     Sensor'.
 
     >>> from AFMReader.spm import load_spm
-    >>> afm_load = load_spm(file_path="path/to/file.spm", channel="Height")
-    >>> image = afm_load.image
-    >>> pixel_to_nm = afm_load.px2nm
+    >>> image, pixel_to_nm, unit = load_spm(file_path="path/to/file.spm", channel="Height")
     ```
     """
     logger.info(f"Loading image from : {file_path}")
@@ -97,6 +94,7 @@ def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
         logger.info(f"[{filename}] : Loaded image from : {file_path}")
         channel_data = scan.get_channel(channel)
         logger.info(f"[{filename}] : Extracted channel {channel}")
+        unit = channel_data.zscale
         image = np.flipud(np.array(channel_data.pixels))
     except FileNotFoundError:
         logger.error(f"[{filename}] File not found : {file_path}")
@@ -112,7 +110,7 @@ def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
             raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {labels}") from e
         raise e
 
-    return AFMLoad(image=image, px2nm=spm_pixel_to_nm_scaling(filename, channel_data))
+    return (image, spm_pixel_to_nm_scaling(filename, channel_data), unit)
 
 
 def get_spm_channels(file_path: Path | str) -> list:
