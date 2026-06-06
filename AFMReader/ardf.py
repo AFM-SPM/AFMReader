@@ -24,7 +24,8 @@ import struct
 from bisect import bisect_left
 from collections.abc import Collection, Iterable
 from typing import Protocol, TypeAlias, Any
-from AFMReader.data_classes import LazyMetaProxy, LazyQiData, LazyMetadata
+from AFMReader.data_classes import CurvesMetadata, CurvesVolume, CurvesDataset
+from AFMReader.logging import logger
 
 try:
     from collections.abc import Buffer
@@ -875,7 +876,7 @@ class ARDFFFMReader:
             vchns=vchns,
         )
 
-    def get_curve(self, r: int, c: int) -> ZDArrays:
+    def get_curve(self, r: int, c: int) -> dict[str, dict[str, np.ndarray]]:
         """
         Efficiently get a specific curve from disk.
 
@@ -888,7 +889,7 @@ class ARDFFFMReader:
 
         Returns
         -------
-        ZDArrays
+        dict[str, dict[str, np.ndarray]]
             The curve data.
         """
         with memoryview(self.data):  # assert data is open, and hold it open
@@ -934,18 +935,18 @@ class ARDFFFMReader:
             for point in points_iter:
                 yield line, point
 
-    def iter_curves(self) -> Iterable[tuple[Index, ZDArrays]]:
+    def iter_curves(self) -> Iterable[dict[str, dict[str, np.ndarray]]]:
         """
         Iterate over curves lazily in on-disk order.
 
         Returns
         -------
-        Iterable[tuple[Index, ZDArrays]]
-            An iterable yielding curve indices and data.
+        Iterable[dict[str, dict[str, np.ndarray]]]
+            An iterable yielding curve data.
         """
         # TODO: cleverly use np.nditer?
         for index in self.iter_indices():
-            yield index, self.get_curve(*index)
+            yield self.get_curve(*index)
 
     def get_all_curves(self) -> ZDArrays:
         """
@@ -1175,8 +1176,7 @@ class ARDFForceMapReader:
         return np.moveaxis(x.reshape(x.shape[:-1] + (2, -1)), 2, 0)
 
 
-@frozen
-class ARDFVolume:
+class ARDFVolume(CurvesVolume):
     """
     A volume section in an ARDF file.
 
@@ -1187,127 +1187,44 @@ class ARDFVolume:
     name: str
     shape: Index
     step_info: StepInfo
-    xdef: ARDFXdef
     _reader: ARDFForceMapReader | ARDFFFMReader
     _struct = struct.Struct("<LL24sddd32s32s32s32sQ")
-    channels: ChanMap
 
-    @classmethod
-    def parse_volm(cls, volm_header: ARDFHeader) -> "ARDFVolume":
-        """
-        Parse a volume section from its header.
-
-        Parameters
-        ----------
-        volm_header : ARDFHeader
-            The VOLM section header.
-
-        Returns
-        -------
-        ARDFVolume
-            The parsed volume.
-        """
-        data = volm_header.data
-        if volm_header.size != 32 or volm_header.name != b"VOLM":
-            raise ValueError("Malformed volume header.", volm_header)
-        # the next headers look a lot like VSET is a table of contents, but I've only
-        # seen NEXT and NSET headers. NEXT shows up if "both" trace and retrace data
-        # are inside. I'll assume the last entry is always NSET, the number of VSETs.
-        volm_toc = ARDFTableOfContents.unpack(volm_header)
-        nset_header, nsets = volm_toc.entries[-1]
-        nset_header.validate()
-        ttoc_header = ARDFHeader.unpack(data, volm_toc.offset + volm_toc.size)
-        ttoc = ARDFTextTableOfContents.unpack(ttoc_header)
-
-        # don't use TTOC or TOFF, step over
-
-        # cls essentially represents VDEF plus its linkage down to VSET
-        # so this unpacking is intentionally inlined here.
-        vdef_header = ARDFHeader.unpack(data, ttoc.offset + ttoc.size)
-        if vdef_header.name != b"VDEF" or vdef_header.size != cls._struct.size + 16:
-            raise ValueError("Malformed volume definition.", vdef_header)
-        vdef_header.validate()
-        unpack_from = cls._struct.unpack_from  # line wrapping
-        points, lines, _, x_step, y_step, t_step, *cstrings, nseg = unpack_from(
-            vdef_header.data, vdef_header.offset + 16
+    def __init__(
+        self,
+        name: str,
+        shape_x: int,
+        shape_y: int,
+        reader: ARDFForceMapReader | ARDFFFMReader,
+        channels: ChanMap,
+        step_info: StepInfo,
+    ):
+        super().__init__(
+            name=name,
+            shape_x=shape_x,
+            shape_y=shape_y,
+            channel_units={channel_name: channel.unit for channel_name, (i, channel) in channels.items()},
         )
-        assert sum(_) == 0, _
-        complete = points * lines == nsets
-        x_unit, y_unit, t_unit, seg_names = list(map(decode_cstring, cstrings))
-        seg_names = seg_names.split(";")[:-1]
-        assert nseg == len(seg_names)
+        self.step_info = step_info
+        self._reader = reader
 
-        # Implicit table of channels here smh
-        offset = vdef_header.offset + vdef_header.size
-        channels: ChanMap = {}
-        vchn_list: list[ARDFVchan] = []
-        for i in range(5):
-            header = ARDFHeader.unpack(data, offset)
-            if header.name != b"VCHN":
-                break
-            vchn = ARDFVchan.unpack(header)
-            offset = header.offset + header.size
-            vchn_list.append(vchn)
-        else:
-            raise RuntimeError("Got too many channels.", channels)
-
-        channels: ChanMap = {vchn.name: (i, vchn) for i, vchn in enumerate(vchn_list)}
-
-        xdef = ARDFXdef.unpack(header)
-        vtoc_header = ARDFHeader.unpack(data, xdef.offset + xdef.size)
-        vtoc = ARDFVolumeTableOfContents.unpack(vtoc_header)
-
-        mlov_header = ARDFHeader.unpack(data, vtoc.offset + vtoc.size)
-        if mlov_header.size != 16 or mlov_header.name != b"MLOV":
-            raise ValueError("Malformed volume table of contents.", mlov_header)
-        mlov_header.validate()
-
-        # Check if each offset is regularly spaced
-        # optimize for LARGE regular case (FMaps are SMALL)
-        first_vset_header = ARDFHeader.unpack(data, vtoc.pointers[0])
-        if complete and not np.any(np.diff(np.diff(vtoc.pointers))):
-            reader = ARDFFFMReader.parse(first_vset_header, points, lines, channels, vchn_list)
-            name = "Trace" if reader.trace else "Retrace"
-        else:
-            first_vset = ARDFVset.unpack(first_vset_header)
-            reader = ARDFForceMapReader(
-                data,
-                vtoc,
-                lines,
-                points,
-                first_vset.vtype,
-                channels,
-                vchn_list,
-            )
-            name = "FMAP"
-
-        return cls(
-            volm_header.offset,
-            name,
-            (points, lines),
-            ((x_step, x_unit), (y_step, y_unit), (t_step, t_unit)),
-            xdef,
-            reader,
-            channels,
-        )
-
-    def get_curve(self, r: int, c: int) -> ZDArrays:
+    def get_curve(self, y: int, x: int) -> dict[str, dict[str, np.ndarray]]:
         """
         Efficiently get a specific curve from disk.
 
         Parameters
         ----------
-        r : int
+        y : int
             The row index.
-        c : int
+        x : int
             The column index.
 
         Returns
         -------
-        ZDArrays
+        dict[str, dict[str, np.ndarray]]
             The curve data.
         """
-        return self._reader.get_curve(r, c)
+        return self._reader.get_curve(y, x)
 
     def iter_indices(self) -> Iterable[Index]:
         """
@@ -1320,47 +1237,158 @@ class ARDFVolume:
         """
         return self._reader.iter_indices()
 
-    def iter_curves(self) -> Iterable[tuple[Index, ZDArrays]]:
+    def iter_curves(self) -> Iterable[tuple[Index, dict[str, dict[str, np.ndarray]]]]:
         """
         Iterate over curves lazily in on-disk order.
 
         Returns
         -------
-        Iterable[tuple[Index, ZDArrays]]
+        Iterable[tuple[Index, dict[str, dict[str, np.ndarray]]]]
             An iterable yielding curve indices and data.
         """
         return self._reader.iter_curves()
 
-    def get_all_curves(self) -> ZDArrays:
-        """
-        Eagerly load all curves into memory.
-
-        Returns
-        -------
-        ZDArrays
-            All curves in memory.
-        """
-        return self._reader.get_all_curves()
+    def __iter__(self):
+        return self.iter_curves()
 
 
-@frozen
-class ARDFFile:
+def parse_volm(volm_header: ARDFHeader) -> ARDFVolume:
     """
-    An ARDF file parser.
+    Parse a volume section from its header.
 
-    Implements the FVFile protocol to read ARDF format files.
+    Parameters
+    ----------
+    volm_header : ARDFHeader
+        The VOLM section header.
+
+    Returns
+    -------
+    ARDFVolume
+        The parsed volume.
+    """
+    data = volm_header.data
+    if volm_header.size != 32 or volm_header.name != b"VOLM":
+        raise ValueError("Malformed volume header.", volm_header)
+    # the next headers look a lot like VSET is a table of contents, but I've only
+    # seen NEXT and NSET headers. NEXT shows up if "both" trace and retrace data
+    # are inside. I'll assume the last entry is always NSET, the number of VSETs.
+    volm_toc = ARDFTableOfContents.unpack(volm_header)
+    nset_header, nsets = volm_toc.entries[-1]
+    nset_header.validate()
+    ttoc_header = ARDFHeader.unpack(data, volm_toc.offset + volm_toc.size)
+    ttoc = ARDFTextTableOfContents.unpack(ttoc_header)
+
+    # don't use TTOC or TOFF, step over
+
+    # cls essentially represents VDEF plus its linkage down to VSET
+    # so this unpacking is intentionally inlined here.
+    vdef_header = ARDFHeader.unpack(data, ttoc.offset + ttoc.size)
+    if vdef_header.name != b"VDEF" or vdef_header.size != ARDFVolume._struct.size + 16:
+        raise ValueError("Malformed volume definition.", vdef_header)
+    vdef_header.validate()
+    unpack_from = ARDFVolume._struct.unpack_from  # line wrapping
+    points, lines, _, x_step, y_step, t_step, *cstrings, nseg = unpack_from(vdef_header.data, vdef_header.offset + 16)
+    assert sum(_) == 0, _
+    complete = points * lines == nsets
+    x_unit, y_unit, t_unit, seg_names = list(map(decode_cstring, cstrings))
+    seg_names = seg_names.split(";")[:-1]
+    assert nseg == len(seg_names)
+
+    # Implicit table of channels here smh
+    offset = vdef_header.offset + vdef_header.size
+    channels: ChanMap = {}
+    vchn_list: list[ARDFVchan] = []
+    for i in range(5):
+        header = ARDFHeader.unpack(data, offset)
+        if header.name != b"VCHN":
+            break
+        vchn = ARDFVchan.unpack(header)
+        offset = header.offset + header.size
+        vchn_list.append(vchn)
+    else:
+        raise RuntimeError("Got too many channels.", channels)
+
+    channels: ChanMap = {vchn.name: (i, vchn) for i, vchn in enumerate(vchn_list)}
+
+    xdef = ARDFXdef.unpack(header)
+    vtoc_header = ARDFHeader.unpack(data, xdef.offset + xdef.size)
+    vtoc = ARDFVolumeTableOfContents.unpack(vtoc_header)
+
+    mlov_header = ARDFHeader.unpack(data, vtoc.offset + vtoc.size)
+    if mlov_header.size != 16 or mlov_header.name != b"MLOV":
+        raise ValueError("Malformed volume table of contents.", mlov_header)
+    mlov_header.validate()
+
+    channel_units = {channel_name: channel.unit for channel_name, (i, channel) in channels.items()}
+
+    # Check if each offset is regularly spaced
+    # optimize for LARGE regular case (FMaps are SMALL)
+    first_vset_header = ARDFHeader.unpack(data, vtoc.pointers[0])
+    if complete and not np.any(np.diff(np.diff(vtoc.pointers))):
+        reader = ARDFFFMReader.parse(first_vset_header, points, lines, channels, vchn_list)
+        name = "Trace" if reader.trace else "Retrace"
+    else:
+        first_vset = ARDFVset.unpack(first_vset_header)
+        reader = ARDFForceMapReader(
+            data,
+            vtoc,
+            lines,
+            points,
+            first_vset.vtype,
+            channels,
+            vchn_list,
+        )
+        name = "FMAP"
+
+    return ARDFVolume(
+        volm_header.offset,
+        name,
+        shape_x=points,
+        shape_y=lines,
+        reader=reader,
+        channels=channels,
+        step_info=((x_step, x_unit), (y_step, y_unit), (t_step, t_unit)),
+    )
+
+
+class ARDFReader:
+    """
+    A reader for ARDF files.
     """
 
-    headers: dict[str, str] = field(repr=lambda x: f"<dict with {len(x)} entries>")
-    images: dict[str, Image]
-    volumes: list[Volume]
-    k: float
-    defl_sens: float
-    t_step: float
-    scansize: tuple[float, float]
-    trace: int | None
+    def __init__(self, filepath: str, channel: str, flip_image: bool = True):
+        self.filepath = filepath
+        self.channel = channel
+        self.flip_image = flip_image
+        mmap = mmap_path_read_only(filepath)
+        file_header = self.check_type(mmap)
+        ftoc_header = ARDFHeader.unpack(mmap, offset=file_header.size)
+        if ftoc_header.name != b"FTOC":
+            raise ValueError("Malformed ARDF file table of contents.", ftoc_header)
+        ftoc = ARDFTableOfContents.unpack(ftoc_header)
+        ttoc_header = ARDFHeader.unpack(mmap, offset=ftoc.offset + ftoc.size)
+        ttoc = ARDFTextTableOfContents.unpack(ttoc_header)
+        assert len(ttoc.entries) == 1
+        self.metadata = parse_ar_note(ttoc.decode_entry(0).splitlines())
+        self.images: dict[str, ARDFImage] = {}
+        self.volumes: dict[str, ARDFVolume] = {}
+        for item, pointer in ftoc.entries:
+            item.validate()
+            item = ARDFHeader.unpack(mmap, pointer)
+            if item.name == b"IMAG":
+                item = ARDFImage.parse_imag(item)
+                self.images[item.name] = item
+            elif item.name == b"VOLM":
+                item = parse_volm(item)
+                self.volumes[item.name] = item
+            else:
+                raise RuntimeError(f"Unknown TOC entry {item.name}.", item)
 
-    @staticmethod
+        self.size_x = float(self.metadata["FastScanSize"]) * NANOMETER_UNIT_CONVERSION
+        self.size_y = float(self.metadata["SlowScanSize"]) * NANOMETER_UNIT_CONVERSION
+        self.metadata["global.time_step"] = self.volumes[0].step_info[-1][0]
+        self.px2nm = self.size_x / self.shape_x
+
     def check_type(data: Buffer) -> ARDFHeader:
         """
         Check if the buffer contains a valid ARDF file.
@@ -1380,148 +1408,6 @@ class ARDFFile:
             raise ValueError("Not an ARDF file.", file_header)
         file_header.validate()
         return file_header
-
-    @classmethod
-    def parse(cls, data: Buffer) -> "ARDFFile":
-        """
-        Parse an ARDF file from the buffer.
-
-        Parameters
-        ----------
-        data : Buffer
-            The data buffer.
-
-        Returns
-        -------
-        ARDFFile
-            The parsed ARDF file object.
-        """
-        file_header = cls.check_type(data)
-        ftoc_header = ARDFHeader.unpack(data, offset=file_header.size)
-        if ftoc_header.name != b"FTOC":
-            raise ValueError("Malformed ARDF file table of contents.", ftoc_header)
-        ftoc = ARDFTableOfContents.unpack(ftoc_header)
-        ttoc_header = ARDFHeader.unpack(data, offset=ftoc.offset + ftoc.size)
-        ttoc = ARDFTextTableOfContents.unpack(ttoc_header)
-        assert len(ttoc.entries) == 1
-        notes = parse_ar_note(ttoc.decode_entry(0).splitlines())
-        images = {}
-        volumes = []
-        for item, pointer in ftoc.entries:
-            item.validate()
-            item = ARDFHeader.unpack(data, pointer)
-            if item.name == b"IMAG":
-                item = ARDFImage.parse_imag(item)
-                images[item.name] = item
-            elif item.name == b"VOLM":
-                item = ARDFVolume.parse_volm(item)
-                # volumes[item.name] = item
-                volumes.append(item)
-            else:
-                raise RuntimeError(f"Unknown TOC entry {item.name}.", item)
-
-        k = float(notes["SpringConstant"])
-        # slight numerical differences here
-        # lines, points = volumes[0].shape
-        # xsize = lines * volumes[0].step_info[0][0]
-        # ysize = points * volumes[0].step_info[1][0]
-        scansize = (
-            float(notes["FastScanSize"]) * NANOMETER_UNIT_CONVERSION,
-            float(notes["SlowScanSize"]) * NANOMETER_UNIT_CONVERSION,
-        )
-        # NOTE: aspect is redundant to scansize
-        # self.aspect = float(self.notes["SlowRatio"]) / float(self.notes["FastRatio"])
-        defl_sens = float(notes["InvOLS"]) * NANOMETER_UNIT_CONVERSION
-        t_step = volumes[0].step_info[-1][0]
-        trace = 1 if len(volumes) > 1 else None
-        return cls(notes, images, volumes, k, defl_sens, t_step, scansize, trace)
-
-
-class ARDFMetadata(LazyMetadata):
-    """
-    A lazy wrapper for ARDF file metadata.
-
-    Implements the QiMetadata protocol to provide lazy access to ARDF file metadata.
-    """
-
-    def __init__(self, top_level_meta: dict, shape_x: int, shape_y: int, flip_image: bool = True):
-        super().__init__(top_level_meta, shape_x, shape_y, flip_image)
-
-    def __getitem__(self, key):
-        if key == "top_level":
-            return self.top_level
-        if key in ("curves", "segments"):
-            return ARDFMetaProxy(key[:-1], self.shape_x, self.shape_y, self.flip_image)
-        raise KeyError(key)
-
-
-class ARDFMetaProxy(LazyMetaProxy):
-    """
-    A proxy for ARDF metadata.
-
-    Provides access to curve and segment metadata on demand.
-    """
-
-    def __init__(self, meta_type: str, shape_x: int, shape_y: int, flip_image: bool = True):
-        super().__init__(meta_type, shape_x, shape_y, flip_image)
-
-    def _fetch_meta(self, y: int, x: int, direction: int | None = None) -> dict:
-        if self.flip_image:
-            y = self.shape_y - 1 - y
-        return {}
-
-
-class ARDFData(LazyQiData):
-    """
-    A lazy wrapper for ARDF file data.
-
-    Implements the QiData protocol to provide lazy access to ARDF file contents.
-    """
-
-    def __init__(
-        self,
-        ardf_volume: Volume | None = None,
-        shape_x: int | None = None,
-        shape_y: int | None = None,
-        flip_image: bool = True,
-    ):
-        self.volume: Volume | None = ardf_volume
-        super().__init__(shape_x, shape_y, flip_image)
-
-    def set_volume(self, ardf_volume: Volume):
-        """
-        Set the volume to read data from.
-
-        Parameters
-        ----------
-        ardf_volume : Volume
-            The ARDF volume to read from.
-        """
-        self.volume = ardf_volume
-
-    def _fetch_curve(self, y, x):
-        if self.flip_image:
-            y = self.shape_y - 1 - y
-        return self.volume.get_curve(y, x)
-
-    def __iter__(self):
-        yield from self.volume.iter_curves()
-
-
-class ARDFReader:
-    """
-    A reader for ARDF files.
-    """
-
-    def __init__(self, filepath: str, channel: str, flip_image: bool = True):
-        self.filepath = filepath
-        self.channel = channel
-        self.flip_image = flip_image
-        mmap = mmap_path_read_only(filepath)
-        self.fv_file = ARDFFile.parse(mmap)
-        shape_x, shape_y = self.fv_file.volumes[0].shape
-        size_x, size_y = self.fv_file.scansize[0:2]
-        self.px2nm = size_x / shape_x
 
     def load_ardf(self, channel: str = None, flip_image: bool = True) -> ARDFFile:
         """
@@ -1547,29 +1433,25 @@ class ARDFReader:
         logger.info(
             f"Loading ARDF file: {self.filepath}, channel: {self.channel}, trace: {self.trace}, flip_image: {self.flip_image}"
         )
-        if self.trace:
-            self.volume = (
-                self.fv_file.volumes[0] if self.fv_file.volumes[0].name == "Trace" else self.fv_file.volumes[1]
-            )
-        else:
-            self.volume = (
-                self.fv_file.volumes[0] if self.fv_file.volumes[0].name == "Retrace" else self.fv_file.volumes[1]
-            )
-
-        channel_units = {channel_name: channel.unit for channel_name, (i, channel) in self.volume.channels.items()}
-
-        ardf_data = ARDFData(
-            self.volume, shape_x=self.volume.shape[0], shape_y=self.volume.shape[1], flip_image=self.flip_image
+        self.shape_y, self.shape_x = self.images[self.channel].shape
+        curves_metadata = CurvesMetadata(
+            self.metadata,
+            self.shape_y,
+            self.shape_x,
+            self.flip_image,
         )
-        image = self.fv_file.images[self.channel].get_image()
-        z_units = self.fv_file.images[self.channel].units
+        curves_dataset = CurvesDataset(
+            self.volumes,
+            curves_metadata,
+            default_volume_name="Trace" if self.trace else "Retrace",
+        )
+
+        image = self.images[self.channel].get_image()
+        z_units = self.images[self.channel].units
         if self.flip_image:
             image = np.flipud(image)
-        full_metadata = ARDFMetadata(
-            self.fv_file.headers, shape_x=self.volume.shape[0], shape_y=self.volume.shape[1], flip_image=self.flip_image
-        )
 
-        return image, self.px2nm, z_units, (ardf_data, channel_units, full_metadata)
+        return image, self.px2nm, z_units, curves_dataset
 
     def get_available_channels(self) -> list[str]:
         """
@@ -1580,4 +1462,4 @@ class ARDFReader:
         list[str]
             A list of channel names.
         """
-        return list(self.fv_file.images.keys())
+        return list(self.images.keys())
