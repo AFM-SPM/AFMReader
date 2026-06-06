@@ -41,20 +41,16 @@ def test_load_spm(
     unit: str,
 ) -> None:
     """Test the normal operation of loading a .spm file."""
-    result_image = np.ndarray
-    result_pixel_to_nm_scaling = float
-    result_unit = str
-
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling, result_unit = spm.load_spm(file_path, channel=channel)
+    afm_load = spm.load_spm(file_path, channel=channel)
 
-    assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
-    assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == image_shape
-    assert result_image.dtype == image_dtype
-    assert result_image.sum() == pytest.approx(image_sum)
-    assert result_unit == unit
-    assert result_image.sum() == pytest.approx(image_sum)
+    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert isinstance(afm_load.image, np.ndarray)
+    assert afm_load.image.shape == image_shape
+    assert afm_load.image.dtype == image_dtype
+    assert afm_load.image.sum() == pytest.approx(image_sum)
+    assert afm_load.z_units == unit
+    assert afm_load.image.sum() == pytest.approx(image_sum)
 
 
 @patch("pySPM.SPM.SPM_image")

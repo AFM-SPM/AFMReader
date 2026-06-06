@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 from matplotlib import animation
 
+from AFMReader.data_classes import AFMLoad
 from AFMReader.io import (
     read_ascii,
     read_bool,
@@ -182,8 +183,7 @@ def calculate_scaling_factor(
     raise ValueError(f"channel {channel} not known for .asd file type.")
 
 
-# pylint: disable=too-many-locals
-def load_asd(file_path: str | Path, channel: str):
+def load_asd(file_path: str | Path, channel: str) -> AFMLoad:
     """
     Load a .asd file.
 
@@ -197,19 +197,18 @@ def load_asd(file_path: str | Path, channel: str):
 
     Returns
     -------
-    npt.NDArray
-        The .asd file frames data as a numpy 3D array N x W x H
-        (Number of frames x Width of each frame x height of each frame).
-    float
-        The number of nanometres per pixel for the .asd file. (AKA the resolution).
-        Enables converting between pixels and nanometres when working with the data, in order to use real-world length
-        scales.
-    str
-        The unit of the data in the frames. Either 'nm' or 'deg' depending on the channel.
-    dict
-        Metadata for the .asd file. The number of entries is too long to list here, and changes based on the file
-        version please either look into the `read_header_file_version_x` functions or print the keys too see what
-        metadata is available.
+    AFMLoad
+        An AFMLoad object containing:
+        - image : npt.NDArray
+            Shape (Number of frames x Width of each frame x height of each frame).
+        - px2nm : float
+            The number of nanometres per pixel for the .asd file.
+        - z_units : str
+            The unit of the data in the frames. Either 'nm' or 'deg' depending on the channel.
+        - metadata : dict
+            Metadata for the .asd file. The number of entries is too long to list here, and changes based on the file
+            version please either look into the `read_header_file_version_x` functions or print the keys too see what
+            metadata is available.
     """
     # Ensure the file path is a Path object
     file_path = Path(file_path)
@@ -250,8 +249,6 @@ def load_asd(file_path: str | Path, channel: str):
         elif channel == header_dict["channel2"]:
             logger.info(f"Requested channel {channel} matches second channel in file: {header_dict['channel2']}")
 
-            # Skip first channel data
-            _size_of_frame_header = header_dict["frame_header_length"]
             # Remember that each value is two bytes (since signed int16)
             size_of_single_frame_plus_header = (
                 header_dict["frame_header_length"] + header_dict["x_pixels"] * header_dict["y_pixels"] * 2
@@ -291,7 +288,7 @@ def load_asd(file_path: str | Path, channel: str):
             unit = "deg"
         else:
             unit = "nm"
-        return frames, pixel_to_nanometre_scaling_factor, unit, header_dict
+        return AFMLoad(image=frames, px2nm=pixel_to_nanometre_scaling_factor, z_units=unit, metadata=header_dict)
 
 
 def get_asd_channels(file_path: Path):

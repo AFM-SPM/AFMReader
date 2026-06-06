@@ -6,6 +6,8 @@ lazy manner (i.e. loading data on demand rather than all at once) across differe
 formats. This is necessary for handling large datasets with massive memory consumption.
 """
 
+import numpy as np
+
 # pylint: disable=too-few-public-methods,fixme
 
 
@@ -267,3 +269,66 @@ class CurvesDataset:
             The default CurvesVolume instance for this dataset.
         """
         return self.volumes[self.default_volume_name]
+
+
+class AFMLoad:
+    """
+    A class representing the loaded AFM data, including the image and scaling factors.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        The image data.
+    px2nm : float
+        The pixel to nanometer scaling factor.
+    z_units : str
+        The units of the z-axis (e.g. 'm', 'nm').
+    timestamps : dict | None, optional
+        Timestamps associated with the data. Default is None.
+    metadata : dict | None, optional
+        Metadata associated with the data. Default is None.
+    curves_dataset : CurvesDataset | None, optional
+        Curves dataset associated with the data. Default is None.
+    """
+
+    image: np.ndarray
+    px2nm: float
+    z_units: str
+    timestamps: dict | None = None
+    metadata: dict | None = None
+    curves_dataset: CurvesDataset | None = None
+
+    # pylint: disable=too-many-positional-arguments
+    def __init__(
+        self,
+        image: np.ndarray,
+        px2nm: float,
+        z_units: str,
+        timestamps: dict | None = None,
+        metadata: dict | None = None,
+        curves_dataset: CurvesDataset | None = None,
+    ):
+        """
+        Initialise AFMLoad.
+
+        Parameters
+        ----------
+        image : np.ndarray
+            The image data.
+        px2nm : float
+            The pixel to nanometer scaling factor.
+        z_units : str
+            The units of the z-axis (e.g. 'm', 'nm').
+        timestamps : dict | None, optional
+            Timestamps associated with the data. Default is None.
+        metadata : dict | None, optional
+            Metadata associated with the data. Default is None.
+        curves_dataset : CurvesDataset | None, optional
+            Curves dataset associated with the data. Default is None.
+        """
+        self.image = image
+        self.px2nm = px2nm
+        self.z_units = z_units
+        self.timestamps = timestamps
+        self.metadata = metadata
+        self.curves_dataset = curves_dataset

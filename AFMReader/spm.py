@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pySPM
 
+from AFMReader.data_classes import AFMLoad
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -54,7 +55,7 @@ def spm_pixel_to_nm_scaling(filename: str, channel_data: pySPM.SPM.SPM_image) ->
     return pixel_to_nm_scaling
 
 
-def load_spm(file_path: Path | str, channel: str) -> tuple:
+def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
     """
     Extract image and pixel to nm scaling from the Bruker .spm file.
 
@@ -67,8 +68,8 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
 
     Returns
     -------
-    tuple(np.ndarray, float, str)
-        A tuple containing the image, its pixel to nanometre scaling value, and the unit.
+    AFMLoad
+        An AFMLoad object containing the image, its pixel to nanometre scaling value, and z-axis units.
 
     Raises
     ------
@@ -83,7 +84,10 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
     Sensor'.
 
     >>> from AFMReader.spm import load_spm
-    >>> image, pixel_to_nm, unit = load_spm(file_path="path/to/file.spm", channel="Height")
+    >>> afm_load = load_spm(file_path="path/to/file.spm", channel="Height")
+    >>> image = afm_load.image
+    >>> pixel_to_nm = afm_load.px2nm
+    >>> z_units = afm_load.z_units
     ```
     """
     logger.info(f"Loading image from : {file_path}")
@@ -110,7 +114,7 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
             raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {labels}") from e
         raise e
 
-    return (image, spm_pixel_to_nm_scaling(filename, channel_data), unit)
+    return AFMLoad(image=image, px2nm=spm_pixel_to_nm_scaling(filename, channel_data), z_units=unit)
 
 
 def get_spm_channels(file_path: Path | str) -> list:
