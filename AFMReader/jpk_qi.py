@@ -1337,7 +1337,7 @@ class JPKQILoader:
         self.list_of_all_paths = []
 
 
-def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict, save_as_h5: bool = False) -> AFMLoad:
+def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict) -> AFMLoad:
     """
     Load the JPK QI data using the JPKQILoader.
 
@@ -1349,8 +1349,6 @@ def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict, save_as
         The channel to load from the file.
     cached_data : dict
         Cached data to avoid reloading heavy data.
-    save_as_h5 : bool, optional
-        Whether to save the loaded data as an h5 file for faster future loading. Default is False.
 
     Returns
     -------
@@ -1358,8 +1356,8 @@ def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict, save_as
         The loaded JPK QI data.
     """
     if "jpk_qi_loader" not in cached_data:
-        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath, channel=channel, save_as_h5=save_as_h5)
-    return cached_data["jpk_qi_loader"].load(channel=channel, save_as_h5=save_as_h5)
+        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath, channel=channel)
+    return cached_data["jpk_qi_loader"].load(channel=channel)
 
 
 def get_jpk_data_channels(filepath: str | Path, cached_data: dict) -> list[str]:
@@ -1381,3 +1379,48 @@ def get_jpk_data_channels(filepath: str | Path, cached_data: dict) -> list[str]:
     if "jpk_qi_loader" not in cached_data:
         cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath)
     return cached_data["jpk_qi_loader"].get_available_channels()
+
+
+def get_jpk_data_params(filepath: str | Path, cached_data: dict) -> dict:
+    """
+    Get any additional parameters for the JPK QI data.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the JPK QI file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+
+    Returns
+    -------
+    dict
+        A dictionary containing any additional parameters for the JPK QI data.
+    """
+    if "jpk_qi_loader" not in cached_data:
+        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath)
+    return cached_data["jpk_qi_loader"].get_additional_params()
+
+
+def save_jpk_data_to_h5(filepath: str | Path, cached_data: dict) -> Path:
+    """
+    Save the JPK QI data as an h5 file for faster future loading.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the JPK QI file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+
+    Returns
+    -------
+    Path
+        The path to the saved h5 file.
+    """
+    if "jpk_qi_loader" not in cached_data:
+        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath)
+    cached_data["jpk_qi_loader"].close()
+    h5_path = cached_data["jpk_qi_loader"].save_to_h5()
+    cached_data.pop("jpk_qi_loader")
+    return h5_path

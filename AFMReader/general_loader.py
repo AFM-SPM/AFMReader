@@ -42,7 +42,6 @@ class LoadFile:
         self.filepath = Path(filepath)
         self.channel = channel
         self.suffix = self.filepath.suffix
-        self.loaded_curves = False
         self.kwargs = kwargs if kwargs else {}
 
         # Store heavy loaded data in a dict to avoid having to reload it
@@ -135,22 +134,9 @@ class LoadFile:
         elif self.suffix == ".h5-jpk":
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
         elif self.suffix == ".jpk-qi-data":
-            if "jpk_qi_loader" not in self.cached_data:
-                self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(filepath=self.filepath, **self.kwargs)
-            if "save_as_h5" in self.kwargs and self.kwargs["save_as_h5"]:
-                # if saving to h5, the channels will be the keys of the h5 file,
-                # so we need to load the h5 file to get the channels
-                h5_path = self.cached_data["jpk_qi_loader"].save_to_h5()
-                self.filepath = Path(h5_path)
-                self.suffix = Path(h5_path).suffix
-                self.cached_data["jpk_qi_loader"].close()
-                self.cached_data.pop("jpk_qi_loader")
-                self.kwargs.pop("save_as_h5")
-                available_channels = self.get_available_channels()
-            else:
-                available_channels = self.cached_data["jpk_qi_loader"].get_available_channels()
+            available_channels = jpk_qi.get_jpk_data_channels(self.filepath, self.cached_data)
         elif self.suffix == ".topostats":
-            available_channels = ["image", "image_original"]
+            available_channels = topostats.get_topostats_channels()
         elif self.suffix in [".stp", ".top", ".bin"]:
             return []
         else:
@@ -169,7 +155,15 @@ class LoadFile:
         if self.suffix == ".bin":
             return raw_bin.get_bin_params()
         if self.suffix == ".jpk-qi-data":
-            if "jpk_qi_loader" not in self.cached_data:
-                self.cached_data["jpk_qi_loader"] = jpk_qi.JPKQILoader(filepath=self.filepath, **self.kwargs)
-            return self.cached_data["jpk_qi_loader"].get_additional_params()
+            return jpk_qi.get_jpk_data_params(self.filepath, self.cached_data)
         return {}
+
+    def save_to_h5(self):
+        """Save the loaded data to an h5 file."""
+        if self.suffix == ".jpk-qi-data":
+            h5_path = jpk_qi.save_jpk_data_to_h5(filepath=self.filepath, cached_data=self.cached_data)
+        else:
+            raise ValueError(f"Saving to h5 is not currently implemented for file type '{self.suffix}'.")
+        # Once saved to h5, update the filepath and suffix to point to the new h5 file for future loading
+        self.filepath = h5_path
+        self.suffix = h5_path.suffix
