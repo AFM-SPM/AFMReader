@@ -281,6 +281,8 @@ class AFMLoad:
         The image data.
     px2nm : float
         The pixel to nanometer scaling factor.
+    z_units : str
+        The units of the z-axis (e.g. 'm', 'nm').
     timestamps : dict | None, optional
         Timestamps associated with the data. Default is None.
     metadata : dict | None, optional
@@ -291,14 +293,17 @@ class AFMLoad:
 
     image: np.ndarray
     px2nm: float
+    z_units: str
     timestamps: dict | None = None
     metadata: dict | None = None
     curves_dataset: CurvesDataset | None = None
 
+    # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
         image: np.ndarray,
         px2nm: float,
+        z_units: str,
         timestamps: dict | None = None,
         metadata: dict | None = None,
         curves_dataset: CurvesDataset | None = None,
@@ -312,6 +317,8 @@ class AFMLoad:
             The image data.
         px2nm : float
             The pixel to nanometer scaling factor.
+        z_units : str
+            The units of the z-axis (e.g. 'm', 'nm').
         timestamps : dict | None, optional
             Timestamps associated with the data. Default is None.
         metadata : dict | None, optional
@@ -321,6 +328,7 @@ class AFMLoad:
         """
         self.image = image
         self.px2nm = px2nm
+        self.z_units = z_units
         self.timestamps = timestamps
         self.metadata = metadata
         self.curves_dataset = curves_dataset

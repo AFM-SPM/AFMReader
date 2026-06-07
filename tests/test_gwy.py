@@ -30,13 +30,13 @@ def test_load_gwy(
 ) -> None:
     """Test the normal operation of loading a .gwy file."""
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling, result_unit = gwy.load_gwy(file_path, channel=channel)
-    assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == image_shape
-    assert result_image.sum() == pytest.approx(image_sum)
-    assert isinstance(result_pixel_to_nm_scaling, float)
-    assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
-    assert result_unit == unit
+    afm_load = gwy.load_gwy(file_path, channel=channel)
+    assert isinstance(afm_load.image, np.ndarray)
+    assert afm_load.image.shape == image_shape
+    assert afm_load.image.sum() == pytest.approx(image_sum)
+    assert isinstance(afm_load.px2nm, float)
+    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert afm_load.z_units == unit
 
 
 def test_gwy_read_object() -> None:

@@ -25,19 +25,15 @@ def test_load_ibw(  # pylint: disable=too-many-positional-arguments
     expected_z_units: str,
 ) -> None:
     """Test the normal operation of loading an .ibw file."""
-    result_image = np.ndarray
-    result_pixel_to_nm_scaling = float
-    result_z_units = str
-
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling, result_z_units = ibw.load_ibw(file_path, channel)  # type: ignore
+    afm_load = ibw.load_ibw(file_path, channel)
 
-    assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
-    assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == image_shape
-    assert result_image.dtype == image_dtype
-    assert result_z_units == expected_z_units
-    assert result_image.sum() == pytest.approx(image_sum)
+    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert isinstance(afm_load.image, np.ndarray)
+    assert afm_load.image.shape == image_shape
+    assert afm_load.image.dtype == image_dtype
+    assert afm_load.z_units == expected_z_units
+    assert afm_load.image.sum() == pytest.approx(image_sum)
 
 
 def test_load_ibw_file_not_found() -> None:
