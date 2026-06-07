@@ -1420,7 +1420,7 @@ def save_jpk_data_to_h5(filepath: str | Path, cached_data: dict) -> Path:
     """
     if "jpk_qi_loader" not in cached_data:
         cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath)
-    cached_data["jpk_qi_loader"].close()
     h5_path = cached_data["jpk_qi_loader"].save_to_h5()
+    cached_data["jpk_qi_loader"].close()
     cached_data.pop("jpk_qi_loader")
     return h5_path
