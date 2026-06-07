@@ -23,8 +23,8 @@ import mmap
 import struct
 from bisect import bisect_left
 from collections.abc import Collection, Iterable
-from typing import Protocol, TypeAlias, Any
-from AFMReader.data_classes import CurvesMetadata, CurvesVolume, CurvesDataset
+from typing import TypeAlias, Any
+from AFMReader.data_classes import AFMLoad, CurvesMetadata, CurvesVolume, CurvesDataset
 from AFMReader.logging import logger
 
 try:
@@ -49,143 +49,6 @@ Index: TypeAlias = tuple[int, ...]
 ZDArrays: TypeAlias = Collection[np.ndarray]
 ChanMap: TypeAlias = dict[str, tuple[int, "ARDFVchan"]]
 StepInfo: TypeAlias = tuple[tuple[float, str], ...]
-
-
-class Image(Protocol):
-    """
-    Protocol defining the interface for image objects.
-
-    This protocol outlines the attributes and methods that an image
-    representation must implement.
-    """
-
-    name: str
-    shape: Index
-
-    def get_image(self) -> np.ndarray:
-        """
-        Get the image from disk.
-
-        Returns
-        -------
-        np.ndarray
-            The image data.
-        """
-        ...
-
-
-class Volume(Protocol):
-    """
-    Protocol defining the interface for volume objects.
-
-    This protocol outlines the attributes and methods that a volume
-    representation must implement.
-    """
-
-    name: str
-    shape: Index
-
-    def get_curve(self, r: int, c: int) -> ZDArrays:
-        """
-        Efficiently get a specific curve from disk.
-
-        Parameters
-        ----------
-        r : int
-            Row index.
-        c : int
-            Column index.
-
-        Returns
-        -------
-        ZDArrays
-            Specific curve from disk.
-        """
-        ...
-
-    def iter_indices(self) -> Iterable[Index]:
-        """
-        Iterate over force curve indices in on-disk order.
-
-        Returns
-        -------
-        Iterable[Index]
-            Force curve indices.
-        """
-        ...
-
-    def iter_curves(self) -> Iterable[tuple[Index, ZDArrays]]:
-        """
-        Iterate over curves lazily in on-disk order.
-
-        Returns
-        -------
-        Iterable[tuple[Index, ZDArrays]]
-            Force curves.
-        """
-        ...
-
-    def get_all_curves(self) -> ZDArrays:
-        """
-        Eagerly load all curves into memory.
-
-        Returns
-        -------
-        ZDArrays
-            All curves in memory.
-        """
-        ...
-
-
-class FVFile(Protocol):
-    """
-    Protocol defining the interface for force volume files.
-
-    This protocol outlines the attributes and methods that a force volume
-    file representation must implement.
-    """
-
-    headers: dict[str, Any]
-    images: dict[str, Image]
-    volumes: list[Volume]
-    k: float
-    defl_sens: float
-    t_step: float
-    scansize: tuple[float, float]
-
-    @staticmethod
-    def check_type(data: Buffer) -> Any:
-        """
-        Check the type of the buffer.
-
-        Parameters
-        ----------
-        data : Buffer
-            The buffer to check.
-
-        Returns
-        -------
-        Any
-            The result of checking the type.
-        """
-        ...
-
-    @classmethod
-    def parse(cls, data: Buffer) -> "FVFile":
-        """
-        Parse a force volume file from a buffer.
-
-        Parameters
-        ----------
-        data : Buffer
-            The buffer to parse.
-
-        Returns
-        -------
-        FVFile
-            The parsed force volume file.
-        """
-        ...
 
 
 # ###############################################
@@ -1196,14 +1059,14 @@ class ARDFVolume(CurvesVolume):
         shape_x: int,
         shape_y: int,
         reader: ARDFForceMapReader | ARDFFFMReader,
-        channels: ChanMap,
+        channel_units: dict[str, str],
         step_info: StepInfo,
     ):
         super().__init__(
             name=name,
             shape_x=shape_x,
             shape_y=shape_y,
-            channel_units={channel_name: channel.unit for channel_name, (i, channel) in channels.items()},
+            channel_units=channel_units,
         )
         self.step_info = step_info
         self._reader = reader
@@ -1237,14 +1100,14 @@ class ARDFVolume(CurvesVolume):
         """
         return self._reader.iter_indices()
 
-    def iter_curves(self) -> Iterable[tuple[Index, dict[str, dict[str, np.ndarray]]]]:
+    def iter_curves(self) -> Iterable[dict[str, dict[str, np.ndarray]]]:
         """
         Iterate over curves lazily in on-disk order.
 
         Returns
         -------
-        Iterable[tuple[Index, dict[str, dict[str, np.ndarray]]]]
-            An iterable yielding curve indices and data.
+        Iterable[dict[str, dict[str, np.ndarray]]]
+            An iterable yielding curve data.
         """
         return self._reader.iter_curves()
 
@@ -1346,7 +1209,7 @@ def parse_volm(volm_header: ARDFHeader) -> ARDFVolume:
         shape_x=points,
         shape_y=lines,
         reader=reader,
-        channels=channels,
+        channel_units=channel_units,
         step_info=((x_step, x_unit), (y_step, y_unit), (t_step, t_unit)),
     )
 
@@ -1451,7 +1314,14 @@ class ARDFReader:
         if self.flip_image:
             image = np.flipud(image)
 
-        return image, self.px2nm, z_units, curves_dataset
+        afm_load = AFMLoad(
+            image=image,
+            px2nm=self.px2nm,
+            z_units=z_units,
+            curves_dataset=curves_dataset,
+        )
+
+        return afm_load
 
     def get_available_channels(self) -> list[str]:
         """
@@ -1463,3 +1333,47 @@ class ARDFReader:
             A list of channel names.
         """
         return list(self.images.keys())
+
+
+def load_ardf(filepath: str | Path, channel: str, cached_data: dict) -> AFMLoad:
+    """
+    Load the ARDF file data.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the JPK QI file.
+    channel : str
+        The channel to load from the file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+
+    Returns
+    -------
+    AFMLoad
+        The loaded JPK QI data.
+    """
+    if "ardf_loader" not in cached_data:
+        cached_data["ardf_loader"] = ARDFReader(filepath=filepath, channel=channel)
+    return cached_data["ardf_loader"].load(channel=channel)
+
+
+def get_ardf_channels(filepath: str | Path, cached_data: dict) -> list[str]:
+    """
+    Get the available channels in the ARDF file.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the ARDF file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+
+    Returns
+    -------
+    list[str]
+        A list of available channels in the ARDF file.
+    """
+    if "ardf_loader" not in cached_data:
+        cached_data["ardf_loader"] = ARDFReader(filepath=filepath)
+    return cached_data["ardf_loader"].get_available_channels()
