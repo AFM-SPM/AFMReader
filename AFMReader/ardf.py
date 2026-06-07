@@ -21,6 +21,7 @@
 
 import mmap
 import struct
+from pathlib import Path
 from bisect import bisect_left
 from collections.abc import Collection, Iterable
 from typing import TypeAlias, Any
@@ -1204,8 +1205,7 @@ def parse_volm(volm_header: ARDFHeader) -> ARDFVolume:
         name = "FMAP"
 
     return ARDFVolume(
-        volm_header.offset,
-        name,
+        name=name,
         shape_x=points,
         shape_y=lines,
         reader=reader,
@@ -1219,7 +1219,7 @@ class ARDFReader:
     A reader for ARDF files.
     """
 
-    def __init__(self, filepath: str, channel: str, flip_image: bool = True):
+    def __init__(self, filepath: str, channel: str | None = None, flip_image: bool = True):
         self.filepath = filepath
         self.channel = channel
         self.flip_image = flip_image
@@ -1249,10 +1249,12 @@ class ARDFReader:
 
         self.size_x = float(self.metadata["FastScanSize"]) * NANOMETER_UNIT_CONVERSION
         self.size_y = float(self.metadata["SlowScanSize"]) * NANOMETER_UNIT_CONVERSION
-        self.metadata["global.time_step"] = self.volumes[0].step_info[-1][0]
+        if self.images:
+            first_image = next(iter(self.images.values()))
+            self.shape_x, self.shape_y = first_image.shape
         self.px2nm = self.size_x / self.shape_x
 
-    def check_type(data: Buffer) -> ARDFHeader:
+    def check_type(self, data: Buffer) -> ARDFHeader:
         """
         Check if the buffer contains a valid ARDF file.
 
@@ -1272,21 +1274,21 @@ class ARDFReader:
         file_header.validate()
         return file_header
 
-    def load_ardf(self, channel: str = None, flip_image: bool = True) -> ARDFFile:
+    def load(self, channel: str | None = None, flip_image: bool = True) -> AFMLoad:
         """
         Load the ARDF file data.
 
         Parameters
         ----------
-        filepath : str
-            The path to the ARDF file.
-        channel : str
-            The channel to load.
+        channel : str | None
+            The channel to load. If None, the default channel will be used.
+        flip_image : bool
+            Whether to flip the image vertically to match typical AFM orientation.
 
         Returns
         -------
-        ARDFFile
-            The loaded ARDF file object.
+        AFMLoad
+            The loaded AFM data.
         """
         if channel is not None:
             self.channel = channel
@@ -1296,11 +1298,11 @@ class ARDFReader:
         logger.info(
             f"Loading ARDF file: {self.filepath}, channel: {self.channel}, trace: {self.trace}, flip_image: {self.flip_image}"
         )
-        self.shape_y, self.shape_x = self.images[self.channel].shape
+        self.shape_x, self.shape_y = self.images[self.channel].shape
         curves_metadata = CurvesMetadata(
             self.metadata,
-            self.shape_y,
             self.shape_x,
+            self.shape_y,
             self.flip_image,
         )
         curves_dataset = CurvesDataset(
@@ -1308,6 +1310,8 @@ class ARDFReader:
             curves_metadata,
             default_volume_name="Trace" if self.trace else "Retrace",
         )
+        self.metadata["global.time_step"] = curves_dataset.get_default_volume().step_info[-1][0]
+        curves_dataset.metadata.toplevel.update(self.metadata)
 
         image = self.images[self.channel].get_image()
         z_units = self.images[self.channel].units
@@ -1342,16 +1346,16 @@ def load_ardf(filepath: str | Path, channel: str, cached_data: dict) -> AFMLoad:
     Parameters
     ----------
     filepath : str | Path
-        Path to the JPK QI file.
-    channel : str
-        The channel to load from the file.
+        Path to the ARDF file.
+    channel : str | None
+        The channel to load from the file. If None, the default channel will be used.
     cached_data : dict
         Cached data to avoid reloading heavy data.
 
     Returns
     -------
     AFMLoad
-        The loaded JPK QI data.
+        The loaded AFM data.
     """
     if "ardf_loader" not in cached_data:
         cached_data["ardf_loader"] = ARDFReader(filepath=filepath, channel=channel)
