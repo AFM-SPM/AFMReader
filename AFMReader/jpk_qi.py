@@ -1015,16 +1015,16 @@ class JPKQILoader:
 
                     buf["Data"].append(segment_array)
                     if len(buf["Data"]) >= self.BUFFER_SIZE or curve_num == self.num_of_curves - 1:
-                        if self.points_for_channel_segment[direction][chan_name] > data_size:
-                            # Fetch and resize the existing dataset for this channel and segment to fit the new data
-                            data_set.resize((self.points_for_channel_segment[direction][chan_name],))
-
                         buffered_data = np.concatenate(buf["Data"])
+                        required_size = filled_size + len(buffered_data)
+                        if required_size > data_size:
+                            # Fetch and resize the existing dataset for this channel and segment to fit the new data
+                            data_set.resize((required_size,))
 
                         # Add the buffer to the dataset
-                        data_set[filled_size : filled_size + len(buffered_data)] = buffered_data
+                        data_set[filled_size:required_size] = buffered_data
                         # Update the filled size for this channel and segment
-                        self.points_for_channel_segment[direction][chan_name] += len(buffered_data)
+                        self.points_for_channel_segment[direction][chan_name] = required_size
                         # Clear the buffer
                         buf["Data"].clear()
 
