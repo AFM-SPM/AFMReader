@@ -69,7 +69,6 @@ class H5Saver:
         self.curve_search_terms: list[bytes] = []
         self.seg_work: list[tuple[bytes, h5py.Dataset, list[str]]] = []
         self.segment_search_terms: list[bytes] = []
-        self.volume_data_group: h5py.Group | None = None
 
         # Chunk size for H5 datasets
         self.DATA_CHUNKSIZE = 512 * 1024
@@ -183,7 +182,7 @@ class H5Saver:
             The list of channel dictionaries containing information about each channel.
         """
         assert self.curve_data_group is not None, "setup_curve_data_structure must be called first"
-        self.volume_data_group = self.curve_data_group.require_group(f"{volume_name}_VOLM")
+        volume_data_group = self.curve_data_group.require_group(f"{volume_name}_VOLM")
         self.volumes_dims[volume_name] = volume_dims
         curve_groups: dict[str, dict[str, h5py.Group]] = {"Data": {}, "Indices": {}}
         self.volume_datasets[volume_name] = {}
@@ -194,7 +193,7 @@ class H5Saver:
         for direction in range(2):
             # For each segment direction, establish necessary group structure that will contain each channel dataset
             seg_name = f"Segment_{direction}"
-            dir_group = self.curve_data_group.require_group(seg_name)
+            dir_group = volume_data_group.require_group(seg_name)
             self.volume_datasets[volume_name][seg_name] = {}
             self.volumes_data_buffer[volume_name][seg_name] = {}
             self.volume_points_saved[volume_name][seg_name] = {}

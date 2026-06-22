@@ -372,7 +372,7 @@ class CurvesH5Volume(CurvesVolume):
             A dictionary containing the QI curve data for each channel and segment.
         """
         indices_map = {}
-        for segment, segment_group in self.qi_data_group["Curves"].items():
+        for segment, segment_group in self.qi_data_group[f"{self.name}_VOLM"].items():
             for channel in segment_group["Indices"]:
                 if channel not in indices_map:
                     indices_map[channel] = {}
@@ -380,7 +380,7 @@ class CurvesH5Volume(CurvesVolume):
         for y_idx in range(self.shape_y):
             data = {}
             y = self.shape_y - 1 - y_idx if self.flip_image else y_idx
-            for segment, segment_group in self.qi_data_group["Curves"].items():
+            for segment, segment_group in self.qi_data_group[f"{self.name}_VOLM"].items():
                 for channel in segment_group["Indices"]:
                     if channel not in data:
                         data[channel] = {}
@@ -422,7 +422,7 @@ class CurvesH5Volume(CurvesVolume):
         if self.flip_image:
             y = self.shape_y - 1 - y
         curve_num = self.shape_x * y + x
-        for segment, segment_group in self.qi_data_group["Curves"].items():
+        for segment, segment_group in self.qi_data_group[f"{self.name}_VOLM"].items():
             for channel in segment_group["Indices"]:
                 start_idx = int(segment_group["Indices"][channel][curve_num])
                 end_idx = int(segment_group["Indices"][channel][curve_num + 1])
@@ -441,7 +441,7 @@ class CurvesH5Volume(CurvesVolume):
             A 2D list containing dictionaries with QI curve data for each pixel.
         """
         all_curves = [[{} for _ in range(self.shape_x)] for _ in range(self.shape_y)]
-        for segment, segment_group in self.qi_data_group["Curves"].items():
+        for segment, segment_group in self.qi_data_group[f"{self.name}_VOLM"].items():
             for channel in segment_group["Indices"]:
                 indices = segment_group["Indices"][channel][:]
                 data = segment_group["Data"][channel][:]
@@ -630,13 +630,13 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
         logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
         px2nm = _jpk_pixel_to_nm_scaling_h5(measurement_group)
 
-        if "QI_Curve_Data" not in f:
+        if "Curve_Data" not in f:
             load_curves = False
 
     if load_curves:
         f = h5py.File(file_path, "r")
         logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
-        qi_data_group = f["QI_Curve_Data"]
+        qi_data_group = f["Curve_Data"]
         channels_units = {}
         top_level_meta = {}
         for key, value in qi_data_group["Global_Metadata"].attrs.items():
