@@ -21,7 +21,8 @@ from AFMReader.data_classes import (
 
 logger.enable(__package__)
 
-# pylint: disable=too-few-public-methods,too-many-locals,fixme,too-many-positional-arguments
+# ruff: noqa: C901
+# pylint: disable=too-few-public-methods,too-many-locals,fixme,too-many-positional-arguments,too-many-branches
 
 
 def _parse_channel_name(channel: str) -> tuple[str, str]:
@@ -318,8 +319,8 @@ class CurvesH5Volume(CurvesVolume):
         The number of columns in the image.
     shape_y : int
         The number of rows in the image.
-    qi_data_group : h5py.Group
-        The HDF5 group containing the QI curve data.
+    volume_data_group : h5py.Group
+        The HDF5 group containing the volume data.
     channel_units : dict[str, str]
         A dictionary mapping channel names to their units.
     flip_image : bool, optional
@@ -331,7 +332,7 @@ class CurvesH5Volume(CurvesVolume):
         name: str,
         shape_x: int,
         shape_y: int,
-        qi_data_group: h5py.Group,
+        volume_data_group: h5py.Group,
         channel_units: dict[str, str],
         flip_image: bool = True,
     ):
@@ -346,8 +347,8 @@ class CurvesH5Volume(CurvesVolume):
             The number of columns in the image.
         shape_y : int
             The number of rows in the image.
-        qi_data_group : h5py.Group
-            The HDF5 group containing the QI curve data.
+        volume_data_group : h5py.Group
+            The HDF5 group containing the volume data.
         channel_units : dict[str, str]
             A dictionary mapping channel names to their units.
         flip_image : bool, optional
@@ -360,7 +361,7 @@ class CurvesH5Volume(CurvesVolume):
             channel_units=channel_units,
             flip_image=flip_image,
         )
-        self.qi_data_group = qi_data_group
+        self.volume_data_group = volume_data_group
 
     def __iter__(self):  # noqa: C901
         """
@@ -372,7 +373,7 @@ class CurvesH5Volume(CurvesVolume):
             A dictionary containing the QI curve data for each channel and segment.
         """
         indices_map = {}
-        for segment, segment_group in self.qi_data_group[f"{self.name}_VOLM"].items():
+        for segment, segment_group in self.volume_data_group.items():
             for channel in segment_group["Indices"]:
                 if channel not in indices_map:
                     indices_map[channel] = {}
@@ -380,7 +381,7 @@ class CurvesH5Volume(CurvesVolume):
         for y_idx in range(self.shape_y):
             data = {}
             y = self.shape_y - 1 - y_idx if self.flip_image else y_idx
-            for segment, segment_group in self.qi_data_group[f"{self.name}_VOLM"].items():
+            for segment, segment_group in self.volume_data_group.items():
                 for channel in segment_group["Indices"]:
                     if channel not in data:
                         data[channel] = {}
@@ -422,7 +423,7 @@ class CurvesH5Volume(CurvesVolume):
         if self.flip_image:
             y = self.shape_y - 1 - y
         curve_num = self.shape_x * y + x
-        for segment, segment_group in self.qi_data_group[f"{self.name}_VOLM"].items():
+        for segment, segment_group in self.volume_data_group.items():
             for channel in segment_group["Indices"]:
                 start_idx = int(segment_group["Indices"][channel][curve_num])
                 end_idx = int(segment_group["Indices"][channel][curve_num + 1])
@@ -441,7 +442,7 @@ class CurvesH5Volume(CurvesVolume):
             A 2D list containing dictionaries with QI curve data for each pixel.
         """
         all_curves = [[{} for _ in range(self.shape_x)] for _ in range(self.shape_y)]
-        for segment, segment_group in self.qi_data_group[f"{self.name}_VOLM"].items():
+        for segment, segment_group in self.volume_data_group.items():
             for channel in segment_group["Indices"]:
                 indices = segment_group["Indices"][channel][:]
                 data = segment_group["Data"][channel][:]
@@ -465,8 +466,8 @@ class CurvesH5Metadata(CurvesMetadata):
 
     Parameters
     ----------
-    qi_data_group : h5py.Group
-        The HDF5 group containing the QI curve data.
+    curve_meta_group : h5py.Group
+        The HDF5 group containing the curve metadata.
     toplevel : dict[str, Any]
         The top-level metadata dictionary.
     shape_x : int
@@ -480,7 +481,7 @@ class CurvesH5Metadata(CurvesMetadata):
     # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
-        qi_data_group: h5py.Group,
+        curve_meta_group: h5py.Group,
         toplevel: dict[str, Any],
         shape_x: int,
         shape_y: int,
@@ -491,8 +492,8 @@ class CurvesH5Metadata(CurvesMetadata):
 
         Parameters
         ----------
-        qi_data_group : h5py.Group
-            The HDF5 group containing the QI curve data.
+        curve_meta_group : h5py.Group
+            The HDF5 group containing the curve metadata.
         toplevel : dict[str, Any]
             The top-level metadata dictionary.
         shape_x : int
@@ -503,7 +504,7 @@ class CurvesH5Metadata(CurvesMetadata):
             Whether to flip the image vertically. Default is ``True``.
         """
         super().__init__(toplevel, shape_x, shape_y, flip_image)
-        self.qi_data_group = qi_data_group
+        self.curve_meta_group = curve_meta_group
 
     def get_point_metadata(self, y: int, x: int, direction: int | None = None):
         """
@@ -531,17 +532,17 @@ class CurvesH5Metadata(CurvesMetadata):
         if direction is not None:
             idx = (idx * 2) + direction
         meta_dict = {}
-        for key in self.qi_data_group["Curve_Metadata"]:
+        for key in self.curve_meta_group:
             if key.startswith(f"{'segment' if direction is not None else 'curve'}."):
                 new_key = key.split(".", 1)[1]
-                if isinstance(self.qi_data_group["Curve_Metadata"][key], h5py.Dataset):
+                if isinstance(self.curve_meta_group[key], h5py.Dataset):
                     meta_dict[new_key] = (
-                        self.qi_data_group["Curve_Metadata"][key][idx].decode("utf-8")
-                        if isinstance(self.qi_data_group["Curve_Metadata"][key][idx], bytes)
-                        else self.qi_data_group["Curve_Metadata"][key][idx]
+                        self.curve_meta_group[key][idx].decode("utf-8")
+                        if isinstance(self.curve_meta_group[key][idx], bytes)
+                        else self.curve_meta_group[key][idx]
                     )
                 else:
-                    meta_dict[new_key] = self.qi_data_group["Curve_Metadata"][key]
+                    meta_dict[new_key] = self.curve_meta_group[key]
         return meta_dict
 
 
@@ -636,31 +637,36 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
     if load_curves:
         f = h5py.File(file_path, "r")
         logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
-        qi_data_group = f["Curve_Data"]
+        curve_data_group = f["Curve_Data"]
         channels_units = {}
         top_level_meta = {}
-        for key, value in qi_data_group["Global_Metadata"].attrs.items():
+        for key, value in curve_data_group["Global_Metadata"].attrs.items():
             if key.startswith("channel.unit."):
                 channels_units[key.split(".")[-1]] = value
             top_level_meta[key] = value
+        volumes: dict[str, CurvesVolume] = {}
 
-        curves_volume = CurvesH5Volume(
-            name="Trace",
-            shape_x=shape_x,
-            shape_y=shape_y,
-            qi_data_group=qi_data_group,
-            channel_units=channels_units,
-            flip_image=flip_image,
-        )
+        for name, group in curve_data_group.items():
+            if name.endswith("_VOLM"):
+                volume_name = name.split("_VOLM")[0]
+                curves_volume = CurvesH5Volume(
+                    name=volume_name,
+                    shape_x=shape_x,
+                    shape_y=shape_y,
+                    volume_data_group=group,
+                    channel_units=channels_units,
+                    flip_image=flip_image,
+                )
+                volumes[volume_name] = curves_volume
         curves_metadata = CurvesH5Metadata(
-            qi_data_group=qi_data_group,
+            curve_meta_group=curve_data_group["Curve_Metadata"],
             toplevel=top_level_meta,
             shape_x=shape_x,
             shape_y=shape_y,
             flip_image=flip_image,
         )
 
-        curves_data = CurvesDataset(volumes={"Trace": curves_volume}, metadata=curves_metadata)
+        curves_data = CurvesDataset(volumes=volumes, metadata=curves_metadata)
 
         return AFMLoad(
             image=image_stack, px2nm=px2nm, z_units=z_units, timestamps=timestamps, curves_dataset=curves_data
