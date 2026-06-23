@@ -96,7 +96,7 @@ class H5Saver:
         self.h5file.attrs["created_on"] = datetime.now().isoformat()
         return self.h5file
 
-    def setup_curve_data_structure(self, changing_curve_keys: set, changing_segment_keys: set, num_of_curves: int):
+    def setup_curve_metadata_structure(self, changing_curve_keys: set, changing_segment_keys: set, num_of_curves: int):
         """
         Set up structure in the h5 file for saving curve data and metadata.
 
@@ -111,7 +111,7 @@ class H5Saver:
         """
         assert (
             self.h5file is not None
-        ), "existing h5 file must be passed or create_file called before setup_curve_data_structure"
+        ), "existing h5 file must be passed or create_file called before setup_curve_metadata_structure"
         # Create the main group for the curve data that all the curve data will be in
         self.curve_data_group = self.h5file.require_group("Curve_Data")
 
@@ -192,7 +192,8 @@ class H5Saver:
         volume_channels : list[dict[str, str]]
             The list of channel dictionaries containing information about each channel.
         """
-        assert self.curve_data_group is not None, "setup_curve_data_structure must be called first"
+        assert self.h5file is not None, "existing h5 file must be passed or create_file called before setup_volume"
+        self.curve_data_group = self.h5file.require_group("Curve_Data")
         volume_data_group = self.curve_data_group.require_group(f"{volume_name}_VOLM")
         self.volumes_dims[volume_name] = volume_dims
         curve_groups: dict[str, dict[str, h5py.Group]] = {"Data": {}, "Indices": {}}

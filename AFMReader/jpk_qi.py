@@ -609,7 +609,7 @@ class JPKQILoader:
             # Sample curves in dataset to make a best guess for the meta keys
             self.changing_curve_keys, self.changing_segment_keys = self.get_changing_keys()
 
-            h5_saver.setup_curve_data_structure(
+            h5_saver.setup_curve_metadata_structure(
                 changing_curve_keys=self.changing_curve_keys,
                 changing_segment_keys=self.changing_segment_keys,
                 num_of_curves=self.num_of_curves,
