@@ -247,8 +247,10 @@ class CurvesJPKVolume(CurvesVolume):
                         curve_data[chan_name][f"Segment_{direction}"] = (raw_array * scale["multiplier"]) + scale[
                             "offset"
                         ]
-                except KeyError:
-                    pass  # File doesn't exist for this segment
+                except KeyError as e:
+                    raise KeyError(
+                        f"Internal data file missing for pixel ({x}, {y}), direction {direction}, channel {chan_name}"
+                    ) from e
 
         return curve_data
 
@@ -596,6 +598,15 @@ class JPKQILoader:
         Path
             The path to the saved H5 file.
         """
+        self.curves_volume = CurvesJPKVolume(
+            name="Trace",
+            shape_x=self.shape_x or 0,
+            shape_y=self.shape_y or 0,
+            archive=self.qi_archive,
+            channel_scaling=self.channel_scaling,
+            channel_units=self.channels_units,
+            flip_image=bool(self.flip_image),
+        )
         # Determine the path for the H5 file, ensuring it does not overwrite an existing file
         self.h5_path = self.filepath.parent / f"{self.filepath.stem}.h5-jpk"
         i = 0
@@ -607,7 +618,7 @@ class JPKQILoader:
         with h5_saver.create_file() as file:
 
             # Sample curves in dataset to make a best guess for the meta keys
-            self.changing_curve_keys, self.changing_segment_keys = self.get_changing_keys()
+            self.changing_curve_keys, self.changing_segment_keys = self.get_changing_keys(h5_saver)
 
             h5_saver.setup_curve_metadata_structure(
                 changing_curve_keys=self.changing_curve_keys,
@@ -615,13 +626,8 @@ class JPKQILoader:
                 num_of_curves=self.num_of_curves,
             )
 
-            self.points_for_channel_segment = self.predict_total_points()
-
             h5_saver.setup_volume(
-                "Trace",
-                predicted_points_per_channel_segment=self.points_for_channel_segment,
-                volume_dims=(self.shape_x, self.shape_y),
-                volume_channels=self.segment_channels,
+                curves_volume=self.curves_volume,
             )
 
             # Extract data from the JPK QI archive and save to H5 datasets
@@ -646,76 +652,17 @@ class JPKQILoader:
             self.saved_to_h5 = True
             return self.h5_path
 
-    def get_curves_sample(self):
-        """
-        Get a sample of curve numbers distrubuted evenly across the dataset.
-
-        Returns
-        -------
-        range:
-            A range object representing the sampled curve numbers.
-        """
-        # Check evenly spaced curves in the dataset to sample metadata without having to load every curve
-        step = 1 if self.num_of_curves <= self.MAX_CURVE_CHECKS else self.num_of_curves // self.MAX_CURVE_CHECKS
-        # If the step is equal to a shape dimension, we might just go down the row or column
-        while step in [self.shape_x, self.shape_y] and step > 1:
-            # So make the step slightly smaller (more checks) to ensure we get a good sample
-            step -= 1
-        return range(0, self.num_of_curves, step)
-
-    def predict_total_points(self):
-        """
-        Predict the total number of points for each channel and segment.
-
-        This is done by sampling a subset of curves and extrapolating based on the maximum number
-        of points found in the sample.
-
-        Returns
-        -------
-        dict:
-            A dictionary containing the predicted total points for each channel and segment.
-        """
-        # Get a sample of curve (indices)
-        curves_to_check = self.get_curves_sample()
-        points_for_channel_segment = {}
-
-        # Iterate through the segments, channels and our curve indices
-        for direction in range(2):
-            points_for_channel_segment[direction] = {}
-            for channel in self.segment_channels:
-                points_for_channel_segment[direction][channel["name"]] = []
-                for curve_num in curves_to_check:
-                    # Loop until we successfully retrieve some data
-                    while True:
-                        dat_path = f"index/{curve_num}/segments/{direction}/channels/{channel['name']}.dat"
-                        try:
-                            # Count points in extracted data
-                            with self.qi_archive.open(dat_path) as f:
-                                raw_array = np.frombuffer(f.read(), dtype=">i4")
-                                points_for_channel_segment[direction][channel["name"]].append(len(raw_array))
-                                break
-
-                        except KeyError:
-                            # If the file doesn't exist for this curve, check the next curve so we don't just get
-                            # a smaller sample
-                            if curve_num + 1 >= self.num_of_curves:
-                                # If we've gone past the number of curves, stop checking
-                                break
-                            curve_num += 1
-                            continue
-                # Calculate a prediction for total number of points based on maximum number of points then assuming
-                # maximum points throughout data is no more than 10% higher
-                points_for_channel_segment[direction][channel["name"]] = (
-                    int(np.max(points_for_channel_segment[direction][channel["name"]]) * 1.1) * self.num_of_curves
-                )
-        return points_for_channel_segment
-
-    def get_changing_keys(self):  # noqa: C901
+    def get_changing_keys(self, h5_saver: H5Saver):  # noqa: C901
         """
         Check a sample of curves to see which metadata keys change across curves and segments.
 
         This allows us to extract only the changing keys for each curve and segment.
         Non-changing keys are moved to the top-level metadata and not extracted for each curve/segment.
+
+        Parameters
+        ----------
+        h5_saver : H5Saver
+            The H5Saver instance to use for sampling curves.
 
         Returns
         -------
@@ -724,7 +671,7 @@ class JPKQILoader:
         """
         curve_meta_dict: dict[str, list[Any]] = {}
         segment_meta_dict: dict[str, list[Any]] = {}
-        curves_to_check = self.get_curves_sample()
+        curves_to_check = h5_saver.get_curves_sample(self.shape_x, self.shape_y, self.MAX_CURVE_CHECKS)
         for curve_num in curves_to_check:
             for direction in range(2):
                 while True:

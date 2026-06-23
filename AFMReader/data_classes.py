@@ -180,9 +180,9 @@ class CurvesVolume:
             raise IndexError(f"Pixel index ({y}, {x}) is out of bounds for image of shape {self.dims}.")
         return self.get_curve(y, x)
 
-    def get_curve(self, y: int, x: int):
+    def get_curve(self, y: int, x: int) -> dict:
         """
-        Fetch the QI curve data for a specific pixel.
+        Fetch the curve data for a specific pixel.
 
         Should be implemented by subclasses to define how the curve data is retrieved from the underlying data source.
 
@@ -196,7 +196,7 @@ class CurvesVolume:
         Returns
         -------
         dict
-            The QI curve data for the specified pixel.
+            The curve data for the specified pixel.
         """
         raise NotImplementedError("This method should be implemented by subclasses to fetch curve data on demand.")
 

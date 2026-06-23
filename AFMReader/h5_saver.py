@@ -1,3 +1,4 @@
+# ruff: noqa: C901
 # pylint: disable=too-many-instance-attributes,too-many-positional-arguments,too-many-locals
 """Module for saving AFM reader data to HDF5 files."""
 
@@ -10,6 +11,7 @@ import numpy as np
 
 from AFMReader import __version__
 from AFMReader.logging import logger
+from AFMReader.data_classes import CurvesVolume
 
 
 class H5Saver:
@@ -171,72 +173,146 @@ class H5Saver:
                         (self.volume_points_saved[volume_name][seg_name][chan_name],)
                     )
 
-    def setup_volume(
-        self,
-        volume_name: str,
-        predicted_points_per_channel_segment: dict[int, dict[str, int]],
-        volume_dims: tuple[int, int],
-        volume_channels: list[dict[str, str]],
-    ):
+    def get_curves_sample(self, shape_x: int, shape_y: int, minimum_sample_size: int = 20):
+        """
+        Get a sample of curve numbers distributed evenly across the dataset.
+
+        Parameters
+        ----------
+        shape_x : int
+            The number of columns in the image.
+        shape_y : int
+            The number of rows in the image.
+        minimum_sample_size : int, optional
+            The minimum number of curves to sample. Default is 20.
+
+        Returns
+        -------
+        range:
+            A range object representing the sampled curve numbers.
+        """
+        num_of_curves = shape_x * shape_y
+        # Check evenly spaced curves in the dataset to sample metadata without having to load every curve
+        step = 1 if num_of_curves <= minimum_sample_size else num_of_curves // minimum_sample_size
+        # If the step is equal to a shape dimension, we might just go down the row or column
+        while step in [shape_x, shape_y] and step > 1:
+            # So make the step slightly smaller (more checks) to ensure we get a good sample
+            step -= 1
+        return range(0, num_of_curves, step)
+
+    def predict_total_points(self, curves_volume: CurvesVolume) -> dict[int, dict[str, int]]:
+        """
+        Predict the total number of points for each channel and segment.
+
+        This is done by sampling a subset of curves and extrapolating based on the maximum number
+        of points found in the sample.
+
+        Parameters
+        ----------
+        curves_volume : CurvesVolume
+            The CurvesVolume instance containing the curve data for each pixel.
+
+        Returns
+        -------
+        dict:
+            A dictionary containing the predicted total points for each channel and segment.
+        """
+        # Get a sample of curve (indices)
+        curves_to_check = self.get_curves_sample(curves_volume.shape_x, curves_volume.shape_y)
+        num_of_curves = curves_volume.shape_x * curves_volume.shape_y
+        points_for_channel_segment: dict[int, dict[str, list[int]]] = {}
+
+        # Iterate through the segments, channels and our curve indices
+        for direction in range(2):
+            points_for_channel_segment[direction] = {}
+            for channel in curves_volume.channel_units:
+                points_for_channel_segment[direction][channel] = []
+        for curve_num in curves_to_check:
+            # Loop until we successfully retrieve some data
+            while True:
+                try:
+                    # Count points in extracted data
+                    sampled_curve = curves_volume[curve_num // curves_volume.shape_x, curve_num % curves_volume.shape_x]
+                    for direction in range(2):
+                        for channel in points_for_channel_segment[direction]:
+                            raw_array = sampled_curve[channel][f"Segment_{direction}"]
+                            points_for_channel_segment[direction][channel].append(len(raw_array))
+                    break
+
+                except KeyError:
+                    # If the file doesn't exist for this curve, check the next curve so we don't just get
+                    # a smaller sample
+                    if curve_num + 1 >= num_of_curves:
+                        # If we've gone past the number of curves, stop checking
+                        break
+                    curve_num += 1
+                    continue
+        predicted_points_per_channel_segment: dict[int, dict[str, int]] = {}
+        # Calculate a prediction for total number of points based on maximum number of points then assuming
+        # maximum points throughout data is no more than 10% higher
+        for direction in range(2):
+            predicted_points_per_channel_segment[direction] = {}
+            for channel in points_for_channel_segment[direction]:
+                predicted_points_per_channel_segment[direction][channel] = (
+                    int(np.max(points_for_channel_segment[direction][channel]) * 1.1) * num_of_curves
+                )
+        return predicted_points_per_channel_segment
+
+    def setup_volume(self, curves_volume: CurvesVolume):
         """
         Set up a dataset in the h5 file for saving volume data.
 
         Parameters
         ----------
-        volume_name : str
-            The name of the volume dataset to be created.
-        predicted_points_per_channel_segment : dict[int, dict[str, int]]
-            Predicted number of points per channel and segment.
-        volume_dims : tuple[int, int]
-            Dimensions of the volume.
-        volume_channels : list[dict[str, str]]
-            The list of channel dictionaries containing information about each channel.
+        curves_volume : CurvesVolume
+            The CurvesVolume instance containing the curve data for each pixel.
         """
         assert self.h5file is not None, "existing h5 file must be passed or create_file called before setup_volume"
         self.curve_data_group = self.h5file.require_group("Curve_Data")
-        volume_data_group = self.curve_data_group.require_group(f"{volume_name}_VOLM")
-        self.volumes_dims[volume_name] = volume_dims
+        volume_data_group = self.curve_data_group.require_group(f"{curves_volume.name}_VOLM")
+        self.volumes_dims[curves_volume.name] = curves_volume.dims
         curve_groups: dict[str, dict[str, h5py.Group]] = {"Data": {}, "Indices": {}}
-        self.volume_datasets[volume_name] = {}
-        self.volumes_data_buffer[volume_name] = {}
-        self.volume_points_saved[volume_name] = {}
-        self.volume_points_read[volume_name] = {}
+        self.volume_datasets[curves_volume.name] = {}
+        self.volumes_data_buffer[curves_volume.name] = {}
+        self.volume_points_saved[curves_volume.name] = {}
+        self.volume_points_read[curves_volume.name] = {}
 
         for direction in range(2):
             # For each segment direction, establish necessary group structure that will contain each channel dataset
             seg_name = f"Segment_{direction}"
             dir_group = volume_data_group.require_group(seg_name)
-            self.volume_datasets[volume_name][seg_name] = {}
-            self.volumes_data_buffer[volume_name][seg_name] = {}
-            self.volume_points_saved[volume_name][seg_name] = {}
-            self.volume_points_read[volume_name][seg_name] = {}
+            self.volume_datasets[curves_volume.name][seg_name] = {}
+            self.volumes_data_buffer[curves_volume.name][seg_name] = {}
+            self.volume_points_saved[curves_volume.name][seg_name] = {}
+            self.volume_points_read[curves_volume.name][seg_name] = {}
             # Create the Data and Indices subfolders and store their references
             curve_groups["Data"][seg_name] = dir_group.require_group("Data")
             curve_groups["Indices"][seg_name] = dir_group.require_group("Indices")
-            for chan in volume_channels:
-                self.volume_datasets[volume_name][seg_name][chan["name"]] = {}
+            predicted_points_per_channel_segment = self.predict_total_points(curves_volume)
+            for chan in curves_volume.channel_units:
+                self.volume_datasets[curves_volume.name][seg_name][chan] = {}
                 # For each channel, create an empty dataset
-                self.volume_datasets[volume_name][seg_name][chan["name"]]["Data"] = curve_groups["Data"][
+                self.volume_datasets[curves_volume.name][seg_name][chan]["Data"] = curve_groups["Data"][
                     seg_name
                 ].create_dataset(
-                    name=chan["name"],
-                    shape=(predicted_points_per_channel_segment[direction][chan["name"]],),
+                    name=chan,
+                    shape=(predicted_points_per_channel_segment[direction][chan],),
                     maxshape=(None,),
                     chunks=(self.DATA_CHUNKSIZE,),
                     dtype=np.float32,
                 )
-                self.volume_datasets[volume_name][seg_name][chan["name"]]["Indices"] = curve_groups["Indices"][
+                self.volume_datasets[curves_volume.name][seg_name][chan]["Indices"] = curve_groups["Indices"][
                     seg_name
                 ].create_dataset(
-                    name=chan["name"],
-                    shape=(volume_dims[0] * volume_dims[1] + 1,),
+                    name=chan,
+                    shape=(curves_volume.shape_y * curves_volume.shape_x + 1,),
                     maxshape=(None,),
                     chunks=(self.INDICES_CHUNKSIZE,),
                     dtype=np.int32,
                 )
-                self.volumes_data_buffer[volume_name][seg_name][chan["name"]] = {"Data": [], "Indices": []}
-                self.volume_points_saved[volume_name][seg_name][chan["name"]] = 0
-                self.volume_points_read[volume_name][seg_name][chan["name"]] = 0
+                self.volumes_data_buffer[curves_volume.name][seg_name][chan] = {"Data": [], "Indices": []}
+                self.volume_points_saved[curves_volume.name][seg_name][chan] = 0
+                self.volume_points_read[curves_volume.name][seg_name][chan] = 0
 
     def save_curve_segment(
         self,
