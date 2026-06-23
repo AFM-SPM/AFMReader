@@ -24,7 +24,7 @@ class H5Saver:
         The h5 file object that will be written to.
     """
 
-    def __init__(self, filepath: Path, h5file: h5py.File):
+    def __init__(self, filepath: Path, h5file: h5py.File | None = None):
         """
         Initialise H5Saver.
 
@@ -32,7 +32,7 @@ class H5Saver:
         ----------
         filepath : Path
             The path to the h5 file.
-        h5file : h5py.File
+        h5file : h5py.File | None
             The h5 file object that will be written to.
         """
         # The path to the h5 file
@@ -81,12 +81,20 @@ class H5Saver:
         # Number of curves to hold in buffer
         self.BUFFER_SIZE = 500
 
-    def create_file(self):
-        """Create the h5 file and write initial global attributes."""
-        with h5py.File(self.filepath, "a") as f:
-            f.attrs["AFMReader_version"] = __version__
-            f.attrs["created_by"] = "AFMReader"
-            f.attrs["created_on"] = datetime.now().isoformat()
+    def create_file(self) -> h5py.File:
+        """
+        Create the h5 file and write initial global attributes.
+
+        Returns
+        -------
+        h5py.File
+            The created h5 file object.
+        """
+        self.h5file = h5py.File(self.filepath, "a")
+        self.h5file.attrs["AFMReader_version"] = __version__
+        self.h5file.attrs["created_by"] = "AFMReader"
+        self.h5file.attrs["created_on"] = datetime.now().isoformat()
+        return self.h5file
 
     def setup_curve_data_structure(self, changing_curve_keys: set, changing_segment_keys: set, num_of_curves: int):
         """
@@ -101,6 +109,9 @@ class H5Saver:
         num_of_curves : int
             Total number of curves.
         """
+        assert (
+            self.h5file is not None
+        ), "existing h5 file must be passed or create_file called before setup_curve_data_structure"
         # Create the main group for the curve data that all the curve data will be in
         self.curve_data_group = self.h5file.require_group("Curve_Data")
 
@@ -378,7 +389,7 @@ class H5Saver:
                 f"metadata for curve {curve_num}, direction {direction}"
             )
 
-    def save_global_meta(self, global_meta: dict[str, Any]):
+    def save_global_meta(self, global_meta: dict[str, Any], size_x: float, size_y: float, shape_x: int, shape_y: int):
         """
         Save global metadata attributes.
 
@@ -386,7 +397,92 @@ class H5Saver:
         ----------
         global_meta : dict[str, Any]
             Dictionary of global metadata.
+        size_x : float
+            The size of the image in the x-direction.
+        size_y : float
+            The size of the image in the y-direction.
+        shape_x : int
+            The number of pixels in the x-direction.
+        shape_y : int
+            The number of pixels in the y-direction.
         """
         assert self.global_meta_group is not None, "setup_curve_data_structure must be called first"
+        assert self.h5file is not None, "existing h5 file must be passed or create_file called before setup"
         for key, value in global_meta.items():
             self.global_meta_group.attrs[key] = str(value).encode("utf-8")
+
+        # Save data required for reading the h5 file as a normal image file
+        meas_grp = self.h5file.require_group("Measurement_000")
+        # Save dimensions data
+        meas_grp.attrs["position-pattern.grid.ulength"] = size_x
+        meas_grp.attrs["position-pattern.grid.ilength"] = shape_x
+        meas_grp.attrs["position-pattern.grid.vlength"] = size_y
+        meas_grp.attrs["position-pattern.grid.jlength"] = shape_y
+        meas_grp.attrs["timing-settings.scanRate"] = 1.0  # Dummy value to satisfy reader
+
+    def save_image(self, image_data: np.ndarray, image_name: str, z_unit: str, idx: int):
+        """
+        Save an image dataset to the h5 file.
+
+        Parameters
+        ----------
+        image_data : np.ndarray
+            The image data to be saved.
+        image_name : str
+            The name of the image dataset.
+        z_unit : str
+            The z-axis unit of the image.
+        idx : int
+            The index of the image channel.
+        """
+        assert (
+            self.h5file is not None
+        ), "existing h5 file must be passed or create_file called before setup_curve_data_structure"
+        meas_grp = self.h5file.require_group("Measurement_000")
+        chan_grp = meas_grp.require_group(f"Channel_{make_num_min_characters(idx)}")
+        # Extract name and retrace information from the channel name
+        if image_name and "_" in str(image_name):
+            base_name, trace_dir = str(image_name).rsplit("_", 1)
+            is_retrace = "true" if trace_dir.lower() == "retrace" else "false"
+        else:
+            base_name = image_name
+            is_retrace = "false"
+
+        # Add the necessary attributes to the channel group
+        chan_grp.attrs["channel.name"] = base_name.encode("utf-8")
+        chan_grp.attrs["retrace"] = is_retrace.encode("utf-8")
+        chan_grp.attrs["net-encoder.scaling.multiplier"] = 1.0
+        chan_grp.attrs["net-encoder.scaling.offset"] = 0.0
+
+        # Format name and reshape image (flattened frame stack)
+        dataset_name = image_name.split("_")[0].capitalize()
+        # Include all the channels including the calculated channel
+        chan_grp.attrs["net-encoder.scaling.unit.unit"] = z_unit.encode("utf-8")
+        frame_stack = image_data.flatten().reshape(-1, 1)
+
+        # Update/ replace the channels dataset
+        if dataset_name in chan_grp:
+            del chan_grp[dataset_name]
+        chan_grp.create_dataset(dataset_name, data=frame_stack)
+
+
+def make_num_min_characters(num: int, min_chars: int = 3):
+    """
+    Zero-pad an integer to a minimum number of characters.
+
+    Parameters
+    ----------
+    num : int
+        The integer to pad.
+    min_chars : int
+        The minimum number of characters the resulting string should have. Default is 3.
+
+    Returns
+    -------
+    str
+        The zero-padded string.
+    """
+    string_num = str(num)
+    if len(string_num) >= min_chars:
+        return string_num
+    return "0" * (min_chars - len(string_num)) + string_num

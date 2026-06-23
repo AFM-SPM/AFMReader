@@ -16,7 +16,6 @@ from typing import Any
 
 import numpy as np
 import javaproperties
-import h5py
 from tqdm import tqdm
 
 from AFMReader.data_classes import AFMLoad, CurvesMetadata, CurvesVolume, CurvesDataset
@@ -316,28 +315,6 @@ def _get_channel_scaling(props, channel_index):
     return final_multiplier, final_offset, unit
 
 
-def _make_num_min_characters(num: int, min_chars: int = 3):
-    """
-    Zero-pad an integer to a minimum number of characters.
-
-    Parameters
-    ----------
-    num : int
-        The integer to pad.
-    min_chars : int
-        The minimum number of characters the resulting string should have. Default is 3.
-
-    Returns
-    -------
-    str
-        The zero-padded string.
-    """
-    string_num = str(num)
-    if len(string_num) >= min_chars:
-        return string_num
-    return "0" * (min_chars - len(string_num)) + string_num
-
-
 class JPKQILoader:
     """
     Class for readability and improving modularity in the load jpk qi data function.
@@ -604,15 +581,15 @@ class JPKQILoader:
 
     def save_to_h5(
         self,
-        include_metadata: bool = True,
+        include_per_curve_metadata: bool = True,
     ) -> Path:
         """
-        Save data as an H5 file. If include_metadata is False, only curve data is saved.
+        Save data as an H5 file. If include_per_curve_metadata is False, only curve data is saved.
 
         Parameters
         ----------
-        include_metadata : bool, optional
-            If True, metadata will be included in the saved H5 file. Default is True.
+        include_per_curve_metadata : bool, optional
+            If True, per-curve metadata will be included in the saved H5 file. Default is True.
 
         Returns
         -------
@@ -626,8 +603,8 @@ class JPKQILoader:
             self.h5_path = self.filepath.parent / f"{self.filepath.stem}_{i}.h5-jpk"
             i += 1
 
-        with h5py.File(self.h5_path, "a") as file:
-            h5_saver = H5Saver(self.h5_path, file)
+        h5_saver = H5Saver(self.h5_path)
+        with h5_saver.create_file() as file:
 
             # Sample curves in dataset to make a best guess for the meta keys
             self.changing_curve_keys, self.changing_segment_keys = self.get_changing_keys()
@@ -650,23 +627,22 @@ class JPKQILoader:
             # Extract data from the JPK QI archive and save to H5 datasets
             self.extract_data_to_h5(
                 h5_saver,
-                include_metadata=include_metadata,
+                include_metadata=include_per_curve_metadata,
             )
             # Resize the datasets to the actual number of points read
             h5_saver.complete_saving(self.segment_channels)
 
-            self.output_summary()
-
-            if include_metadata:
-                # Save the global metadata to the h5 file
-                h5_saver.save_global_meta(self.get_collated_metadata())
-
-            self.save_lite_data()
+            # Save the global metadata to the h5 file
+            h5_saver.save_global_meta(
+                self.get_collated_metadata(), self.size_x, self.size_y, self.shape_x, self.shape_y
+            )
 
             logger.info(f"QI data copied to h5 data {file.filename}")
 
             # Save a lite form of the images (precalculated) if saving to a file
-            self.save_lite_data()
+            self.save_lite_data(h5_saver)
+
+            self.output_summary()
             self.saved_to_h5 = True
             return self.h5_path
 
@@ -863,73 +839,40 @@ class JPKQILoader:
             flip_image=bool(flip_image),
         )
 
-    def save_lite_data(self):
-        """Save a lite form of the data (e.g., the calculated image data) to H5."""
-        with h5py.File(self.h5_path, "a") as h5file:
-            # Save data required for reading the h5 file as a normal image file
-            meas_grp = h5file.require_group("Measurement_000")
-            # Save dimensions data
-            meas_grp.attrs["position-pattern.grid.ulength"] = self.size_x
-            meas_grp.attrs["position-pattern.grid.ilength"] = self.shape_x
-            meas_grp.attrs["position-pattern.grid.vlength"] = self.size_y
-            meas_grp.attrs["position-pattern.grid.jlength"] = self.shape_y
-            meas_grp.attrs["timing-settings.scanRate"] = 1.0  # Dummy value to satisfy reader
+    def save_lite_data(self, h5_saver: H5Saver):
+        """
+        Save a lite form of the data (e.g., the calculated image data) to H5.
 
-            logger.info(f"Saving a hdf5 copy of the data {self.h5_path}")
+        Parameters
+        ----------
+        h5_saver : H5Saver
+            An instance of the H5Saver class used for saving data to the H5 file.
+        """
+        logger.info(f"Saving a hdf5 copy of the data {self.h5_path}")
 
-            # Look for the jpk-qi-image file in the archive
-            path_to_image = None
-            for file_name in self.list_of_all_paths:
-                if file_name.endswith(".jpk-qi-image"):
-                    path_to_image = file_name
-                    break
-            # Add the channels which exist in the jpk-qi-image file
-            h5_channels = []
-            if path_to_image:
-                with self.qi_archive.open(path_to_image, "r") as image_file:
-                    h5_channels = jpk._get_jpk_channels(
-                        file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(path_to_image)
-                    )
-            else:
-                logger.warning(
-                    f"No image data found in {self.filepath}. Cannot save image data to H5."
-                    f"Please check the file and channel name."
+        # Look for the jpk-qi-image file in the archive
+        path_to_image = None
+        for file_name in self.list_of_all_paths:
+            if file_name.endswith(".jpk-qi-image"):
+                path_to_image = file_name
+                break
+        # Add the channels which exist in the jpk-qi-image file
+        h5_channels = []
+        if path_to_image:
+            with self.qi_archive.open(path_to_image, "r") as image_file:
+                h5_channels = jpk._get_jpk_channels(
+                    file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(path_to_image)
                 )
-                return
+        else:
+            logger.warning(
+                f"No image data found in {self.filepath}. Cannot save image data to H5."
+                f"Please check the file and channel name."
+            )
+            return
 
-            for i, h5_channel in enumerate(h5_channels):
-                # For each available channel, save the required data to the h5 file
-                # TODO make sure this metadata is accurate for the channels coming from the .jpk-qi-image file
-                chan_grp = meas_grp.require_group(f"Channel_{_make_num_min_characters(i)}")
-                # Extract name and retrace information from the channel name
-                if h5_channel and "_" in str(h5_channel):
-                    base_name, trace_dir = str(h5_channel).rsplit("_", 1)
-                    is_retrace = "true" if trace_dir.lower() == "retrace" else "false"
-                else:
-                    base_name = h5_channel
-                    is_retrace = "false"
-
-                # Add the necessary attributes to the channel group
-                chan_grp.attrs["channel.name"] = base_name.encode("utf-8")
-                chan_grp.attrs["retrace"] = is_retrace.encode("utf-8")
-                chan_grp.attrs["net-encoder.scaling.multiplier"] = 1.0
-                chan_grp.attrs["net-encoder.scaling.offset"] = 0.0
-
-                # Format name and reshape image (flattened frame stack)
-                dataset_name = h5_channel.split("_")[0].capitalize()
-                # Include all the channels including the calculated channel
-                # TODO make this slightly faster by remembering we have load a channel already but
-                # difficult cause of scaling
-                channel_image, _, z_unit = self.get_image(
-                    overide_channel=h5_channel, convert_to_nm=False, flip_image=False
-                )
-                chan_grp.attrs["net-encoder.scaling.unit.unit"] = z_unit.encode("utf-8")
-                frame_stack = channel_image.flatten().reshape(-1, 1)
-
-                # Update/ replace the channels dataset
-                if dataset_name in chan_grp:
-                    del chan_grp[dataset_name]
-                chan_grp.create_dataset(dataset_name, data=frame_stack)
+        for i, h5_channel in enumerate(h5_channels):
+            channel_image, _, z_unit = self.get_image(overide_channel=h5_channel, convert_to_nm=False, flip_image=False)
+            h5_saver.save_image(channel_image, image_name=h5_channel, z_unit=z_unit, idx=i)
 
     def extract_dat_file(self, h5_saver: H5Saver, curve_num: int, direction: int, chan_name: str):
         """

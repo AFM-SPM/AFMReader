@@ -2,7 +2,7 @@
 
 from importlib import resources
 from pathlib import Path
-from io import BytesIO
+from typing import IO
 
 import numpy as np
 import tifffile
@@ -181,15 +181,15 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
 
 
 def _get_jpk_channels(
-    file: Path | BytesIO, filename: str, file_path: Path | str, config_path: Path | str | None = None
+    file: Path | IO[bytes], filename: str, file_path: Path | str, config_path: Path | str | None = None
 ):
     """
     Retrieve the list of available channels from a JPK TIFF file.
 
     Parameters
     ----------
-    file : Path | BytesIO
-        Path to the JPK TIFF file.
+    file : Path | IO[bytes]
+        Path to the JPK TIFF file or a file-like object.
     filename : str
         Name of the JPK TIFF file.
     file_path : Path | str
@@ -298,7 +298,7 @@ def load_jpk(
 
 
 def _load_jpk(
-    file: Path | BytesIO,
+    file: Path | IO[bytes],
     filename: str,
     channel: str,
     file_suffix: str,
@@ -311,8 +311,8 @@ def _load_jpk(
 
     Parameters
     ----------
-    file : Path | BytesIO
-        Path to the JPK TIFF file.
+    file : Path | IO[bytes]
+        Path to the JPK TIFF file or a file-like object.
     filename : str
         Name of the JPK TIFF file.
     channel : str
