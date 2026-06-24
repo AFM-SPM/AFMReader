@@ -26,13 +26,13 @@ class H5Saver:
         The h5 file object that will be written to.
     """
 
-    def __init__(self, filepath: Path, h5file: h5py.File | None = None):
+    def __init__(self, filepath: Path | None = None, h5file: h5py.File | None = None):
         """
         Initialise H5Saver.
 
         Parameters
         ----------
-        filepath : Path
+        filepath : Path | None
             The path to the h5 file.
         h5file : h5py.File | None
             The h5 file object that will be written to.
@@ -41,6 +41,9 @@ class H5Saver:
         self.filepath = filepath
         # The h5 file object that will be written to
         self.h5file = h5file
+
+        if self.filepath is None and self.h5file is None:
+            raise ValueError("Either filepath or h5file must be provided.")
 
         # A nested dictionary to hold curve volume float data in memory before writing to the h5 file.
         # This is structured as [volume_name][segment][channel][data/indices]. Each list can get no larger
@@ -92,6 +95,7 @@ class H5Saver:
         h5py.File
             The created h5 file object.
         """
+        assert self.filepath is not None, "Filepath must be provided to create an h5 file."
         self.h5file = h5py.File(self.filepath, "a")
         self.h5file.attrs["AFMReader_version"] = __version__
         self.h5file.attrs["created_by"] = "AFMReader"
@@ -150,27 +154,26 @@ class H5Saver:
         ]
         self.segment_search_terms = [f"{k}=".encode() for k in changing_segment_keys]
 
-    def complete_saving(self, volume_channels: list[dict[str, str]]):
+    def complete_saving(self, volume: CurvesVolume):
         """
         Resize datasets and finalize the saved file.
 
         Parameters
         ----------
-        volume_channels : list[dict[str, str]]
-            The list of channel dictionaries containing information about each channel.
+        volume : CurvesVolume
+            The CurvesVolume instance containing the curve data for each pixel.
         """
         # Add the last index to the indices datasets to mark the end of the last curve
         for volume_name, segments in self.volume_datasets.items():
             for direction in range(2):
                 seg_name = f"Segment_{direction}"
-                for chan in volume_channels:
-                    chan_name = chan["name"]
-                    current_dataset = segments[seg_name][chan_name]["Data"]
-                    indices_dataset = segments[seg_name][chan_name]["Indices"]
+                for channel_name in volume.channel_units:
+                    current_dataset = segments[seg_name][channel_name]["Data"]
+                    indices_dataset = segments[seg_name][channel_name]["Indices"]
                     indices_dataset[-1] = current_dataset.shape[0]
 
-                    segments[seg_name][chan_name]["Data"].resize(
-                        (self.volume_points_saved[volume_name][seg_name][chan_name],)
+                    segments[seg_name][channel_name]["Data"].resize(
+                        (self.volume_points_saved[volume_name][seg_name][channel_name],)
                     )
 
     def get_curves_sample(self, shape_x: int, shape_y: int, minimum_sample_size: int = 20):
@@ -258,7 +261,7 @@ class H5Saver:
                 )
         return predicted_points_per_channel_segment
 
-    def setup_volume(self, curves_volume: CurvesVolume):
+    def setup_volume(self, curves_volume: CurvesVolume) -> h5py.Group:
         """
         Set up a dataset in the h5 file for saving volume data.
 
@@ -266,6 +269,11 @@ class H5Saver:
         ----------
         curves_volume : CurvesVolume
             The CurvesVolume instance containing the curve data for each pixel.
+
+        Returns
+        -------
+        h5py.Group
+            The HDF5 group created or retrieved for the volume data.
         """
         assert self.h5file is not None, "existing h5 file must be passed or create_file called before setup_volume"
         self.curve_data_group = self.h5file.require_group("Curve_Data")
@@ -276,6 +284,8 @@ class H5Saver:
         self.volumes_data_buffer[curves_volume.name] = {}
         self.volume_points_saved[curves_volume.name] = {}
         self.volume_points_read[curves_volume.name] = {}
+
+        predicted_points_per_channel_segment = self.predict_total_points(curves_volume)
 
         for direction in range(2):
             # For each segment direction, establish necessary group structure that will contain each channel dataset
@@ -288,7 +298,6 @@ class H5Saver:
             # Create the Data and Indices subfolders and store their references
             curve_groups["Data"][seg_name] = dir_group.require_group("Data")
             curve_groups["Indices"][seg_name] = dir_group.require_group("Indices")
-            predicted_points_per_channel_segment = self.predict_total_points(curves_volume)
             for chan in curves_volume.channel_units:
                 self.volume_datasets[curves_volume.name][seg_name][chan] = {}
                 # For each channel, create an empty dataset
@@ -313,6 +322,7 @@ class H5Saver:
                 self.volumes_data_buffer[curves_volume.name][seg_name][chan] = {"Data": [], "Indices": []}
                 self.volume_points_saved[curves_volume.name][seg_name][chan] = 0
                 self.volume_points_read[curves_volume.name][seg_name][chan] = 0
+        return volume_data_group
 
     def save_curve_segment(
         self,

@@ -330,5 +330,5 @@ class AFMLoad:
         self.px2nm = px2nm
         self.z_units = z_units
         self.timestamps = timestamps
-        self.metadata = metadata
+        self.metadata = metadata if metadata is not None else {}
         self.curves_dataset = curves_dataset

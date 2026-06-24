@@ -22,7 +22,7 @@ from AFMReader.data_classes import (
 logger.enable(__package__)
 
 # ruff: noqa: C901
-# pylint: disable=too-few-public-methods,too-many-locals,fixme,too-many-positional-arguments,too-many-branches
+# pylint: disable=too-few-public-methods,too-many-locals,fixme,too-many-positional-arguments,too-many-branches,too-many-statements
 
 
 def _parse_channel_name(channel: str) -> tuple[str, str]:
@@ -546,6 +546,43 @@ class CurvesH5Metadata(CurvesMetadata):
         return meta_dict
 
 
+class CurvesH5Dataset(CurvesDataset):
+    """
+    A CurvesDataset implementation for HDF5 curve data that provides access to both the volume and metadata.
+
+    Parameters
+    ----------
+    volumes : dict[str, CurvesVolume]
+        A dictionary mapping volume names to their corresponding CurvesVolume instances.
+    metadata : CurvesMetadata
+        An instance of CurvesMetadata containing the metadata for the curves.
+    h5file : h5py.File
+        The underlying HDF5 file object.
+    """
+
+    def __init__(self, volumes: dict[str, CurvesVolume], metadata: CurvesMetadata, h5file: h5py.File):
+        """
+        Initialize the CurvesH5Dataset instance.
+
+        Parameters
+        ----------
+        volumes : dict[str, CurvesVolume]
+            A dictionary mapping volume names to their corresponding CurvesVolume instances.
+        metadata : CurvesMetadata
+            An instance of CurvesMetadata containing the metadata for the curves.
+        h5file : h5py.File
+            The underlying HDF5 file object.
+        """
+        super().__init__(volumes, metadata)
+        self.h5file = h5file
+
+    def close(self):
+        """Close the underlying HDF5 file to free resources."""
+        if self.h5file:
+            self.h5file.close()
+            self.h5file = None
+
+
 def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True) -> AFMLoad:
     """
     Load image from JPK Instruments .h5-jpk files.
@@ -588,10 +625,11 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
     file_path = Path(file_path)
 
     # Load HDF5 file
-    with h5py.File(file_path, "r") as f:
-        logger.info(f"Opened HDF5 file structure: {list(f.keys())}")
+    with h5py.File(file_path, "r") as h5_file:
+        logger.info(f"Opened HDF5 file structure: {list(h5_file.keys())}")
+        metadata = {key: h5_file.attrs[key] for key in h5_file.attrs}
 
-        channel_group, measurement_group, dataset_name = _get_channel_info(f, channel)
+        channel_group, measurement_group, dataset_name = _get_channel_info(h5_file, channel)
 
         # Load images and scaling factors from channel dataset
         images = channel_group[dataset_name][:]
@@ -631,13 +669,16 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
         logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
         px2nm = _jpk_pixel_to_nm_scaling_h5(measurement_group)
 
-        if "Curve_Data" not in f:
+        if "Curve_Data" not in h5_file:
             load_curves = False
 
     if load_curves:
-        f = h5py.File(file_path, "r")
+        try:
+            h5file = h5py.File(file_path, "r+")
+        except (PermissionError, OSError):
+            h5file = h5py.File(file_path, "r")
         logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
-        curve_data_group = f["Curve_Data"]
+        curve_data_group = h5file["Curve_Data"]
         channels_units = {}
         top_level_meta = {}
         for key, value in curve_data_group["Global_Metadata"].attrs.items():
@@ -666,10 +707,15 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
             flip_image=flip_image,
         )
 
-        curves_data = CurvesDataset(volumes=volumes, metadata=curves_metadata)
+        curves_data = CurvesH5Dataset(volumes=volumes, metadata=curves_metadata, h5file=h5file)
 
         return AFMLoad(
-            image=image_stack, px2nm=px2nm, z_units=z_units, timestamps=timestamps, curves_dataset=curves_data
+            image=image_stack,
+            px2nm=px2nm,
+            z_units=z_units,
+            timestamps=timestamps,
+            metadata=metadata,
+            curves_dataset=curves_data,
         )
 
-    return AFMLoad(image=image_stack, px2nm=px2nm, z_units=z_units, timestamps=timestamps)
+    return AFMLoad(image=image_stack, px2nm=px2nm, z_units=z_units, timestamps=timestamps, metadata=metadata)

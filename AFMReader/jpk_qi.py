@@ -636,7 +636,7 @@ class JPKQILoader:
                 include_metadata=include_per_curve_metadata,
             )
             # Resize the datasets to the actual number of points read
-            h5_saver.complete_saving(self.segment_channels)
+            h5_saver.complete_saving(self.curves_volume)
 
             # Save the global metadata to the h5 file
             h5_saver.save_global_meta(
