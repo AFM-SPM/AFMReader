@@ -385,6 +385,34 @@ class H5Saver:
             indices_set[curve_num - items_in_buffer + 1 : curve_num + 1] = buf["Indices"]
             buf["Indices"].clear()
 
+    def save_curve(
+        self, curve_data: dict[str, dict[str, np.ndarray]], curve_num: int, num_of_curves: int, volume_name: str
+    ):
+        """
+        Save a curve's data and metadata to the h5 file.
+
+        Parameters
+        ----------
+        curve_data : dict
+            The curve data to be saved.
+        curve_num : int
+            The number of the curve being saved.
+        num_of_curves : int
+            The total number of curves in the dataset (used to determine when to flush buffer).
+        volume_name : str
+            The name of the volume to which the curve belongs.
+        """
+        for direction in range(2):
+            for channel_name, segment_data in curve_data.items():
+                self.save_curve_segment(
+                    volume_name=volume_name,
+                    segment_data=segment_data[f"Segment_{direction}"],
+                    curve_num=curve_num,
+                    direction=direction,
+                    channel_name=channel_name,
+                    num_of_curves=num_of_curves,
+                )
+
     def get_segment_search_terms(self) -> list[bytes]:
         """
         Get the list of segment search terms.
