@@ -87,7 +87,7 @@ class LoadFile:
                 afm_load = h5_jpk.load_h5jpk(self.filepath, self.channel)
             elif self.suffix == ".jpk-qi-data":
                 afm_load = jpk_qi.load_jpk_data(
-                    filepath=self.filepath, channel=self.channel, cached_data=self.cached_data, **self.kwargs
+                    filepath=self.filepath, channel=self.channel, cached_data=self.cached_data
                 )
             elif self.suffix == ".stp":
                 afm_load = stp.load_stp(self.filepath)
