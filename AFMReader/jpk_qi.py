@@ -207,13 +207,7 @@ class CurvesJPKVolume(CurvesVolume):
         self.archive = archive
         self.channel_scaling = channel_scaling
 
-    def __iter__(self):
-        """Yield the curve data for each pixel in the image, iterating in row-major order (y first, then x)."""
-        for y in range(self.shape_y):
-            for x in range(self.shape_x):
-                yield self.get_curve(y, x)
-
-    def get_curve(self, y: int, x: int):
+    def get_curve(self, y: int, x: int, flip_image: bool | None = None):
         """
         Fetch the curve data for a specific pixel.
 
@@ -223,6 +217,8 @@ class CurvesJPKVolume(CurvesVolume):
             Row index of the pixel.
         x : int
             Column index of the pixel.
+        flip_image : bool, optional
+            Whether to flip the image vertically. If None, uses the instance's flip_image attribute.
 
         Returns
         -------
@@ -231,7 +227,9 @@ class CurvesJPKVolume(CurvesVolume):
         """
         if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
-        if self.flip_image:
+        if flip_image is None:
+            flip_image = self.flip_image
+        if flip_image:
             y = self.shape_y - 1 - y
         curve_num = y * self.shape_x + x
         curve_data: dict[str, Any] = {}

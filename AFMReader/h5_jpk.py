@@ -367,20 +367,38 @@ class CurvesH5Volume(CurvesVolume):
         """
         Efficiently iterate over the QI curve data, loading one row at a time.
 
+        Returns
+        -------
+        Iterator
+            An iterator over the QI curve data.
+        """
+        return self.iter_curves()
+
+    def iter_curves(self, flip_image: bool | None = None):
+        """
+        Iterate over the QI curve data, yielding one pixel's data at a time.
+
+        Parameters
+        ----------
+        flip_image : bool, optional
+            Whether to flip the image vertically during iteration. If None, uses the instance's flip_image attribute.
+
         Yields
         ------
         dict
-            A dictionary containing the QI curve data for each channel and segment.
+            A dictionary containing the QI curve data for each channel and segment for a pixel.
         """
-        indices_map = {}
+        if flip_image is None:
+            flip_image = self.flip_image
+        indices_map: dict[str, dict[str, np.ndarray]] = {}
         for segment, segment_group in self.volume_data_group.items():
             for channel in segment_group["Indices"]:
                 if channel not in indices_map:
                     indices_map[channel] = {}
                 indices_map[channel][segment] = segment_group["Indices"][channel][:]
         for y_idx in range(self.shape_y):
-            data = {}
-            y = self.shape_y - 1 - y_idx if self.flip_image else y_idx
+            data: dict[str, dict[str, np.ndarray]] = {}
+            y = self.shape_y - 1 - y_idx if flip_image else y_idx
             for segment, segment_group in self.volume_data_group.items():
                 for channel in segment_group["Indices"]:
                     if channel not in data:
@@ -391,7 +409,7 @@ class CurvesH5Volume(CurvesVolume):
 
                     data[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
             for x in range(self.shape_x):
-                curve_data = {}
+                curve_data: dict[str, dict[str, np.ndarray]] = {}
                 for channel, channel_data in data.items():
                     curve_data[channel] = {}
                     for segment, segment_data in channel_data.items():
@@ -401,7 +419,7 @@ class CurvesH5Volume(CurvesVolume):
                         curve_data[channel][segment] = segment_data[start_idx:end_idx]
                 yield curve_data
 
-    def get_curve(self, y: int, x: int):
+    def get_curve(self, y: int, x: int, flip_image: bool | None = None):
         """
         Fetch the QI curve data for a specific pixel (x, y) on demand.
 
@@ -411,6 +429,8 @@ class CurvesH5Volume(CurvesVolume):
             The row index.
         x : int
             The column index.
+        flip_image : bool, optional
+            Whether to flip the image vertically. If None, uses the instance's flip_image attribute.
 
         Returns
         -------
@@ -420,7 +440,9 @@ class CurvesH5Volume(CurvesVolume):
         if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
         curve_dict: dict[str, dict[str, Any]] = {}
-        if self.flip_image:
+        if flip_image is None:
+            flip_image = self.flip_image
+        if flip_image:
             y = self.shape_y - 1 - y
         curve_num = self.shape_x * y + x
         for segment, segment_group in self.volume_data_group.items():

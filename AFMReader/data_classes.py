@@ -180,7 +180,7 @@ class CurvesVolume:
             raise IndexError(f"Pixel index ({y}, {x}) is out of bounds for image of shape {self.dims}.")
         return self.get_curve(y, x)
 
-    def get_curve(self, y: int, x: int) -> dict:
+    def get_curve(self, y: int, x: int, flip_image: bool | None = None) -> dict:
         """
         Fetch the curve data for a specific pixel.
 
@@ -192,6 +192,8 @@ class CurvesVolume:
             Row index of the pixel.
         x : int
             Column index of the pixel.
+        flip_image : bool, optional
+            Whether to flip the image vertically. If None, uses the instance's flip_image attribute.
 
         Returns
         -------
@@ -199,6 +201,37 @@ class CurvesVolume:
             The curve data for the specified pixel.
         """
         raise NotImplementedError("This method should be implemented by subclasses to fetch curve data on demand.")
+
+    def iter_curves(self, flip_image: bool | None = None):
+        """
+        Iterate over all pixels in the image, yielding the curve data for each pixel.
+
+        Parameters
+        ----------
+        flip_image : bool, optional
+            Whether to flip the image vertically during iteration. If None, uses the instance's flip_image attribute.
+
+        Yields
+        ------
+        dict
+            The QI curve data for each pixel in row-major order (y first, then x).
+        """
+        if flip_image is None:
+            flip_image = self.flip_image
+        for y in range(self.shape_y):
+            for x in range(self.shape_x):
+                yield self.get_curve(y, x, flip_image=flip_image)
+
+    def __iter__(self):
+        """
+        Iterate over all pixels in the image.
+
+        Returns
+        -------
+        Iterator
+            An iterator over the curve data for each pixel.
+        """
+        return self.iter_curves()
 
 
 class CurvesDataset:
@@ -269,6 +302,22 @@ class CurvesDataset:
             The default CurvesVolume instance for this dataset.
         """
         return self.volumes[self.default_volume_name]
+
+    def get_volume(self, name: str) -> CurvesVolume | None:
+        """
+        Get a specific CurvesVolume by name.
+
+        Parameters
+        ----------
+        name : str
+            The name of the curve to retrieve.
+
+        Returns
+        -------
+        CurvesVolume | None
+            The CurvesVolume instance for the specified curve name, or None if not found.
+        """
+        return self.volumes.get(name)
 
 
 class AFMLoad:
