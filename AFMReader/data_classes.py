@@ -319,6 +319,17 @@ class CurvesDataset:
         """
         return self.volumes.get(name)
 
+    def get_volume_names(self) -> list[str]:
+        """
+        Get a list of all volume names in the dataset.
+
+        Returns
+        -------
+        list[str]
+            A list of all volume names in the dataset.
+        """
+        return list(self.volumes.keys())
+
 
 class AFMLoad:
     """
