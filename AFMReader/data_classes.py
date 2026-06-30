@@ -148,6 +148,9 @@ class CurvesVolume:
         self.name = name
         self.channel_units = channel_units
 
+        # Store analysis results in a dict, with the values being numpy arrays of the results for each pixel.
+        self.analysis_results: dict[str, np.ndarray] = {}
+
     def __len__(self):
         """
         Return the total number of pixels in the image.
@@ -222,6 +225,30 @@ class CurvesVolume:
             for x in range(self.shape_x):
                 yield self.get_curve(y, x, flip_image=flip_image)
 
+    def get_analysis_results(self, y: int, x: int, flip_image: bool | None = None) -> dict:
+        """
+        Fetch the analysis results for a specific pixel.
+
+        Parameters
+        ----------
+        y : int
+            Row index of the pixel.
+        x : int
+            Column index of the pixel.
+        flip_image : bool, optional
+            Whether to flip the image vertically. If None, uses the instance's flip_image attribute.
+
+        Returns
+        -------
+        dict
+            The analysis results for the specified pixel.
+        """
+        if flip_image is None:
+            flip_image = self.flip_image
+        if flip_image:
+            y = self.shape_y - 1 - y  # Flip the y index if needed
+        return {key: value[y, x] for key, value in self.analysis_results.items() if value is not None}
+
     def __iter__(self):
         """
         Iterate over all pixels in the image.
@@ -269,9 +296,9 @@ class CurvesDataset:
             The name of the default volume to use when accessing curve data.
             If None, the first volume in the dictionary is used.
         """
-        self.volumes = volumes
-        self.metadata = metadata
-        self.default_volume_name = default_volume_name or next(
+        self.volumes: dict[str, CurvesVolume] = volumes
+        self.metadata: CurvesMetadata = metadata
+        self.default_volume_name: str = default_volume_name or next(
             iter(volumes)
         )  # Use the first volume as default if not specified
 
