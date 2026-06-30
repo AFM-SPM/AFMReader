@@ -24,7 +24,10 @@ from pathlib import Path
 from bisect import bisect_left
 from collections.abc import Collection, Iterable
 from typing import TypeAlias, Any
+
+from tqdm import tqdm
 from AFMReader.data_classes import AFMLoad, CurvesMetadata, CurvesVolume, CurvesDataset
+from AFMReader.h5_saver import H5Saver, find_unused_filename
 from AFMReader.logging import logger
 
 try:
@@ -1226,8 +1229,8 @@ class ARDFReader:
     A reader for ARDF files.
     """
 
-    def __init__(self, filepath: str, channel: str | None = None, flip_image: bool = True):
-        self.filepath = filepath
+    def __init__(self, filepath: str | Path, channel: str | None = None, flip_image: bool = True):
+        self.filepath = Path(filepath)
         self.channel = channel
         self.flip_image = flip_image
         mmap = mmap_path_read_only(filepath)
@@ -1260,6 +1263,44 @@ class ARDFReader:
             first_image = next(iter(self.images.values()))
             self.shape_x, self.shape_y = first_image.shape
         self.px2nm = self.size_x / self.shape_x
+
+    def save_to_h5(self):
+        """
+        Save the ARDF data to an HDF5 file.
+
+        The output file will have the same name as the input file but with a .h5 extension.
+        """
+        # Determine the path for the H5 file, ensuring it does not overwrite an existing file
+        self.h5_path = find_unused_filename(self.filepath)
+
+        h5_saver = H5Saver(self.h5_path)
+
+        with h5_saver.create_file():
+            # Save metadata
+            h5_saver.setup_curves_group()
+            h5_saver.save_global_meta(
+                self.metadata, size_x=self.size_x, size_y=self.size_y, shape_x=self.shape_x, shape_y=self.shape_y
+            )
+
+            # Save volumes
+            for volume_name, ardf_volume in self.volumes.items():
+                h5_saver.setup_volume(ardf_volume)
+                for curve_idx, curve in enumerate(
+                    tqdm(
+                        ardf_volume.iter_curves(flip_image=False),
+                        total=ardf_volume.shape_x * ardf_volume.shape_y,
+                        desc=f"Saving curves for volume '{volume_name}'",
+                    )
+                ):
+                    h5_saver.save_curve(curve, curve_idx, ardf_volume.shape_x * ardf_volume.shape_y, volume_name)
+
+                h5_saver.complete_saving(ardf_volume)
+
+            # Save images
+            for idx, (image_name, ardf_image) in enumerate(self.images.items()):
+                h5_saver.save_image(
+                    image_data=ardf_image.get_image(), image_name=image_name, z_unit=ardf_image.units, idx=idx
+                )
 
     def check_type(self, data: Buffer) -> ARDFHeader:
         """
@@ -1390,3 +1431,37 @@ def get_ardf_channels(filepath: str | Path, cached_data: dict) -> list[str]:
     if "ardf_loader" not in cached_data:
         cached_data["ardf_loader"] = ARDFReader(filepath=filepath)
     return cached_data["ardf_loader"].get_available_channels()
+
+
+def get_ardf_params() -> dict:
+    """
+    Get the parameters of the ARDF file.
+
+    Returns
+    -------
+    dict
+        A dictionary containing the parameters of the ARDF file.
+    """
+    return {"save_as_h5": bool}
+
+
+def save_ardf_to_h5(filepath: str | Path, cached_data: dict) -> Path:
+    """
+    Save the ARDF data to an HDF5 file.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the ARDF file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+
+    Returns
+    -------
+    Path
+        The path to the saved HDF5 file.
+    """
+    if "ardf_loader" not in cached_data:
+        cached_data["ardf_loader"] = ARDFReader(filepath=filepath)
+    cached_data["ardf_loader"].save_to_h5()
+    return cached_data["ardf_loader"].h5_path

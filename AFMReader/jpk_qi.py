@@ -19,7 +19,7 @@ import javaproperties
 from tqdm import tqdm
 
 from AFMReader.data_classes import AFMLoad, CurvesMetadata, CurvesVolume, CurvesDataset
-from AFMReader.h5_saver import H5Saver
+from AFMReader.h5_saver import H5Saver, find_unused_filename
 from AFMReader.logging import logger
 from AFMReader import jpk
 
@@ -435,17 +435,6 @@ class JPKQILoader:
                 file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(self.path_to_image)
             )
 
-    def get_additional_params(self) -> dict[str, type]:
-        """
-        Get additional parameters that can be passed to the load function.
-
-        Returns
-        -------
-        dict
-            A dictionary of additional parameters with their types.
-        """
-        return {"save_as_h5": bool}
-
     def load(
         self,
         channel: str | None = None,
@@ -606,18 +595,14 @@ class JPKQILoader:
             flip_image=bool(self.flip_image),
         )
         # Determine the path for the H5 file, ensuring it does not overwrite an existing file
-        self.h5_path = self.filepath.parent / f"{self.filepath.stem}.h5-jpk"
-        i = 0
-        while self.h5_path.exists():
-            self.h5_path = self.filepath.parent / f"{self.filepath.stem}_{i}.h5-jpk"
-            i += 1
+        self.h5_path = find_unused_filename(self.filepath)
 
         h5_saver = H5Saver(self.h5_path)
         with h5_saver.create_file() as file:
 
             # Sample curves in dataset to make a best guess for the meta keys
             self.changing_curve_keys, self.changing_segment_keys = self.get_changing_keys(h5_saver)
-
+            h5_saver.setup_curves_group()
             h5_saver.setup_curve_metadata_structure(
                 changing_curve_keys=self.changing_curve_keys,
                 changing_segment_keys=self.changing_segment_keys,
@@ -1094,25 +1079,16 @@ def get_jpk_data_channels(filepath: str | Path, cached_data: dict) -> list[str]:
     return cached_data["jpk_qi_loader"].get_available_channels()
 
 
-def get_jpk_data_params(filepath: str | Path, cached_data: dict) -> dict:
+def get_jpk_data_params() -> dict:
     """
     Get any additional parameters for the JPK QI data.
-
-    Parameters
-    ----------
-    filepath : str | Path
-        Path to the JPK QI file.
-    cached_data : dict
-        Cached data to avoid reloading heavy data.
 
     Returns
     -------
     dict
         A dictionary containing any additional parameters for the JPK QI data.
     """
-    if "jpk_qi_loader" not in cached_data:
-        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath)
-    return cached_data["jpk_qi_loader"].get_additional_params()
+    return {"save_as_h5": bool}
 
 
 def save_jpk_data_to_h5(filepath: str | Path, cached_data: dict | None = None) -> Path:

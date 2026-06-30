@@ -102,6 +102,16 @@ class H5Saver:
         self.h5file.attrs["created_on"] = datetime.now().isoformat()
         return self.h5file
 
+    def setup_curves_group(self):
+        assert (
+            self.h5file is not None
+        ), "existing h5 file must be passed or create_file called before setup_curves_group"
+        # Create the main group for the curve data that all the curve data will be in
+        self.curve_data_group = self.h5file.require_group("Curve_Data")
+
+        # Establish empty groups for global metadata
+        self.global_meta_group = self.curve_data_group.require_group("Global_Metadata")
+
     def setup_curve_metadata_structure(self, changing_curve_keys: set, changing_segment_keys: set, num_of_curves: int):
         """
         Set up structure in the h5 file for saving curve data and metadata.
@@ -601,3 +611,16 @@ def make_num_min_characters(num: int, min_chars: int = 3):
     if len(string_num) >= min_chars:
         return string_num
     return "0" * (min_chars - len(string_num)) + string_num
+
+
+def find_unused_filename(original_path: Path) -> Path:
+    """
+    Find an unused filename by appending a number to the base name.
+    """
+    # Determine the path for the H5 file, ensuring it does not overwrite an existing file
+    h5_path = original_path.parent / f"{original_path.stem}.h5-jpk"
+    i = 0
+    while h5_path.exists():
+        h5_path = original_path.parent / f"{original_path.stem}_{i}.h5-jpk"
+        i += 1
+    return h5_path

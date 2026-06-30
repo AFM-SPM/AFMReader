@@ -159,13 +159,17 @@ class LoadFile:
         if self.suffix == ".bin":
             return raw_bin.get_bin_params()
         if self.suffix == ".jpk-qi-data":
-            return jpk_qi.get_jpk_data_params(self.filepath, self.cached_data)
+            return jpk_qi.get_jpk_data_params()
+        if self.suffix == ".ardf":
+            return ardf.get_ardf_params()
         return {}
 
     def save_to_h5(self):
         """Save the loaded data to an h5 file."""
         if self.suffix == ".jpk-qi-data":
             h5_path = jpk_qi.save_jpk_data_to_h5(filepath=self.filepath, cached_data=self.cached_data)
+        elif self.suffix == ".ardf":
+            h5_path = ardf.save_ardf_to_h5(filepath=self.filepath, cached_data=self.cached_data)
         else:
             raise ValueError(f"Saving to h5 is not currently implemented for file type '{self.suffix}'.")
         # Once saved to h5, update the filepath and suffix to point to the new h5 file for future loading

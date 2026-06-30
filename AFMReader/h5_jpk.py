@@ -546,6 +546,8 @@ class CurvesH5Metadata(CurvesMetadata):
         dict
             A dictionary containing the fetched metadata.
         """
+        if self.curve_meta_group is None:
+            return {}
         if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
         if self.flip_image:
@@ -699,7 +701,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
             h5file = h5py.File(file_path, "r+")
         except (PermissionError, OSError):
             h5file = h5py.File(file_path, "r")
-        logger.info(f"[{file_path.stem}] : Found Force Curves QI data in file.")
+        logger.info(f"[{file_path.stem}] : Found Force Curves data in file.")
         curve_data_group = h5file["Curve_Data"]
         channels_units = {}
         top_level_meta = {}
@@ -721,8 +723,12 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
                     flip_image=flip_image,
                 )
                 volumes[volume_name] = curves_volume
+        if "Curve_Metadata" not in curve_data_group:
+            curve_meta_group = None
+        else:
+            curve_meta_group = curve_data_group["Curve_Metadata"]
         curves_metadata = CurvesH5Metadata(
-            curve_meta_group=curve_data_group["Curve_Metadata"],
+            curve_meta_group=curve_meta_group,
             toplevel=top_level_meta,
             shape_x=shape_x,
             shape_y=shape_y,
