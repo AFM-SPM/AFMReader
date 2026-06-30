@@ -1278,8 +1278,10 @@ class ARDFReader:
         with h5_saver.create_file():
             # Save metadata
             h5_saver.setup_curves_group()
+            size_x_m = self.size_x / NANOMETER_UNIT_CONVERSION
+            size_y_m = self.size_y / NANOMETER_UNIT_CONVERSION
             h5_saver.save_global_meta(
-                self.metadata, size_x=self.size_x, size_y=self.size_y, shape_x=self.shape_x, shape_y=self.shape_y
+                self.metadata, size_x=size_x_m, size_y=size_y_m, shape_x=self.shape_x, shape_y=self.shape_y
             )
 
             # Save volumes
