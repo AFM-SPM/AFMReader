@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 
-from AFMReader import asd, gwy, h5_jpk, ibw, jpk, raw_bin, spm, stp, top, topostats, jpk_qi
+from AFMReader import ardf, asd, gwy, h5_jpk, ibw, jpk, raw_bin, spm, stp, top, topostats, jpk_qi
 from AFMReader.data_classes import AFMLoad
 from AFMReader.logging import logger
 
@@ -41,7 +41,7 @@ class LoadFile:
         """
         self.filepath = Path(filepath)
         self.channel = channel
-        self.suffix = self.filepath.suffix
+        self.suffix = self.filepath.suffix.lower()
         self.kwargs = kwargs if kwargs else {}
 
         # Store heavy loaded data in a dict to avoid having to reload it
@@ -73,7 +73,9 @@ class LoadFile:
         if kwargs:
             self.kwargs = kwargs
         try:
-            if self.suffix == ".asd":
+            if self.suffix == ".ardf":
+                afm_load = ardf.load_ardf(self.filepath, self.channel, self.cached_data)
+            elif self.suffix == ".asd":
                 afm_load = asd.load_asd(self.filepath, self.channel)
             elif self.suffix == ".gwy":
                 afm_load = gwy.load_gwy(self.filepath, self.channel)
@@ -121,7 +123,9 @@ class LoadFile:
             List of available channels.
         """
         self.kwargs = kwargs if kwargs else self.kwargs
-        if self.suffix == ".asd":
+        if self.suffix == ".ardf":
+            available_channels = ardf.get_ardf_channels(self.filepath, self.cached_data)
+        elif self.suffix == ".asd":
             available_channels = asd.get_asd_channels(self.filepath)
         elif self.suffix == ".gwy":
             available_channels = gwy.get_gwy_channels(self.filepath)
@@ -166,4 +170,4 @@ class LoadFile:
             raise ValueError(f"Saving to h5 is not currently implemented for file type '{self.suffix}'.")
         # Once saved to h5, update the filepath and suffix to point to the new h5 file for future loading
         self.filepath = h5_path
-        self.suffix = h5_path.suffix
+        self.suffix = h5_path.suffix.lower()

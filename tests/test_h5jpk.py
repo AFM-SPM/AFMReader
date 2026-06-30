@@ -147,6 +147,7 @@ def test_load_h5jpk(
     assert afm_load.image.dtype == np.dtype(image_dtype)
     assert isinstance(afm_load.timestamps, timestamps_dtype)
     assert afm_load.image.sum() == pytest.approx(image_sum)
+    assert afm_load.timestamps is not None
     assert len(afm_load.timestamps) == afm_load.image.shape[0]
     assert all(
         afm_load.timestamps[f"frame {i}"] < afm_load.timestamps[f"frame {i + 1}"]
