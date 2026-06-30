@@ -1061,17 +1061,19 @@ class ARDFVolume(CurvesVolume):
         reader: ARDFForceMapReader | ARDFFFMReader,
         channel_units: dict[str, str],
         step_info: StepInfo,
+        flip_image: bool = True,
     ):
         super().__init__(
             name=name,
             shape_x=shape_x,
             shape_y=shape_y,
             channel_units=channel_units,
+            flip_image=flip_image,
         )
         self.step_info = step_info
         self._reader = reader
 
-    def get_curve(self, y: int, x: int) -> dict[str, dict[str, np.ndarray]]:
+    def get_curve(self, y: int, x: int, flip_image: bool | None = None) -> dict[str, dict[str, np.ndarray]]:
         """
         Efficiently get a specific curve from disk.
 
@@ -1081,12 +1083,18 @@ class ARDFVolume(CurvesVolume):
             The row index.
         x : int
             The column index.
+        flip_image : bool, optional
+            Whether to flip the image vertically. If None, uses the instance's flip_image attribute.
 
         Returns
         -------
         dict[str, dict[str, np.ndarray]]
             The curve data.
         """
+        if flip_image is None:
+            flip_image = self.flip_image
+        if flip_image:
+            y = self.shape_y - 1 - y
         return self._reader.get_curve(y, x)
 
     def iter_indices(self) -> Iterable[Index]:
@@ -1100,22 +1108,19 @@ class ARDFVolume(CurvesVolume):
         """
         return self._reader.iter_indices()
 
-    def iter_curves(self) -> Iterable[dict[str, dict[str, np.ndarray]]]:
+    def __iter__(self):
         """
-        Iterate over curves lazily in on-disk order.
+        Iterate over curves using the instance's flip setting.
 
         Returns
         -------
         Iterable[dict[str, dict[str, np.ndarray]]]
             An iterable yielding curve data.
         """
-        return self._reader.iter_curves()
-
-    def __iter__(self):
         return self.iter_curves()
 
 
-def parse_volm(volm_header: ARDFHeader) -> ARDFVolume:
+def parse_volm(volm_header: ARDFHeader, flip_image: bool = True) -> ARDFVolume:
     """
     Parse a volume section from its header.
 
@@ -1123,6 +1128,8 @@ def parse_volm(volm_header: ARDFHeader) -> ARDFVolume:
     ----------
     volm_header : ARDFHeader
         The VOLM section header.
+    flip_image : bool
+        Whether to flip the image vertically.
 
     Returns
     -------
@@ -1210,6 +1217,7 @@ def parse_volm(volm_header: ARDFHeader) -> ARDFVolume:
         reader=reader,
         channel_units=channel_units,
         step_info=((x_step, x_unit), (y_step, y_unit), (t_step, t_unit)),
+        flip_image=flip_image,
     )
 
 
@@ -1241,7 +1249,7 @@ class ARDFReader:
                 item = ARDFImage.parse_imag(item)
                 self.images[item.name] = item
             elif item.name == b"VOLM":
-                item = parse_volm(item)
+                item = parse_volm(item, flip_image=self.flip_image)
                 self.volumes[item.name] = item
             else:
                 raise RuntimeError(f"Unknown TOC entry {item.name}.", item)
@@ -1293,6 +1301,8 @@ class ARDFReader:
             self.channel = channel
         if flip_image is not None:
             self.flip_image = flip_image
+        for volume in self.volumes.values():
+            volume.flip_image = self.flip_image
         self.trace = "retrace" not in self.channel.lower()
         logger.info(
             f"Loading ARDF file: {self.filepath}, channel: {self.channel}, trace: {self.trace}, flip_image: {self.flip_image}"
