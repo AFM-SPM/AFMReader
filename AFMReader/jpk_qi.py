@@ -1300,13 +1300,6 @@ class JPKQILoader:
     def close(self):
         """Close the ZIP archive when done to free up system resources."""
         self.qi_archive.close()
-        self.image = None
-        self.curve_data = None
-        self.curve_meta = {}
-        self.segment_meta = {}
-        self.top_level_meta = {}
-        self.failed_curves = set()
-        self.points_for_channel_segment = {}
         self.list_of_all_paths = []
 
 
