@@ -14,7 +14,6 @@ import io
 import zipfile
 import time
 from pathlib import Path
-from contextlib import nullcontext
 from typing import Any
 
 import numpy as np
@@ -239,15 +238,15 @@ class CurvesJPKVolume(CurvesVolume):
         curve_num = y * self.shape_x + x
         curve_data: dict[str, Any] = {}
 
-        for chan_name, scale in self.channel_scaling.items():
-            curve_data[chan_name] = {}
+        for channel_name, scale in self.channel_scaling.items():
+            curve_data[channel_name] = {}
             for direction in (0, 1):
-                dat_path = f"index/{curve_num}/segments/{direction}/channels/{chan_name}.dat"
+                dat_path = f"index/{curve_num}/segments/{direction}/channels/{channel_name}.dat"
                 try:
                     # Access the file directly without re-parsing the ZIP directory
                     with self.archive.open(dat_path) as f:
                         raw_array = np.frombuffer(f.read(), dtype=">i4")
-                        curve_data[chan_name][f"Segment_{direction}"] = (raw_array * scale["multiplier"]) + scale[
+                        curve_data[channel_name][f"Segment_{direction}"] = (raw_array * scale["multiplier"]) + scale[
                             "offset"
                         ]
                 except KeyError:
@@ -256,6 +255,7 @@ class CurvesJPKVolume(CurvesVolume):
         return curve_data
 
 
+# TODO make the variable names for this function more descriptive
 def _get_channel_scaling(props, channel_index):
     """
     Parse the JPK properties dictionary to find cumulative multiplier and offset for a specific channel index.
@@ -278,6 +278,7 @@ def _get_channel_scaling(props, channel_index):
     """
     prefix = f"lcd-info.{channel_index}."
 
+    # The current slot is a running reference to where we are on the steps of converting from raw to the final units
     current_slot = props.get(f"{prefix}conversion-set.conversions.default")
 
     if not current_slot:
@@ -396,7 +397,7 @@ class JPKQILoader:
         # For holding the reference to where the actual .jqk-qi image is (not the metadata).
         self.path_to_image = None
 
-        # Chunk size for H5 datasets
+        # Chunk size for H5 datasets. Chunking is necessary to allow the resizing of h5 datasets and continual writing
         self.DATA_CHUNKSIZE = 512 * 1024
         # Chunk size for indices datasets
         self.INDICES_CHUNKSIZE = 64 * 1024
@@ -539,11 +540,11 @@ class JPKQILoader:
             logger.warning("Summary of missing files (up to 10 shown):")
 
             # Output the first 10 failed loads with details
-            for i, (curve_num, direction, chan_name) in enumerate(self.failed_curves):
+            for i, (curve_num, direction, channel_name) in enumerate(self.failed_curves):
                 if i < 10:
-                    if chan_name:
+                    if channel_name:
                         logger.warning(
-                            f"Failed to load data for curve {curve_num}, direction {direction}, channel {chan_name}"
+                            f"Failed to load data for curve {curve_num}, direction {direction}, channel {channel_name}"
                         )
                     else:
                         if direction is not None:
@@ -558,11 +559,11 @@ class JPKQILoader:
             # If there are no failed loads, log that all data was loaded successfully
             logger.info("Successfully loaded all curve data without any missing files.")
 
-    def extract_data_to_h5(
+    def extract_and_save_per_curve_data(
         self, h5_datasets, h5_meta_datasets, h5_datasets_buffer, h5_meta_datasets_buffer, include_metadata: bool = True
     ):
         """
-        Load all curve data and optionally metadata from the JPK QI archive into HDF5 datasets.
+        Load all curve data and optionally metadata from the JPK QI archive and save into HDF5 datasets.
 
         Parameters
         ----------
@@ -610,7 +611,7 @@ class JPKQILoader:
                         h5_datasets_buffer=h5_datasets_buffer,
                         curve_num=curve_num,
                         direction=direction,
-                        chan_name=chan["name"],
+                        channel_name=chan["name"],
                     )
 
                 if include_metadata:
@@ -625,9 +626,9 @@ class JPKQILoader:
         for direction in range(2):
             seg_name = f"Segment_{direction}"
             for chan in self.segment_channels:
-                chan_name = chan["name"]
-                current_dataset = h5_datasets[seg_name][chan_name]["Data"]
-                indices_dataset = h5_datasets[seg_name][chan_name]["Indices"]
+                channel_name = chan["name"]
+                current_dataset = h5_datasets[seg_name][channel_name]["Data"]
+                indices_dataset = h5_datasets[seg_name][channel_name]["Indices"]
                 indices_dataset[-1] = current_dataset.shape[0]
 
     def save_to_h5(
@@ -642,7 +643,7 @@ class JPKQILoader:
         include_metadata : bool, optional
             If True, metadata will be included in the saved H5 file. Default is True.
         """
-        with self.get_saving_context() as file:
+        with h5py.File(self.h5_path, "a") as file:
 
             t0 = time.perf_counter()
 
@@ -667,7 +668,7 @@ class JPKQILoader:
                     self.points_for_channel_segment[direction][chan["name"]] = 0
 
             # Extract data from the JPK QI archive and save to H5 datasets
-            self.extract_data_to_h5(
+            self.extract_and_save_per_curve_data(
                 h5_datasets,
                 h5_meta_datasets,
                 h5_datasets_buffer,
@@ -690,7 +691,7 @@ class JPKQILoader:
 
             logger.info(f"QI data copied to h5 data {file.filename}")
             # Save a lite form of the images (precalculated) if saving to a file
-            self.save_lite_data()
+            self.save_image_data()
             self.saved_to_h5 = True
 
     def get_curves_sample(self):
@@ -715,7 +716,9 @@ class JPKQILoader:
         Predict the total number of points for each channel and segment.
 
         This is done by sampling a subset of curves and extrapolating based on the maximum number
-        of points found in the sample.
+        of points found in the sample. Note that this is an estimate: if it is too low, the datasets
+        will be continually resized as more points are read, which will slow down the loading process.
+        A too high estimate will result in more wasted space on disk.
 
         Returns
         -------
@@ -886,8 +889,8 @@ class JPKQILoader:
             flip_image=bool(flip_image),
         )
 
-    def save_lite_data(self):
-        """Save a lite form of the data (e.g., the calculated image data) to H5."""
+    def save_image_data(self):
+        """Save the image data and the necessary metadata for interpreting them to H5."""
         with h5py.File(self.h5_path, "a") as h5file:
             # Save data required for reading the h5 file as a normal image file
             meas_grp = h5file.require_group("Measurement_000")
@@ -916,7 +919,7 @@ class JPKQILoader:
             for i, h5_channel in enumerate(h5_channels):
                 # For each available channel, save the required data to the h5 file
                 # TODO make sure this metadata is accurate for the channels coming from the .jpk-qi-image file
-                chan_grp = meas_grp.require_group(f"Channel_{_make_num_min_characters(i)}")
+                channel_grp = meas_grp.require_group(f"Channel_{_make_num_min_characters(i)}")
                 # Extract name and retrace information from the channel name
                 if h5_channel and "_" in str(h5_channel):
                     base_name, trace_dir = str(h5_channel).rsplit("_", 1)
@@ -926,10 +929,10 @@ class JPKQILoader:
                     is_retrace = "false"
 
                 # Add the necessary attributes to the channel group
-                chan_grp.attrs["channel.name"] = base_name.encode("utf-8")
-                chan_grp.attrs["retrace"] = is_retrace.encode("utf-8")
-                chan_grp.attrs["net-encoder.scaling.multiplier"] = 1.0
-                chan_grp.attrs["net-encoder.scaling.offset"] = 0.0
+                channel_grp.attrs["channel.name"] = base_name.encode("utf-8")
+                channel_grp.attrs["retrace"] = is_retrace.encode("utf-8")
+                channel_grp.attrs["net-encoder.scaling.multiplier"] = 1.0
+                channel_grp.attrs["net-encoder.scaling.offset"] = 0.0
 
                 # Format name and reshape image (flattened frame stack)
                 dataset_name = h5_channel.split("_")[0].capitalize()
@@ -940,11 +943,11 @@ class JPKQILoader:
                 frame_stack = channel_image.flatten().reshape(-1, 1)
 
                 # Update/ replace the channels dataset
-                if dataset_name in chan_grp:
-                    del chan_grp[dataset_name]
-                chan_grp.create_dataset(dataset_name, data=frame_stack)
+                if dataset_name in channel_grp:
+                    del channel_grp[dataset_name]
+                channel_grp.create_dataset(dataset_name, data=frame_stack)
 
-    def extract_dat_file(self, h5_datasets, h5_datasets_buffer, curve_num: int, direction: int, chan_name: str):
+    def extract_dat_file(self, h5_datasets, h5_datasets_buffer, curve_num: int, direction: int, channel_name: str):
         """
         Extract the data from a .dat file in the JPK QI archive.
 
@@ -962,19 +965,19 @@ class JPKQILoader:
             The curve number associated with the .dat file, parsed from the filename.
         direction : int
             The segment direction (0 or 1) associated with the .dat file, parsed from the filename.
-        chan_name : str
+        channel_name : str
             The channel name associated with the .dat file, parsed from the filename.
         """
-        if chan_name in self.channel_scaling:
+        if channel_name in self.channel_scaling:
             # Get data structures for this channel and segment
-            scale = self.channel_scaling[chan_name]
-            dat_path = f"index/{curve_num}/segments/{direction}/channels/{chan_name}.dat"
-            data_set = h5_datasets[f"Segment_{direction}"][chan_name]["Data"]
-            indices_set = h5_datasets[f"Segment_{direction}"][chan_name]["Indices"]
+            scale = self.channel_scaling[channel_name]
+            dat_path = f"index/{curve_num}/segments/{direction}/channels/{channel_name}.dat"
+            data_set = h5_datasets[f"Segment_{direction}"][channel_name]["Data"]
+            indices_set = h5_datasets[f"Segment_{direction}"][channel_name]["Indices"]
             data_size = data_set.shape[0]
-            buf = h5_datasets_buffer[f"Segment_{direction}"][chan_name]
-            filled_size = self.points_for_channel_segment[direction][chan_name]
-            start_offset = self.current_offsets[direction][chan_name]
+            buf = h5_datasets_buffer[f"Segment_{direction}"][channel_name]
+            filled_size = self.points_for_channel_segment[direction][channel_name]
+            start_offset = self.current_offsets[direction][channel_name]
 
             try:
                 with self.qi_archive.open(dat_path) as f:
@@ -987,7 +990,7 @@ class JPKQILoader:
                     segment_array = (raw_array * scale["multiplier"]) + scale["offset"]
 
                     # Update the current offset so it include the length of the data we have just read
-                    self.current_offsets[direction][chan_name] += len(segment_array)
+                    self.current_offsets[direction][channel_name] += len(segment_array)
 
                     buf["Data"].append(segment_array)
                     if len(buf["Data"]) >= self.BUFFER_SIZE or curve_num == self.num_of_curves - 1:
@@ -1000,18 +1003,18 @@ class JPKQILoader:
                         # Add the buffer to the dataset
                         data_set[filled_size:required_size] = buffered_data
                         # Update the filled size for this channel and segment
-                        self.points_for_channel_segment[direction][chan_name] = required_size
+                        self.points_for_channel_segment[direction][channel_name] = required_size
                         # Clear the buffer
                         buf["Data"].clear()
 
             except KeyError:
-                self.failed_curves.add((curve_num, direction, chan_name))
+                self.failed_curves.add((curve_num, direction, channel_name))
 
                 # Limit the number of warnings to avoid spamming the logs
                 if len(self.failed_curves) < 10:
                     logger.warning(
                         f"Data file {dat_path} not found in archive. Skipping data for curve {curve_num}, "
-                        f"direction {direction}, channel {chan_name}."
+                        f"direction {direction}, channel {channel_name}."
                     )
                 elif len(self.failed_curves) == 10:
                     logger.warning(
@@ -1035,10 +1038,10 @@ class JPKQILoader:
 
         else:
             # Log if curve failed
-            self.failed_curves.add((curve_num, direction, chan_name))
+            self.failed_curves.add((curve_num, direction, channel_name))
             if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
                 logger.warning(
-                    f"Channel {chan_name} not found in scaling information. Skipping data for curve {curve_num}, "
+                    f"Channel {channel_name} not found in scaling information. Skipping data for curve {curve_num}, "
                     f"direction {direction}."
                 )
 
@@ -1221,21 +1224,6 @@ class JPKQILoader:
                 )
                 h5_datasets_buffer[seg_name][chan["name"]] = {"Data": [], "Indices": []}
         return global_meta_group, h5_datasets, h5_meta_datasets, h5_datasets_buffer, h5_meta_datasets_buffer
-
-    def get_saving_context(self):
-        """
-        Return the appropriate context manager for saving the data based on the save_as_h5 attribute.
-
-        If save_as_h5 is True, it returns a context manager for an h5 file. Otherwise, it returns a null context.
-
-        Returns
-        -------
-        contextlib.AbstractContextManager
-            The context manager for saving the data.
-        """
-        if self.save_as_h5:
-            return h5py.File(self.h5_path, "a")
-        return nullcontext()
 
     def parse_dimension_data(self):
         """Parse dimension data and calculate the pixel to nanometer scaling factor."""
