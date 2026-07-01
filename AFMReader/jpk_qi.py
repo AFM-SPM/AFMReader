@@ -255,10 +255,13 @@ class CurvesJPKVolume(CurvesVolume):
         return curve_data
 
 
-# TODO make the variable names for this function more descriptive
-def _get_channel_scaling(props, channel_index):
+def _get_channel_scaling(props: dict, channel_index: str) -> tuple[float, float, str]:
     """
     Parse the JPK properties dictionary to find cumulative multiplier and offset for a specific channel index.
+
+    The idea is that we should keep multiplying the multipliers and adding the offsets as we go through the
+    conversion chain, storing the current step or slot in conversion_slot, and keeping going until there is
+    no longer a pointer to the next conversion step, meaning we have reached the final scaling for the channel.
 
     Parameters
     ----------
@@ -278,41 +281,43 @@ def _get_channel_scaling(props, channel_index):
     """
     prefix = f"lcd-info.{channel_index}."
 
-    # The current slot is a running reference to where we are on the steps of converting from raw to the final units
-    current_slot = props.get(f"{prefix}conversion-set.conversions.default")
+    # This tracks each conversion step from the raw encoded values to the final calibrated units.
+    #
+    #
+    conversion_slot = props.get(f"{prefix}conversion-set.conversions.default")
 
-    if not current_slot:
-        mult = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
-        off = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
+    if not conversion_slot:
+        encoder_multiplier = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
+        encoder_offset = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
         unit = props.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
-        return mult, off, unit
+        return encoder_multiplier, encoder_offset, unit
 
     cumulative_multiplier = 1.0
     cumulative_offset = 0.0
-    unit = props.get(f"{prefix}conversion-set.conversion.{current_slot}.scaling.unit.unit")
+    unit = props.get(f"{prefix}conversion-set.conversion.{conversion_slot}.scaling.unit.unit")
 
-    while current_slot:
-        slot_prefix = f"{prefix}conversion-set.conversion.{current_slot}."
+    while conversion_slot:
+        conversion_prefix = f"{prefix}conversion-set.conversion.{conversion_slot}."
 
-        if f"{slot_prefix}scaling.multiplier" in props:
-            m = float(props[f"{slot_prefix}scaling.multiplier"])
-            c = float(props[f"{slot_prefix}scaling.offset"])
+        if f"{conversion_prefix}scaling.multiplier" in props:
+            scaling_multiplier = float(props[f"{conversion_prefix}scaling.multiplier"])
+            scaling_offset = float(props[f"{conversion_prefix}scaling.offset"])
 
-            cumulative_offset = (cumulative_multiplier * c) + cumulative_offset
-            cumulative_multiplier *= m
+            cumulative_offset = (cumulative_multiplier * scaling_offset) + cumulative_offset
+            cumulative_multiplier *= scaling_multiplier
 
-            current_slot = props.get(f"{slot_prefix}base-calibration-slot")
+            conversion_slot = props.get(f"{conversion_prefix}base-calibration-slot")
 
-            if current_slot == props.get(f"{prefix}conversion-set.conversions.base"):
+            if conversion_slot == props.get(f"{prefix}conversion-set.conversions.base"):
                 break
         else:
             break
 
-    enc_m = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
-    enc_c = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
+    encoder_multiplier = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
+    encoder_offset = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
 
-    final_multiplier = cumulative_multiplier * enc_m
-    final_offset = (cumulative_multiplier * enc_c) + cumulative_offset
+    final_multiplier = cumulative_multiplier * encoder_multiplier
+    final_offset = (cumulative_multiplier * encoder_offset) + cumulative_offset
     if not unit:
         unit = props.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
 
