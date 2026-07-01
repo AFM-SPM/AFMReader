@@ -73,7 +73,7 @@ def mmap_path_read_only(path: Any) -> mmap.mmap:
     mmap.mmap
         The memory map of the file.
     """
-    with open(path, mode="rb", buffering=0) as file:
+    with Path(path).open(mode="rb", buffering=0) as file:
         return mmap.mmap(file.fileno(), length=0, access=mmap.ACCESS_READ)
 
 
@@ -331,7 +331,7 @@ class ARDFVolumeTableOfContents:
         assert stride == 40, stride
         assert size - 32 == nentries * stride, (size, nentries, stride)
         lines, pointers = [], []
-        for i, toc_offset in enumerate(range(header.offset + 32, header.offset + size, stride)):
+        for _i, toc_offset in enumerate(range(header.offset + 32, header.offset + size, stride)):
             entry_header = ARDFHeader.unpack(data, toc_offset)
             if not entry_header.crc:
                 # scan was interrupted, and vtoc is zero-filled
@@ -742,7 +742,7 @@ class ARDFFFMReader:
             vchns=vchns,
         )
 
-    def get_curve(self, r: int, c: int) -> dict[str, dict[str, np.ndarray]]:
+    def get_curve(self, r: int, c: int, reverse_curve_points: bool = False) -> dict[str, dict[str, np.ndarray]]:
         """
         Efficiently get a specific curve from disk.
 
@@ -752,6 +752,8 @@ class ARDFFFMReader:
             The row index.
         c : int
             The column index.
+        reverse_curve_points : bool, optional
+            Whether to reverse the points in each curve segment.
 
         Returns
         -------
@@ -776,7 +778,10 @@ class ARDFFFMReader:
             curve_dict[chan_name] = {}
             for phase_idx, seg_name in enumerate(seg_keys):
                 # Map channel and segment name to its respective slice
-                curve_dict[chan_name][seg_name] = reshaped[idx, phase_idx]
+                if reverse_curve_points and chan_name == "Raw":
+                    curve_dict[chan_name][seg_name] = reshaped[idx, phase_idx][::-1]
+                else:
+                    curve_dict[chan_name][seg_name] = reshaped[idx, phase_idx]
 
         return curve_dict
 
@@ -1047,6 +1052,25 @@ class ARDFVolume(CurvesVolume):
     A volume section in an ARDF file.
 
     Represents a full force volume containing multiple force curves.
+
+    Parameters
+    ----------
+    name : str
+        The name of the volume.
+    shape_x : int
+        The number of columns in the image.
+    shape_y : int
+        The number of rows in the image.
+    reader : ARDFForceMapReader | ARDFFFMReader
+        The reader used to load curve data.
+    channel_units : dict[str, str]
+        A dictionary mapping channel names to their units.
+    step_info : StepInfo
+        Step size and unit information for each axis.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
+    reverse_curve_points : bool, optional
+        Whether to reverse the points in each curve segment. Default is True.
     """
 
     volm_offset: int
@@ -1065,14 +1089,34 @@ class ARDFVolume(CurvesVolume):
         channel_units: dict[str, str],
         step_info: StepInfo,
         flip_image: bool = True,
+        reverse_curve_points: bool = True,
     ):
+        """
+        Initialise ARDFVolume.
+
+        Parameters
+        ----------
+        name : str
+            The name of the volume.
+        shape_x : int
+            The number of columns in the image.
+        shape_y : int
+            The number of rows in the image.
+        reader : ARDFForceMapReader | ARDFFFMReader
+            The reader used to load curve data.
+        channel_units : dict[str, str]
+            A dictionary mapping channel names to their units.
+        step_info : StepInfo
+            Step size and unit information for each axis.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is True.
+        reverse_curve_points : bool, optional
+            Whether to reverse the points in each curve segment. Default is True.
+        """
         super().__init__(
-            name=name,
-            shape_x=shape_x,
-            shape_y=shape_y,
-            channel_units=channel_units,
-            flip_image=flip_image,
+            name=name, shape_x=shape_x, shape_y=shape_y, channel_units=channel_units, flip_image=flip_image
         )
+        self.reverse_curve_points = reverse_curve_points
         self.step_info = step_info
         self._reader = reader
 
@@ -1098,7 +1142,7 @@ class ARDFVolume(CurvesVolume):
             flip_image = self.flip_image
         if flip_image:
             y = self.shape_y - 1 - y
-        return self._reader.get_curve(y, x)
+        return self._reader.get_curve(y, x, reverse_curve_points=self.reverse_curve_points)
 
     def iter_indices(self) -> Iterable[Index]:
         """
@@ -1171,7 +1215,7 @@ def parse_volm(volm_header: ARDFHeader, flip_image: bool = True) -> ARDFVolume:
     offset = vdef_header.offset + vdef_header.size
     channels: ChanMap = {}
     vchn_list: list[ARDFVchan] = []
-    for i in range(5):
+    for _i in range(5):
         header = ARDFHeader.unpack(data, offset)
         if header.name != b"VCHN":
             break
@@ -1193,6 +1237,7 @@ def parse_volm(volm_header: ARDFHeader, flip_image: bool = True) -> ARDFVolume:
     mlov_header.validate()
 
     channel_units = {channel_name: channel.unit for channel_name, (i, channel) in channels.items()}
+    logger.debug(f"Channel units: {channel_units}")
 
     # Check if each offset is regularly spaced
     # optimize for LARGE regular case (FMaps are SMALL)
@@ -1221,15 +1266,37 @@ def parse_volm(volm_header: ARDFHeader, flip_image: bool = True) -> ARDFVolume:
         channel_units=channel_units,
         step_info=((x_step, x_unit), (y_step, y_unit), (t_step, t_unit)),
         flip_image=flip_image,
+        reverse_curve_points=True,
     )
 
 
 class ARDFReader:
     """
     A reader for ARDF files.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        The path to the ARDF file.
+    channel : str | None, optional
+        The channel to load by default.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
     """
 
     def __init__(self, filepath: str | Path, channel: str | None = None, flip_image: bool = True):
+        """
+        Initialise ARDFReader.
+
+        Parameters
+        ----------
+        filepath : str | Path
+            The path to the ARDF file.
+        channel : str | None, optional
+            The channel to load by default.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is True.
+        """
         self.filepath = Path(filepath)
         self.channel = channel
         self.flip_image = flip_image
@@ -1275,9 +1342,9 @@ class ARDFReader:
 
         h5_saver = H5Saver(self.h5_path)
 
-        with h5_saver.create_file():
+        with h5_saver.create_file(source=self.filepath.suffix):
             # Save metadata
-            h5_saver.setup_curves_group()
+            h5_saver.setup_curves_group(channel_units=next(iter(self.volumes.values())).channel_units)
             size_x_m = self.size_x / NANOMETER_UNIT_CONVERSION
             size_y_m = self.size_y / NANOMETER_UNIT_CONVERSION
             h5_saver.save_global_meta(
@@ -1287,6 +1354,7 @@ class ARDFReader:
             # Save volumes
             for volume_name, ardf_volume in self.volumes.items():
                 h5_saver.setup_volume(ardf_volume)
+                logger.debug(f"Volume channel units before saving: {ardf_volume.channel_units}")
                 for curve_idx, curve in enumerate(
                     tqdm(
                         ardf_volume.iter_curves(flip_image=False),
@@ -1297,6 +1365,7 @@ class ARDFReader:
                     h5_saver.save_curve(curve, curve_idx, ardf_volume.shape_x * ardf_volume.shape_y, volume_name)
 
                 h5_saver.complete_saving(ardf_volume)
+                logger.debug(f"Channel units after saving: {ardf_volume.channel_units}")
 
             # Save images
             for idx, (image_name, ardf_image) in enumerate(self.images.items()):
@@ -1370,14 +1439,12 @@ class ARDFReader:
         if self.flip_image:
             image = np.flipud(image)
 
-        afm_load = AFMLoad(
+        return AFMLoad(
             image=image,
             px2nm=self.px2nm,
             z_units=z_units,
             curves_dataset=curves_dataset,
         )
-
-        return afm_load
 
     def get_available_channels(self) -> list[str]:
         """

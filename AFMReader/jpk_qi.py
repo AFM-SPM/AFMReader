@@ -598,7 +598,7 @@ class JPKQILoader:
         self.h5_path = find_unused_filename(self.filepath)
 
         h5_saver = H5Saver(self.h5_path)
-        with h5_saver.create_file() as file:
+        with h5_saver.create_file(source=self.filepath.suffix) as file:
 
             # Sample curves in dataset to make a best guess for the meta keys
             self.changing_curve_keys, self.changing_segment_keys = self.get_changing_keys(h5_saver)

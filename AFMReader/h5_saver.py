@@ -86,9 +86,14 @@ class H5Saver:
         # Number of curves to hold in buffer
         self.BUFFER_SIZE = 500
 
-    def create_file(self) -> h5py.File:
+    def create_file(self, source: str | None = None) -> h5py.File:
         """
         Create the h5 file and write initial global attributes.
+
+        Parameters
+        ----------
+        source : str | None
+            The source type of the data (the original file type if converting).
 
         Returns
         -------
@@ -100,9 +105,18 @@ class H5Saver:
         self.h5file.attrs["AFMReader_version"] = __version__
         self.h5file.attrs["created_by"] = "AFMReader"
         self.h5file.attrs["created_on"] = datetime.now().isoformat()
+        self.h5file.attrs["source_type"] = source if source is not None else "new"
         return self.h5file
 
-    def setup_curves_group(self):
+    def setup_curves_group(self, channel_units: dict[str, str] | None = None):
+        """
+        Set up the HDF5 groups used to store curve data.
+
+        Parameters
+        ----------
+        channel_units : dict[str, str] | None, optional
+            A dictionary mapping channel names to their units.
+        """
         assert (
             self.h5file is not None
         ), "existing h5 file must be passed or create_file called before setup_curves_group"
@@ -111,6 +125,10 @@ class H5Saver:
 
         # Establish empty groups for global metadata
         self.global_meta_group = self.curve_data_group.require_group("Global_Metadata")
+
+        if channel_units is not None:
+            for channel_name, unit in channel_units.items():
+                self.global_meta_group.attrs[f"channel.unit.{channel_name}"] = unit
 
     def setup_curve_metadata_structure(self, changing_curve_keys: set, changing_segment_keys: set, num_of_curves: int):
         """
@@ -616,6 +634,16 @@ def make_num_min_characters(num: int, min_chars: int = 3):
 def find_unused_filename(original_path: Path) -> Path:
     """
     Find an unused filename by appending a number to the base name.
+
+    Parameters
+    ----------
+    original_path : Path
+        The original file path used to derive the HDF5 file name.
+
+    Returns
+    -------
+    Path
+        An unused HDF5 file path.
     """
     # Determine the path for the H5 file, ensuring it does not overwrite an existing file
     h5_path = original_path.parent / f"{original_path.stem}.h5-jpk"

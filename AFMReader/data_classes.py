@@ -122,9 +122,19 @@ class CurvesVolume:
         A dictionary mapping channel names to their units.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
+    reverse_curve_points : bool, optional
+        Whether to reverse the points in each curve segment. Default is False.
     """
 
-    def __init__(self, name: str, shape_x: int, shape_y: int, channel_units: dict[str, str], flip_image: bool = True):
+    def __init__(
+        self,
+        name: str,
+        shape_x: int,
+        shape_y: int,
+        channel_units: dict[str, str],
+        flip_image: bool = True,
+        reverse_curve_points: bool = False,
+    ):
         """
         Initialise CurvesVolume.
 
@@ -140,6 +150,8 @@ class CurvesVolume:
             A dictionary mapping channel names to their units.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
+        reverse_curve_points : bool, optional
+            Whether to reverse the points in each curve segment. Default is False.
         """
         self.shape_x = shape_x
         self.shape_y = shape_y
@@ -147,6 +159,7 @@ class CurvesVolume:
         self.flip_image = flip_image
         self.name = name
         self.channel_units = channel_units
+        self.reverse_curve_points = reverse_curve_points
 
         # Store analysis results in a dict, with the values being numpy arrays of the results for each pixel.
         self.analysis_results: dict[str, np.ndarray] = {}
