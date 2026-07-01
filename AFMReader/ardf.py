@@ -1167,6 +1167,53 @@ class ARDFVolume(CurvesVolume):
         return self.iter_curves()
 
 
+class ARDFDataset(CurvesDataset):
+    """
+    A dataset containing multiple ARDF volumes.
+
+    Parameters
+    ----------
+    volumes : dict[str, ARDFVolume]
+        A dictionary of ARDFVolume instances keyed by their names.
+    metadata : CurvesMetadata
+        Metadata associated with the dataset.
+    mmap_file : mmap.mmap
+        The memory map backing the ARDF data.
+    default_volume_name : str | None
+        The name of the default volume to use when accessing curve data.
+    """
+
+    def __init__(
+        self,
+        volumes: dict[str, ARDFVolume],
+        metadata: CurvesMetadata,
+        mmap_file: mmap.mmap,
+        default_volume_name: str | None = None,
+    ):
+        """
+        Initialise ARDFDataset.
+
+        Parameters
+        ----------
+        volumes : dict[str, ARDFVolume]
+            A dictionary of ARDFVolume instances keyed by their names.
+        metadata : CurvesMetadata
+            Metadata associated with the dataset.
+        mmap_file : mmap.mmap
+            The memory map backing the ARDF data.
+        default_volume_name : str | None
+            The name of the default volume to use when accessing curve data.
+        """
+        super().__init__(volumes=volumes, metadata=metadata, default_volume_name=default_volume_name)
+        self.mmap_file = mmap_file
+
+    def close(self):
+        """Close the underlying ARDF memory map to free resources."""
+        if self.mmap_file is not None:
+            self.mmap_file.close()
+            self.mmap_file = None
+
+
 def parse_volm(volm_header: ARDFHeader, flip_image: bool = True) -> ARDFVolume:
     """
     Parse a volume section from its header.
@@ -1300,13 +1347,13 @@ class ARDFReader:
         self.filepath = Path(filepath)
         self.channel = channel
         self.flip_image = flip_image
-        mmap = mmap_path_read_only(filepath)
-        file_header = self.check_type(mmap)
-        ftoc_header = ARDFHeader.unpack(mmap, offset=file_header.size)
+        self.mmap_file = mmap_path_read_only(filepath)
+        file_header = self.check_type(self.mmap_file)
+        ftoc_header = ARDFHeader.unpack(self.mmap_file, offset=file_header.size)
         if ftoc_header.name != b"FTOC":
             raise ValueError("Malformed ARDF file table of contents.", ftoc_header)
         ftoc = ARDFTableOfContents.unpack(ftoc_header)
-        ttoc_header = ARDFHeader.unpack(mmap, offset=ftoc.offset + ftoc.size)
+        ttoc_header = ARDFHeader.unpack(self.mmap_file, offset=ftoc.offset + ftoc.size)
         ttoc = ARDFTextTableOfContents.unpack(ttoc_header)
         assert len(ttoc.entries) == 1
         self.metadata = parse_ar_note(ttoc.decode_entry(0).splitlines())
@@ -1314,7 +1361,7 @@ class ARDFReader:
         self.volumes: dict[str, ARDFVolume] = {}
         for item, pointer in ftoc.entries:
             item.validate()
-            item = ARDFHeader.unpack(mmap, pointer)
+            item = ARDFHeader.unpack(self.mmap_file, pointer)
             if item.name == b"IMAG":
                 item = ARDFImage.parse_imag(item)
                 self.images[item.name] = item
@@ -1426,9 +1473,10 @@ class ARDFReader:
             self.shape_y,
             self.flip_image,
         )
-        curves_dataset = CurvesDataset(
+        curves_dataset = ARDFDataset(
             self.volumes,
             curves_metadata,
+            self.mmap_file,
             default_volume_name="Trace" if self.trace else "Retrace",
         )
         self.metadata["global.time_step"] = curves_dataset.get_default_volume().step_info[-1][0]
@@ -1456,6 +1504,12 @@ class ARDFReader:
             A list of channel names.
         """
         return list(self.images.keys())
+
+    def close(self):
+        """Close the underlying ARDF memory map to free resources."""
+        if self.mmap_file is not None:
+            self.mmap_file.close()
+            self.mmap_file = None
 
 
 def load_ardf(filepath: str | Path, channel: str, cached_data: dict) -> AFMLoad:

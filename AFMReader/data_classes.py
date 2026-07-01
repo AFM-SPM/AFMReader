@@ -370,6 +370,16 @@ class CurvesDataset:
         """
         return list(self.volumes.keys())
 
+    def close(self):
+        """
+        Close the dataset and release any resources.
+
+        This method should be called when the dataset is no longer needed to free up memory and release files.
+        """
+        raise NotImplementedError(
+            "This method should be implemented by subclasses to close the dataset and release resources."
+        )
+
 
 class AFMLoad:
     """
