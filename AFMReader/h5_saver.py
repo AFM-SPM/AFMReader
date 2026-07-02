@@ -191,6 +191,7 @@ class H5Saver:
         volume : CurvesVolume
             The CurvesVolume instance containing the curve data for each pixel.
         """
+        assert self.h5file is not None, "existing h5 file must be passed or create_file called before complete_saving"
         # Add the last index to the indices datasets to mark the end of the last curve
         for volume_name, segments in self.volume_datasets.items():
             for direction in range(2):
@@ -203,6 +204,7 @@ class H5Saver:
                     segments[seg_name][channel_name]["Data"].resize(
                         (self.volume_points_saved[volume_name][seg_name][channel_name],)
                     )
+        self.h5file.flush()
 
     def get_curves_sample(self, shape_x: int, shape_y: int, minimum_sample_size: int = 20):
         """
