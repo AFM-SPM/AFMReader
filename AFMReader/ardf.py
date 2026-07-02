@@ -670,10 +670,17 @@ class ARDFFFMReader:
     trace: bool
     vtype: int
     vchns: list[ARDFVchan]
+    curve_height_offset: float = field(repr=False, default=0.0)
 
     @classmethod
     def parse(
-        cls, first_vset_header: ARDFHeader, points: int, lines: int, channels: Any, vchns: list[ARDFVchan]
+        cls,
+        first_vset_header: ARDFHeader,
+        points: int,
+        lines: int,
+        channels: Any,
+        vchns: list[ARDFVchan],
+        curve_height_offset: float = 0.0,
     ) -> "ARDFFFMReader":
         """
         Parse FFM metadata.
@@ -738,6 +745,7 @@ class ARDFFFMReader:
             trace=trace,
             vtype=first_vset.vtype,
             vchns=vchns,
+            curve_height_offset=curve_height_offset,
         )
 
     def get_curve(self, r: int, c: int, reverse_curve_points: bool = False) -> dict[str, dict[str, np.ndarray]]:
@@ -776,7 +784,7 @@ class ARDFFFMReader:
             for phase_idx, seg_name in enumerate(seg_keys):
                 # Map channel and segment name to its respective slice
                 if reverse_curve_points and chan_name == "Raw":
-                    curve_dict[chan_name][seg_name] = reshaped[idx, phase_idx]
+                    curve_dict[chan_name][seg_name] = self.curve_height_offset - reshaped[idx, phase_idx]
                 else:
                     curve_dict[chan_name][seg_name] = reshaped[idx, phase_idx]
 
@@ -1209,7 +1217,7 @@ class ARDFDataset(CurvesDataset):
             self.mmap_file = None
 
 
-def parse_volm(volm_header: ARDFHeader, flip_image: bool = True) -> ARDFVolume:
+def parse_volm(volm_header: ARDFHeader, flip_image: bool = True, curve_height_offset: float = 0.0) -> ARDFVolume:
     """
     Parse a volume section from its header.
 
@@ -1285,7 +1293,9 @@ def parse_volm(volm_header: ARDFHeader, flip_image: bool = True) -> ARDFVolume:
     # optimize for LARGE regular case (FMaps are SMALL)
     first_vset_header = ARDFHeader.unpack(data, vtoc.pointers[0])
     if complete and not np.any(np.diff(np.diff(vtoc.pointers))):
-        reader = ARDFFFMReader.parse(first_vset_header, points, lines, channels, vchn_list)
+        reader = ARDFFFMReader.parse(
+            first_vset_header, points, lines, channels, vchn_list, curve_height_offset=curve_height_offset
+        )
         name = "Trace" if reader.trace else "Retrace"
     else:
         first_vset = ARDFVset.unpack(first_vset_header)
@@ -1354,6 +1364,13 @@ class ARDFReader:
         self.metadata = parse_ar_note(ttoc.decode_entry(0).splitlines())
         self.images: dict[str, ARDFImage] = {}
         self.volumes: dict[str, ARDFVolume] = {}
+        TRIGGER_HEIGHT_KEYS = ["TriggerRawZSensor", "ForceDist"]
+        curve_height_offset = 0
+        for key in TRIGGER_HEIGHT_KEYS:
+            if key in self.metadata:
+                curve_height_offset = float(self.metadata[key])
+                break
+
         for item, pointer in ftoc.entries:
             item.validate()
             item = ARDFHeader.unpack(self.mmap_file, pointer)
@@ -1361,7 +1378,7 @@ class ARDFReader:
                 item = ARDFImage.parse_imag(item)
                 self.images[item.name] = item
             elif item.name == b"VOLM":
-                item = parse_volm(item, flip_image=self.flip_image)
+                item = parse_volm(item, flip_image=self.flip_image, curve_height_offset=curve_height_offset)
                 self.volumes[item.name] = item
             else:
                 raise RuntimeError(f"Unknown TOC entry {item.name}.", item)
