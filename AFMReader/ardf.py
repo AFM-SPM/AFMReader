@@ -544,17 +544,15 @@ class ARDFVdata:
         Returns
         -------
         np.ndarray
-            The parsed data array in nanometers.
+            The parsed data array in the unit reported by the ARDF channel metadata.
         """
         with memoryview(self.data) as v:  # assert data is open, and hold it open
-            x = np.ndarray(
+            return np.ndarray(
                 shape=self.nfloats,
                 dtype="<f4",
                 buffer=v,
                 offset=self.array_offset,
             ).astype("f4", copy=True)
-        x *= NANOMETER_UNIT_CONVERSION
-        return x
 
 
 @frozen
@@ -763,7 +761,6 @@ class ARDFFFMReader:
         with memoryview(self.data):  # assert data is open, and hold it open
             x = self.array_view[r, c, self.channels]  # advanced indexing copies
         x = x.astype("f4", copy=False)
-        x *= NANOMETER_UNIT_CONVERSION
         num_phases = 2 if (self.vtype & 0x2) else 1
         reshaped = x.reshape((len(self.channels), num_phases, -1))
 
@@ -779,7 +776,7 @@ class ARDFFFMReader:
             for phase_idx, seg_name in enumerate(seg_keys):
                 # Map channel and segment name to its respective slice
                 if reverse_curve_points and chan_name == "Raw":
-                    curve_dict[chan_name][seg_name] = reshaped[idx, phase_idx][::-1]
+                    curve_dict[chan_name][seg_name] = reshaped[idx, phase_idx]
                 else:
                     curve_dict[chan_name][seg_name] = reshaped[idx, phase_idx]
 
@@ -831,8 +828,6 @@ class ARDFFFMReader:
         with memoryview(self.data):  # assert data is open, and hold it open
             # advanced indexing triggers a copy
             loaded_data = self.array_view[:, :, self.channels, :]
-        # avoid a second copy with inplace op
-        loaded_data *= NANOMETER_UNIT_CONVERSION
         # reshape assuming equal points on extend and retract
         loaded_data = loaded_data.reshape(loaded_data.shape[:-1] + (2, -1))
         # make it look like z, d
