@@ -73,7 +73,7 @@ def load_topostats(file_path: Path | str, channel: str) -> AFMLoad:
         ) from exc
 
     # Analyses are stored to metadata - this might be a bit clunky and potentially should be stored to their own attr
-    return AFMLoad(image=image, px2nm=pixel_to_nanometre_scaling_factor, metadata=data)
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling_factor, metadata=data)
 
 
 def get_topostats_channels() -> list[str]:

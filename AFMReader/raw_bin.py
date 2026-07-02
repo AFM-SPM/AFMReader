@@ -90,7 +90,7 @@ def load_bin(
     pixel_to_nm_scaling_factor_x = size_x / shape_x if shape_x > 0 else 1.0
     pixel_to_nm_scaling_factor_y = size_y / shape_y if shape_y > 0 else 1.0
     px2nm = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
-    return AFMLoad(image=image, px2nm=px2nm)
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=px2nm)
 
 
 def get_bin_channels():

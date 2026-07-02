@@ -116,7 +116,7 @@ def load_gwy(file_path: Path | str, channel: str) -> AFMLoad:
         raise ValueError(f"'{channel}' not found in {file_path.suffix} channel list: {channel_ids}") from e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return AFMLoad(image=image, px2nm=px_to_nm)
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=px_to_nm)
 
 
 def gwy_read_object(open_file: BinaryIO, data_dict: dict) -> None:

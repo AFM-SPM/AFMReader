@@ -76,7 +76,7 @@ def test_load_jpk(
     file_path = RESOURCES / file_name
     afm_load = jpk.load_jpk(file_path, channel)
 
-    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
     assert isinstance(afm_load.image, np.ndarray)
     assert afm_load.image.shape == image_shape
     assert afm_load.image.dtype == image_dtype

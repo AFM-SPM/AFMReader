@@ -652,6 +652,8 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
 
         curves_data = CurvesDataset(volumes={"Trace": curves_volume}, metadata=curves_metadata)
 
-        return AFMLoad(image=image_stack, px2nm=px2nm, timestamps=timestamps, curves_dataset=curves_data)
+        return AFMLoad(
+            image=image_stack, pixel_to_nanometre_scaling=px2nm, timestamps=timestamps, curves_dataset=curves_data
+        )
 
-    return AFMLoad(image=image_stack, px2nm=px2nm, timestamps=timestamps)
+    return AFMLoad(image=image_stack, pixel_to_nanometre_scaling=px2nm, timestamps=timestamps)

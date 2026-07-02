@@ -286,7 +286,7 @@ def load_jpk(
         config_path=config_path,
         flip_image=flip_image,
     )
-    return AFMLoad(image=image, px2nm=px2nm)
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=px2nm)
 
 
 def _load_jpk(

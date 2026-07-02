@@ -23,7 +23,7 @@ def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_
     afm_load = asd.load_asd(file_path, channel)
 
     assert len(afm_load.image) == number_of_frames  # type: ignore
-    assert afm_load.px2nm == pixel_to_nm_scaling
+    assert afm_load.pixel_to_nanometre_scaling == pixel_to_nm_scaling
     assert isinstance(afm_load.metadata, dict)
 
 

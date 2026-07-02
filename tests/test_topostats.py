@@ -98,7 +98,7 @@ def test_load_topostats(
         assert afm_load.metadata[version_key] == float(version)
     else:
         assert afm_load.metadata[version_key] == version
-    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
     assert afm_load.image.shape == image_shape
     assert afm_load.image.sum() == pytest.approx(image_sum)
     if version > "0.2":

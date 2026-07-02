@@ -285,7 +285,7 @@ def load_asd(file_path: str | Path, channel: str) -> AFMLoad:
         frames = np.array(frames)
 
         logger.info(f"[{filename}] : Extracted image.")
-        return AFMLoad(image=frames, px2nm=pixel_to_nanometre_scaling_factor, metadata=header_dict)
+        return AFMLoad(image=frames, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling_factor, metadata=header_dict)
 
 
 def get_asd_channels(file_path: Path):

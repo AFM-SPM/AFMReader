@@ -536,7 +536,7 @@ class JPKQILoader:
         # Load the image
         self.image, _ = self.get_image()
 
-        return AFMLoad(image=self.image, px2nm=self.px2nm, curves_dataset=self.curves_dataset)
+        return AFMLoad(image=self.image, pixel_to_nanometre_scaling=self.px2nm, curves_dataset=self.curves_dataset)
 
     def output_summary(self):
         """Output a summary of the loading process, including any failed curve loads and their details."""

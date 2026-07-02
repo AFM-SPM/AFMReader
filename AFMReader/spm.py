@@ -112,7 +112,7 @@ def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
             raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {labels}") from e
         raise e
 
-    return AFMLoad(image=image, px2nm=spm_pixel_to_nm_scaling(filename, channel_data))
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=spm_pixel_to_nm_scaling(filename, channel_data))
 
 
 def get_spm_channels(file_path: Path | str) -> list:

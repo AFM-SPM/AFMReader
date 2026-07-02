@@ -279,8 +279,8 @@ class AFMLoad:
     ----------
     image : np.ndarray
         The image data.
-    px2nm : float
-        The pixel to nanometer scaling factor.
+    pixel_to_nanometre_scaling : float
+        The pixel to nanometre scaling factor.
     timestamps : dict | None, optional
         Timestamps associated with the data. Default is None.
     metadata : dict | None, optional
@@ -290,7 +290,7 @@ class AFMLoad:
     """
 
     image: np.ndarray
-    px2nm: float
+    pixel_to_nanometre_scaling: float
     timestamps: dict | None = None
     metadata: dict | None = None
     curves_dataset: CurvesDataset | None = None
@@ -298,7 +298,7 @@ class AFMLoad:
     def __init__(
         self,
         image: np.ndarray,
-        px2nm: float,
+        pixel_to_nanometre_scaling: float,
         timestamps: dict | None = None,
         metadata: dict | None = None,
         curves_dataset: CurvesDataset | None = None,
@@ -310,8 +310,8 @@ class AFMLoad:
         ----------
         image : np.ndarray
             The image data.
-        px2nm : float
-            The pixel to nanometer scaling factor.
+        pixel_to_nanometre_scaling : float
+            The pixel to nanometre scaling factor.
         timestamps : dict | None, optional
             Timestamps associated with the data. Default is None.
         metadata : dict | None, optional
@@ -320,7 +320,7 @@ class AFMLoad:
             Curves dataset associated with the data. Default is None.
         """
         self.image = image
-        self.px2nm = px2nm
+        self.pixel_to_nanometre_scaling = pixel_to_nanometre_scaling
         self.timestamps = timestamps
         self.metadata = metadata
         self.curves_dataset = curves_dataset

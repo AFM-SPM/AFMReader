@@ -36,7 +36,7 @@ def test_load_spm(
     file_path = RESOURCES / file_name
     afm_load = spm.load_spm(file_path, channel=channel)
 
-    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
     assert isinstance(afm_load.image, np.ndarray)
     assert afm_load.image.shape == image_shape
     assert afm_load.image.dtype == image_dtype

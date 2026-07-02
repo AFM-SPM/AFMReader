@@ -129,4 +129,4 @@ def load_ibw(file_path: Path | str, channel: str) -> AFMLoad:
         raise e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return AFMLoad(image=image, px2nm=_ibw_pixel_to_nm_scaling(scan))
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=_ibw_pixel_to_nm_scaling(scan))

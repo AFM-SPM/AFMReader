@@ -20,8 +20,8 @@ def test_load_gwy() -> None:
     assert isinstance(afm_load.image, np.ndarray)
     assert afm_load.image.shape == (512, 512)
     assert afm_load.image.sum() == pytest.approx(33836850.232917726)
-    assert isinstance(afm_load.px2nm, float)
-    assert afm_load.px2nm == pytest.approx(0.8468632812499975)
+    assert isinstance(afm_load.pixel_to_nanometre_scaling, float)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(0.8468632812499975)
 
 
 def test_gwy_read_object() -> None:
