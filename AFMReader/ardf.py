@@ -1599,4 +1599,5 @@ def save_ardf_to_h5(filepath: str | Path, cached_data: dict) -> Path:
     if "ardf_loader" not in cached_data:
         cached_data["ardf_loader"] = ARDFReader(filepath=filepath)
     cached_data["ardf_loader"].save_to_h5()
+    cached_data["ardf_loader"].close()
     return cached_data["ardf_loader"].h5_path
