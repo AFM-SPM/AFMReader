@@ -1,13 +1,18 @@
 """For reading and writing data from / to files."""
 
 import struct
+import re
+from importlib import resources
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 import h5py
 import numpy as np
 from loguru import logger
 from ruamel.yaml import YAML, YAMLError
+
+_INTEGER_RE = re.compile(r"^[+-]?(?:0|[1-9]\d*)$")
+_FLOAT_RE = re.compile(r"^[+-]?(?:(?:\d+\.\d*)|(?:\.\d+)|(?:\d+\.?\d*[eE][+-]?\d+))$")
 
 
 def read_uint8(open_file: BinaryIO) -> int:
@@ -25,6 +30,58 @@ def read_uint8(open_file: BinaryIO) -> int:
         Integer decoded value.
     """
     return int.from_bytes(open_file.read(1), byteorder="little")
+
+
+def coerce_metadata_value(value: Any) -> Any:
+    """
+    Convert text metadata values to scalar Python types where unambiguous.
+
+    Scientific notation is treated as a float, so values such as ``1e-9`` are
+    returned as ``1e-09`` rather than kept as strings.
+
+    Parameters
+    ----------
+    value : Any
+        Metadata value to convert.
+
+    Returns
+    -------
+    Any
+        Converted scalar value, or the original value when conversion is ambiguous.
+    """
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
+    if not isinstance(value, str):
+        return value.item() if isinstance(value, np.generic) else value
+
+    stripped_value = value.strip()
+    lower_value = stripped_value.lower()
+    if lower_value == "true":
+        return True
+    if lower_value == "false":
+        return False
+    if _INTEGER_RE.fullmatch(stripped_value):
+        return int(stripped_value)
+    if _FLOAT_RE.fullmatch(stripped_value):
+        return float(stripped_value)
+    return value
+
+
+def coerce_metadata_dict(metadata: dict[str, Any]) -> dict[str, Any]:
+    """
+    Convert all values in a metadata dictionary to scalar Python types where possible.
+
+    Parameters
+    ----------
+    metadata : dict[str, Any]
+        Metadata dictionary to convert.
+
+    Returns
+    -------
+    dict[str, Any]
+        Metadata dictionary with converted scalar values.
+    """
+    return {key: coerce_metadata_value(value) for key, value in metadata.items()}
 
 
 def read_int8(open_file: BinaryIO) -> int:
@@ -349,3 +406,26 @@ def read_yaml(filename: str | Path) -> dict:
         except YAMLError as exception:
             logger.error(exception)
             return {}
+
+
+def load_config(config_path: str | Path | None = None) -> dict:
+    """
+    Load an AFMReader YAML configuration file.
+
+    If no config path is supplied, the package default_config.yaml is loaded.
+
+    Parameters
+    ----------
+    config_path : str | Path | None
+        Optional path to a YAML configuration file.
+
+    Returns
+    -------
+    dict
+        Dictionary of the configuration file.
+    """
+    if config_path is None:
+        config_path = resources.files(__package__) / "default_config.yaml"  # type: ignore[assignment]
+    config = read_yaml(Path(config_path))  # type: ignore[arg-type]
+    logger.info(f"Configuration loaded from : {config_path}")
+    return config

@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 
 from AFMReader.logging import logger
+from AFMReader.io import coerce_metadata_value
 from AFMReader.data_classes import (
     AFMLoad,
     CurvesDataset,
@@ -490,8 +491,10 @@ class CurvesH5Metadata(CurvesMetadata):
     ----------
     curve_meta_group : h5py.Group
         The HDF5 group containing the curve metadata.
-    toplevel : dict[str, Any]
-        The top-level metadata dictionary.
+    all_global_metadata : dict[str, Any]
+        The dictionary containing all global metadata.
+    essential_global_metadata : dict[str, Any]
+        The dictionary containing essential global metadata.
     shape_x : int
         The number of columns in the image.
     shape_y : int
@@ -504,7 +507,8 @@ class CurvesH5Metadata(CurvesMetadata):
     def __init__(
         self,
         curve_meta_group: h5py.Group,
-        toplevel: dict[str, Any],
+        all_global_metadata: dict[str, Any],
+        essential_global_metadata: dict[str, Any],
         shape_x: int,
         shape_y: int,
         flip_image: bool = True,
@@ -516,8 +520,10 @@ class CurvesH5Metadata(CurvesMetadata):
         ----------
         curve_meta_group : h5py.Group
             The HDF5 group containing the curve metadata.
-        toplevel : dict[str, Any]
-            The top-level metadata dictionary.
+        all_global_metadata : dict[str, Any]
+            The dictionary containing all global metadata.
+        essential_global_metadata : dict[str, Any]
+            The dictionary containing essential global metadata.
         shape_x : int
             The number of columns in the image.
         shape_y : int
@@ -525,7 +531,7 @@ class CurvesH5Metadata(CurvesMetadata):
         flip_image : bool, optional
             Whether to flip the image vertically. Default is ``True``.
         """
-        super().__init__(toplevel, shape_x, shape_y, flip_image)
+        super().__init__(all_global_metadata, essential_global_metadata, shape_x, shape_y, flip_image)
         self.curve_meta_group = curve_meta_group
 
     def get_point_metadata(self, y: int, x: int, direction: int | None = None):
@@ -560,11 +566,7 @@ class CurvesH5Metadata(CurvesMetadata):
             if key.startswith(f"{'segment' if direction is not None else 'curve'}."):
                 new_key = key.split(".", 1)[1]
                 if isinstance(self.curve_meta_group[key], h5py.Dataset):
-                    meta_dict[new_key] = (
-                        self.curve_meta_group[key][idx].decode("utf-8")
-                        if isinstance(self.curve_meta_group[key][idx], bytes)
-                        else self.curve_meta_group[key][idx]
-                    )
+                    meta_dict[new_key] = coerce_metadata_value(self.curve_meta_group[key][idx])
                 else:
                     meta_dict[new_key] = self.curve_meta_group[key]
         return meta_dict
@@ -651,7 +653,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
     # Load HDF5 file
     with h5py.File(file_path, "r") as h5_file:
         logger.info(f"Opened HDF5 file structure: {list(h5_file.keys())}")
-        metadata = {key: h5_file.attrs[key] for key in h5_file.attrs}
+        metadata = {key: coerce_metadata_value(h5_file.attrs[key]) for key in h5_file.attrs}
 
         channel_group, measurement_group, dataset_name = _get_channel_info(h5_file, channel)
 
@@ -705,10 +707,15 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
         curve_data_group = h5file["Curve_Data"]
         channels_units = {}
         top_level_meta = {}
+        essential_global_metadata = {}
         for key, value in curve_data_group["Global_Metadata"].attrs.items():
-            if key.startswith("channel.unit."):
-                channels_units[key.split(".")[-1]] = value
-            top_level_meta[key] = value
+            value = coerce_metadata_value(value)
+            if key.startswith("essential."):
+                essential_global_metadata[key.split(".", 1)[-1]] = value
+            else:
+                if key.startswith("channel.unit."):
+                    channels_units[key.split(".")[-1]] = value
+                top_level_meta[key] = value
         volumes: dict[str, CurvesVolume] = {}
 
         for name, group in curve_data_group.items():
@@ -729,7 +736,8 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
             curve_meta_group = curve_data_group["Curve_Metadata"]
         curves_metadata = CurvesH5Metadata(
             curve_meta_group=curve_meta_group,
-            toplevel=top_level_meta,
+            all_global_metadata=top_level_meta,
+            essential_global_metadata=essential_global_metadata,
             shape_x=shape_x,
             shape_y=shape_y,
             flip_image=flip_image,

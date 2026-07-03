@@ -28,6 +28,7 @@ from typing import TypeAlias, Any
 from tqdm import tqdm
 from AFMReader.data_classes import AFMLoad, CurvesMetadata, CurvesVolume, CurvesDataset
 from AFMReader.h5_saver import H5Saver, find_unused_filename
+from AFMReader.io import coerce_metadata_dict, load_config
 from AFMReader.logging import logger
 
 try:
@@ -94,7 +95,7 @@ def decode_cstring(cstring: bytes) -> str:
     return cstring.rstrip(b"\0").decode("windows-1252")
 
 
-def parse_ar_note(note: Iterable[str]) -> dict[str, str]:
+def parse_ar_note(note: Iterable[str]) -> dict[str, Any]:
     """
     Parse keys and values from notes.
 
@@ -105,12 +106,12 @@ def parse_ar_note(note: Iterable[str]) -> dict[str, str]:
 
     Returns
     -------
-    dict[str, str]
+    dict[str, Any]
         A dictionary mapping keys to values.
     """
     # The notes have a very regular key-value structure
     # convert to dict for later access
-    return dict(line.split(":", 1) for line in note if ":" in line and "@Line:" not in line)
+    return coerce_metadata_dict(dict(line.split(":", 1) for line in note if ":" in line and "@Line:" not in line))
 
 
 @frozen
@@ -1336,7 +1337,13 @@ class ARDFReader:
         Whether to flip the image vertically. Default is True.
     """
 
-    def __init__(self, filepath: str | Path, channel: str | None = None, flip_image: bool = True):
+    def __init__(
+        self,
+        filepath: str | Path,
+        channel: str | None = None,
+        flip_image: bool = True,
+        config_path: Path | str | None = None,
+    ):
         """
         Initialise ARDFReader.
 
@@ -1352,6 +1359,7 @@ class ARDFReader:
         self.filepath = Path(filepath)
         self.channel = channel
         self.flip_image = flip_image
+        self.config_path = config_path
         self.mmap_file = mmap_path_read_only(filepath)
         file_header = self.check_type(self.mmap_file)
         ftoc_header = ARDFHeader.unpack(self.mmap_file, offset=file_header.size)
@@ -1362,6 +1370,7 @@ class ARDFReader:
         ttoc = ARDFTextTableOfContents.unpack(ttoc_header)
         assert len(ttoc.entries) == 1
         self.metadata = parse_ar_note(ttoc.decode_entry(0).splitlines())
+        self.essential_metadata = self.filter_essential_metadata(self.metadata)
         self.images: dict[str, ARDFImage] = {}
         self.volumes: dict[str, ARDFVolume] = {}
         TRIGGER_HEIGHT_KEYS = ["TriggerRawZSensor", "ForceDist"]
@@ -1390,6 +1399,29 @@ class ARDFReader:
             self.shape_x, self.shape_y = first_image.shape
         self.px2nm = self.size_x / self.shape_x
 
+    def filter_essential_metadata(self, raw_metadata: dict[str, Any]) -> dict[str, Any]:
+        """
+        Extract canonical essential metadata from raw global metadata.
+
+        Parameters
+        ----------
+        raw_metadata : dict[str, Any]
+            The raw global metadata dictionary to filter.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary keyed by canonical metadata names.
+        """
+        essential_key_options = load_config(self.config_path).get("ardf", {}).get("essential_metadata_keys", {})
+        filtered_metadata = {}
+        for target_name, source_keys in essential_key_options.items():
+            for source_key in source_keys:
+                if source_key in raw_metadata:
+                    filtered_metadata[target_name] = raw_metadata[source_key]
+                    break
+        return filtered_metadata
+
     def save_to_h5(self):
         """
         Save the ARDF data to an HDF5 file.
@@ -1407,7 +1439,11 @@ class ARDFReader:
             size_x_m = self.size_x / NANOMETER_UNIT_CONVERSION
             size_y_m = self.size_y / NANOMETER_UNIT_CONVERSION
             h5_saver.save_global_meta(
-                self.metadata, size_x=size_x_m, size_y=size_y_m, shape_x=self.shape_x, shape_y=self.shape_y
+                self.metadata | {f"essential.{key}": value for key, value in self.essential_metadata.items()},
+                size_x=size_x_m,
+                size_y=size_y_m,
+                shape_x=self.shape_x,
+                shape_y=self.shape_y,
             )
 
             # Save volumes
@@ -1479,8 +1515,12 @@ class ARDFReader:
             f"Loading ARDF file: {self.filepath}, channel: {self.channel}, trace: {self.trace}, flip_image: {self.flip_image}"
         )
         self.shape_x, self.shape_y = self.images[self.channel].shape
+        default_volume_name = "Trace" if self.trace else "Retrace"
+        self.metadata["global.time_step"] = self.volumes[default_volume_name].step_info[-1][0]
+        self.essential_metadata = self.filter_essential_metadata(self.metadata)
         curves_metadata = CurvesMetadata(
             self.metadata,
+            self.essential_metadata,
             self.shape_x,
             self.shape_y,
             self.flip_image,
@@ -1489,10 +1529,8 @@ class ARDFReader:
             self.volumes,
             curves_metadata,
             self.mmap_file,
-            default_volume_name="Trace" if self.trace else "Retrace",
+            default_volume_name=default_volume_name,
         )
-        self.metadata["global.time_step"] = curves_dataset.get_default_volume().step_info[-1][0]
-        curves_dataset.metadata.toplevel.update(self.metadata)
 
         image = self.images[self.channel].get_image()
         z_units = self.images[self.channel].units

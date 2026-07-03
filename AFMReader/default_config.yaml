@@ -13,3 +13,68 @@ jpk:
   grid_ilength: 32838
   grid_jlength: 32839
   slot_size: 48
+
+jpk_qi:
+  essential_metadata_keys:
+    z_velocity:
+      - shared-data.force-segment-header-info.0.environment.feedback-mode.approach-feedback-settings.velocity
+      - main-header.quantitative-imaging-map.environment.feedback-mode.approach-feedback-settings.velocity
+    trigger_setpoint:
+      - shared-data.force-segment-header-info.0.settings.segment-settings.setpoint
+      - main-header.quantitative-imaging-map.settings.force-settings.extend.setpoint
+      - main-header.quantitative-imaging-map.settings.force-settings.relative-setpoint
+    trigger_channel:
+      - shared-data.force-segment-header-info.0.environment.feedback-mode.setpoint-feedback-settings.feedback-channel.name
+      - main-header.quantitative-imaging-map.environment.feedback-mode.setpoint-feedback-settings.feedback-channel.name
+    extend_duration:
+      - shared-data.force-segment-header-info.0.settings.segment-settings.duration
+      - main-header.quantitative-imaging-map.settings.force-settings.extend.duration
+    extend_num_points:
+      - shared-data.force-segment-header-info.0.settings.segment-settings.num-points
+      - main-header.quantitative-imaging-map.settings.force-settings.extend.num-points
+    retract_duration:
+      - shared-data.force-segment-header-info.1.settings.segment-settings.duration
+      - main-header.quantitative-imaging-map.settings.force-settings.retract.duration
+    retract_num_points:
+      - shared-data.force-segment-header-info.1.settings.segment-settings.num-points
+      - main-header.quantitative-imaging-map.settings.force-settings.retract.num-points
+    deflection_inverse_ols:
+      - shared-data.lcd-info.1.conversion-set.conversion.distance.scaling.multiplier
+    cantilever_spring_constant:
+      - shared-data.lcd-info.1.conversion-set.conversion.force.scaling.multiplier
+
+ardf:
+  essential_metadata_keys:
+    z_velocity:
+      - ApproachVelocity
+      - Velocity
+      - RetractVelocity
+    cantilever_spring_constant:
+      - SpringConstant
+      - DisplaySpringConstant
+    deflection_inverse_ols:
+      - InvOLS
+      - DelfInvOLS
+    scan_rate:
+      - ScanRate
+      - ForceScanRate
+      - ApproachScanRate
+      - FastMapScanRate
+    trigger_force:
+      - TriggerForce
+      - FastMapSetpointNewtons
+      - DeflectionSetpointNewtons
+    trigger_deflection:
+      - TriggerDeflection
+      - TriggerDeflVolts
+    trigger_channel:
+      - TriggerChannel
+    x_scan_size:
+      - ScanSize
+      - FastScanSize
+    scan_points:
+      - FastMapScanPoints
+      - FMapScanPoints
+    scan_lines:
+      - FastMapScanLines
+      - FMapScanLines

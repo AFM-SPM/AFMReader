@@ -21,8 +21,10 @@ class CurvesMetadata:
 
     Parameters
     ----------
-    toplevel : dict
-        A dictionary containing the top-level metadata for the dataset.
+    all_global_metadata : dict
+        A dictionary containing all global metadata for the dataset.
+    essential_global_metadata : dict
+        A dictionary containing essential global metadata for the dataset.
     shape_x : int
         The number of columns in the image.
     shape_y : int
@@ -31,14 +33,23 @@ class CurvesMetadata:
         Whether to flip the image vertically. Default is True.
     """
 
-    def __init__(self, toplevel: dict, shape_x: int, shape_y: int, flip_image: bool = True):
+    def __init__(
+        self,
+        all_global_metadata: dict,
+        essential_global_metadata: dict,
+        shape_x: int,
+        shape_y: int,
+        flip_image: bool = True,
+    ):
         """
         Initialise CurvesMetadata.
 
         Parameters
         ----------
-        toplevel : dict
-            A dictionary containing the top-level metadata for the dataset.
+        all_global_metadata : dict
+            A dictionary containing all global metadata for the dataset.
+        essential_global_metadata : dict
+            A dictionary containing essential global metadata for the dataset.
         shape_x : int
             The number of columns in the image.
         shape_y : int
@@ -46,7 +57,8 @@ class CurvesMetadata:
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
         """
-        self.toplevel = toplevel
+        self.all_global_metadata = all_global_metadata
+        self.essential_global_metadata = essential_global_metadata
         self.shape_x = shape_x
         self.shape_y = shape_y
         self.flip_image = flip_image

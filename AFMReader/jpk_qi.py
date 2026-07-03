@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 from AFMReader.data_classes import AFMLoad, CurvesMetadata, CurvesVolume, CurvesDataset
 from AFMReader.h5_saver import H5Saver, find_unused_filename
+from AFMReader.io import coerce_metadata_dict, coerce_metadata_value, load_config
 from AFMReader.logging import logger
 from AFMReader import jpk
 
@@ -69,8 +70,10 @@ class CurvesJPKMetadata(CurvesMetadata):
 
     Parameters
     ----------
-    toplevel : dict
-        A dictionary containing the top-level metadata for the dataset.
+    all_global_metadata : dict
+        A dictionary containing all global metadata for the dataset.
+    essential_global_metadata : dict
+        A dictionary containing essential global metadata for the dataset.
     archive : zipfile.ZipFile
         The ZIP archive containing the JPK data.
     shape_x : int
@@ -83,7 +86,8 @@ class CurvesJPKMetadata(CurvesMetadata):
 
     def __init__(
         self,
-        toplevel: dict,
+        all_global_metadata: dict,
+        essential_global_metadata: dict,
         archive: zipfile.ZipFile,
         shape_x: int,
         shape_y: int,
@@ -94,8 +98,10 @@ class CurvesJPKMetadata(CurvesMetadata):
 
         Parameters
         ----------
-        toplevel : dict
-            A dictionary containing the top-level metadata for the dataset.
+        all_global_metadata : dict
+            A dictionary containing all global metadata for the dataset.
+        essential_global_metadata : dict
+            A dictionary containing essential global metadata for the dataset.
         archive : zipfile.ZipFile
             The ZIP archive containing the JPK data.
         shape_x : int
@@ -105,7 +111,7 @@ class CurvesJPKMetadata(CurvesMetadata):
         flip_image : bool, optional
             Whether to flip the image vertically. Default is ``True``.
         """
-        super().__init__(toplevel, shape_x, shape_y, flip_image)
+        super().__init__(all_global_metadata, essential_global_metadata, shape_x, shape_y, flip_image)
         self.archive = archive
 
     def get_point_metadata(self, y: int, x: int, direction: int | None = None):
@@ -138,7 +144,9 @@ class CurvesJPKMetadata(CurvesMetadata):
 
         try:
             with self.archive.open(path) as f:
-                meta_dict = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                meta_dict = coerce_metadata_dict(
+                    {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                )
         except KeyError:
             meta_dict = {}
 
@@ -411,6 +419,7 @@ class JPKQILoader:
         self.extract_global_metadata()
 
         self.parse_dimension_data()
+        self.essential_metadata = self.filter_essential_metadata(self.top_level_meta)
 
     def get_available_channels(self):
         """
@@ -480,6 +489,7 @@ class JPKQILoader:
         # all the data has been accessed and saved to H5 to prevent excessive memory usage
         self.full_metadata = CurvesJPKMetadata(
             self.top_level_meta,
+            self.essential_metadata,
             self.qi_archive,
             self.shape_x or 0,
             self.shape_y or 0,
@@ -661,7 +671,9 @@ class JPKQILoader:
                     meta_path = f"index/{curve_num}/segments/{direction}/segment-header.properties"
                     try:
                         with self.qi_archive.open(meta_path) as f:
-                            meta_dict = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                            meta_dict = coerce_metadata_dict(
+                                {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                            )
                             for k, v in meta_dict.items():
                                 if k not in segment_meta_dict:
                                     segment_meta_dict[k] = []
@@ -677,7 +689,9 @@ class JPKQILoader:
             while True:
                 try:
                     with self.qi_archive.open(meta_path) as f:
-                        meta_dict = {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                        meta_dict = coerce_metadata_dict(
+                            {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                        )
                         for k, v in meta_dict.items():
                             if k not in curve_meta_dict:
                                 curve_meta_dict[k] = []
@@ -718,6 +732,8 @@ class JPKQILoader:
             collated_meta[f"channel.unit.{seg_chan['name']}"] = seg_chan["unit"]
         for key, value in self.top_level_meta.items():
             collated_meta[key] = value
+        for key, value in self.essential_metadata.items():
+            collated_meta[f"essential.{key}"] = value
         return collated_meta
 
     def get_image(
@@ -904,7 +920,7 @@ class JPKQILoader:
             if start != -1:
                 start += len(search_term)
                 end = raw_bytes.find(b"\n", start)
-                value = raw_bytes[start:end].decode("utf-8").strip()
+                value = coerce_metadata_value(raw_bytes[start:end].decode("utf-8").strip())
             # Save a no data value if the search term is not found in the metadata file
             else:
                 value = "No data"
@@ -946,7 +962,7 @@ class JPKQILoader:
             if start != -1:
                 start += len(search_term)
                 end = raw_content.find(b"\n", start)
-                value = raw_content[start:end].decode("utf-8").strip()
+                value = coerce_metadata_value(raw_content[start:end].decode("utf-8").strip())
             else:
                 value = "No data"
             h5_saver.save_segment_meta_attr(
@@ -987,7 +1003,7 @@ class JPKQILoader:
         # Load the metadata from the global properties file
         if "header.properties" in self.list_of_all_paths:
             with self.qi_archive.open("header.properties") as archive_meta_file:
-                props = javaproperties.load(archive_meta_file)
+                props = coerce_metadata_dict(javaproperties.load(archive_meta_file))
 
                 # Add data from the main header to the top level metadata with a prefix to avoid key clashes
                 for key, value in props.items():
@@ -998,7 +1014,7 @@ class JPKQILoader:
         # Load the metadata from the shared header
         if "shared-data/header.properties" in self.list_of_all_paths:
             with self.qi_archive.open("shared-data/header.properties") as shared_data_file:
-                shared_meta = javaproperties.load(shared_data_file)
+                shared_meta = coerce_metadata_dict(javaproperties.load(shared_data_file))
                 channel_idx = 0
 
                 # Add all the data from the shared header to the top level metadata with a prefix to avoid key clashes
@@ -1028,6 +1044,29 @@ class JPKQILoader:
         self.channels_units = {seg_chan["name"]: seg_chan["unit"] for seg_chan in self.segment_channels}
         # Lookup map for binary scaling
         self.channel_scaling = {chan["name"]: chan for chan in self.segment_channels}
+
+    def filter_essential_metadata(self, raw_metadata: dict[str, Any]) -> dict[str, Any]:
+        """
+        Extract canonical essential metadata from raw global metadata.
+
+        Parameters
+        ----------
+        raw_metadata : dict
+            The raw metadata dictionary to filter.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary containing only the essential metadata keys.
+        """
+        essential_key_options = load_config(self.config_path).get("jpk_qi", {}).get("essential_metadata_keys", {})
+        filtered_metadata = {}
+        for target_name, source_keys in essential_key_options.items():
+            for source_key in source_keys:
+                if source_key in raw_metadata:
+                    filtered_metadata[target_name] = raw_metadata[source_key]
+                    break
+        return filtered_metadata
 
     def close(self):
         """Close the ZIP archive when done to free up system resources."""

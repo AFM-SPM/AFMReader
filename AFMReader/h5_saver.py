@@ -12,6 +12,7 @@ import numpy as np
 from AFMReader import __version__
 from AFMReader.logging import logger
 from AFMReader.data_classes import CurvesVolume
+from AFMReader.io import coerce_metadata_value
 
 
 class H5Saver:
@@ -475,7 +476,7 @@ class H5Saver:
         """
         return self.curve_search_terms
 
-    def save_curve_meta_attr(self, curve_num: int, attr_idx: int, value: str, num_of_curves: int) -> None:
+    def save_curve_meta_attr(self, curve_num: int, attr_idx: int, value: Any, num_of_curves: int) -> None:
         """
         Save a curve metadata attribute.
 
@@ -492,7 +493,7 @@ class H5Saver:
         """
         attr_name, meta_set, meta_buffer = self.curve_work[attr_idx]
         if meta_buffer is not None:
-            meta_buffer.append(value)
+            meta_buffer.append(str(value))
             if len(meta_buffer) >= self.BUFFER_SIZE or curve_num == num_of_curves - 1:
                 meta_set[curve_num - len(meta_buffer) + 1 : curve_num + 1] = meta_buffer
                 meta_buffer.clear()
@@ -503,7 +504,7 @@ class H5Saver:
             )
 
     def save_segment_meta_attr(
-        self, curve_num: int, direction: int, attr_idx: int, value: str, num_of_curves: int
+        self, curve_num: int, direction: int, attr_idx: int, value: Any, num_of_curves: int
     ) -> None:
         """
         Save a segment metadata attribute.
@@ -523,7 +524,7 @@ class H5Saver:
         """
         attr_name, meta_set, meta_buffer = self.seg_work[attr_idx]
         if meta_buffer is not None:
-            meta_buffer.append(value)
+            meta_buffer.append(str(value))
             if len(meta_buffer) >= self.BUFFER_SIZE or curve_num == num_of_curves - 1:
                 idx = curve_num * 2 + direction
                 meta_set[idx - len(meta_buffer) + 1 : idx + 1] = meta_buffer
@@ -554,7 +555,11 @@ class H5Saver:
         assert self.global_meta_group is not None, "setup_curve_data_structure must be called first"
         assert self.h5file is not None, "existing h5 file must be passed or create_file called before setup"
         for key, value in global_meta.items():
-            self.global_meta_group.attrs[key] = str(value).encode("utf-8")
+            value = coerce_metadata_value(value)
+            try:
+                self.global_meta_group.attrs[key] = value
+            except TypeError:
+                self.global_meta_group.attrs[key] = str(value)
 
         # Save data required for reading the h5 file as a normal image file
         meas_grp = self.h5file.require_group("Measurement_000")
