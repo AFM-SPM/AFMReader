@@ -1066,6 +1066,11 @@ class JPKQILoader:
                 if source_key in raw_metadata:
                     filtered_metadata[target_name] = raw_metadata[source_key]
                     break
+        if "read_sample_rate" not in filtered_metadata:
+            if "extend_num_points" in filtered_metadata and "extend_duration" in filtered_metadata:
+                filtered_metadata["read_sample_rate"] = (
+                    filtered_metadata["extend_num_points"] / filtered_metadata["extend_duration"]
+                )
         return filtered_metadata
 
     def close(self):

@@ -1370,7 +1370,6 @@ class ARDFReader:
         ttoc = ARDFTextTableOfContents.unpack(ttoc_header)
         assert len(ttoc.entries) == 1
         self.metadata = parse_ar_note(ttoc.decode_entry(0).splitlines())
-        self.essential_metadata = self.filter_essential_metadata(self.metadata)
         self.images: dict[str, ARDFImage] = {}
         self.volumes: dict[str, ARDFVolume] = {}
         TRIGGER_HEIGHT_KEYS = ["TriggerRawZSensor", "ForceDist"]
@@ -1391,6 +1390,8 @@ class ARDFReader:
                 self.volumes[item.name] = item
             else:
                 raise RuntimeError(f"Unknown TOC entry {item.name}.", item)
+
+        self.essential_metadata = self.filter_essential_metadata(self.metadata)
 
         self.size_x = float(self.metadata["FastScanSize"]) * NANOMETER_UNIT_CONVERSION
         self.size_y = float(self.metadata["SlowScanSize"]) * NANOMETER_UNIT_CONVERSION
@@ -1420,6 +1421,12 @@ class ARDFReader:
                 if source_key in raw_metadata:
                     filtered_metadata[target_name] = raw_metadata[source_key]
                     break
+        if "read_sample_rate" not in filtered_metadata:
+            if "global.time_step" in self.metadata:
+                filtered_metadata["read_sample_rate"] = 1.0 / float(self.metadata["global.time_step"])
+            else:
+                first_volume = next(iter(self.volumes.values()))
+                filtered_metadata["read_sample_rate"] = 1.0 / first_volume.step_info[-1][0]
         return filtered_metadata
 
     def save_to_h5(self):
