@@ -5,6 +5,8 @@ It extracts scan channels, reshapes image frames, applies scaling, and generates
 timestamps based on scan metadata.
 """
 
+import shutil
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -286,24 +288,6 @@ def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> d
     timestamps = np.arange(num_frames) * (image_size / line_rate)
     # Compose a dictionary of timestamsps
     return {f"frame {i}": timestamp for i, timestamp in enumerate(timestamps)}
-
-
-def get_h5jpk_channels(file_path: Path | str):
-    """
-    Get available channels from a .h5-jpk file.
-
-    Parameters
-    ----------
-    file_path : Path | str
-        Path to the .h5-jpk file.
-
-    Returns
-    -------
-    list
-        List of available channels.
-    """
-    with h5py.File(file_path, "r") as f:
-        return list(_available_channels(f))
 
 
 class CurvesH5Volume(CurvesVolume):
@@ -755,3 +739,120 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
         )
 
     return AFMLoad(image=image_stack, px2nm=px2nm, z_units=z_units, timestamps=timestamps, metadata=metadata)
+
+
+def get_h5jpk_channels(file_path: Path | str):
+    """
+    Get available channels from a .h5-jpk file.
+
+    Parameters
+    ----------
+    file_path : Path | str
+        Path to the .h5-jpk file.
+
+    Returns
+    -------
+    list
+        List of available channels.
+    """
+    with h5py.File(file_path, "r") as f:
+        return list(_available_channels(f))
+
+
+def copy_h5_file(src_path: Path | str | h5py.File, dest_path: Path | str | h5py.File, without: list[str] | None = None):
+    """
+    Copy an HDF5 file from source to destination.
+
+    Parameters
+    ----------
+    src_path : Path | str | h5py.File
+        Path to the source HDF5 file.
+    dest_path : Path | str | h5py.File
+        Path to the destination HDF5 file.
+    without : list[str], optional
+        List of HDF5 paths to exclude from copying. If None or empty, the entire file is copied.
+    """
+    if not without:
+        if isinstance(src_path, h5py.File):
+            src_path = src_path.filename
+        if isinstance(dest_path, h5py.File):
+            dest_path = dest_path.filename
+        shutil.copy2(src_path, dest_path)
+        return
+
+    with _h5_context(src_path, "r") as src_file, _h5_context(dest_path, "w") as dest_file:
+        _copy_h5_group(src_file, dest_file, _filter_without(without))
+
+
+def _h5_context(file: Path | str | h5py.File, mode: str):
+    """
+    Get a context manager for an HDF5 file without closing caller-owned files.
+
+    Parameters
+    ----------
+    file : Path | str | h5py.File
+        Path to an HDF5 file or an already-open HDF5 file.
+    mode : str
+        Mode to use when opening a path.
+
+    Returns
+    -------
+    contextlib.AbstractContextManager
+        A context manager that yields an open HDF5 file.
+    """
+    if isinstance(file, h5py.File):
+        return nullcontext(file)
+    return h5py.File(file, mode)
+
+
+def _copy_h5_group(src_group: h5py.File | h5py.Group, dest_group: h5py.File | h5py.Group, without: list[str]):
+    """
+    Recursively copy an HDF5 group while excluding selected child paths.
+
+    Parameters
+    ----------
+    src_group : h5py.File | h5py.Group
+        Source HDF5 file or group to copy from.
+    dest_group : h5py.File | h5py.Group
+        Destination HDF5 file or group to copy into.
+    without : list[str]
+        Normalised child paths to exclude from the copied group.
+    """
+    for key, item in src_group.items():
+        if key in without:
+            continue
+
+        if isinstance(item, h5py.Group):
+            child_without = [w.removeprefix(key + "/") for w in without if w.startswith(key + "/")]
+            if child_without:
+                _copy_h5_group(item, dest_group.require_group(key), child_without)
+            else:
+                src_group.copy(key, dest_group, name=key)
+
+        else:
+            src_group.copy(key, dest_group, name=key)
+
+
+def _filter_without(without: list[str]):
+    """
+    Normalise excluded HDF5 paths and remove redundant nested entries.
+
+    Parameters
+    ----------
+    without : list[str]
+        HDF5 paths to exclude from a copy operation.
+
+    Returns
+    -------
+    list[str]
+        Normalised HDF5 paths with nested duplicates removed.
+    """
+    new_without = []
+    normalised_without = [path.strip("/") for path in without if path.strip("/")]
+    for top_key in normalised_without:
+        for inner_key in normalised_without:
+            if top_key != inner_key and top_key.startswith(inner_key + "/"):
+                break
+        else:
+            new_without.append(top_key)
+    return new_without
