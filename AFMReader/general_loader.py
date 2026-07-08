@@ -173,5 +173,24 @@ class LoadFile:
         else:
             raise ValueError(f"Saving to h5 is not currently implemented for file type '{self.suffix}'.")
         # Once saved to h5, update the filepath and suffix to point to the new h5 file for future loading
-        self.filepath = h5_path
-        self.suffix = h5_path.suffix.lower()
+        self.reinitialise(filepath=h5_path)
+
+    def reinitialise(self, filepath: str | Path, channel: str | None = None, kwargs: dict | None = None):
+        """
+        Reinitialise the loader with a new file path, channel, and optional parameters.
+
+        Parameters
+        ----------
+        filepath : str | Path
+            Path to the new file.
+        channel : str | None
+            Channel to load from the new file.
+        kwargs : dict | None, optional
+            Additional parameters for the loader.
+        """
+        self.filepath = Path(filepath)
+        self.suffix = self.filepath.suffix.lower()
+        if channel:
+            self.channel = channel
+        if kwargs:
+            self.kwargs = kwargs

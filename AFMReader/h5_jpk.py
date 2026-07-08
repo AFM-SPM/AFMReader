@@ -772,6 +772,11 @@ def copy_h5_file(src_path: Path | str | h5py.File, dest_path: Path | str | h5py.
     without : list[str], optional
         List of HDF5 paths to exclude from copying. If None or empty, the entire file is copied.
     """
+    logger.info(
+        f"Copying HDF5 file from "
+        f"{src_path if isinstance(src_path, (str, Path)) else src_path.filename} "
+        f"to {dest_path if isinstance(dest_path, (str, Path)) else dest_path.filename}"
+    )
     if not without:
         if isinstance(src_path, h5py.File):
             src_path = src_path.filename

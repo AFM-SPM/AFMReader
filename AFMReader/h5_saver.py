@@ -570,6 +570,13 @@ class H5Saver:
         meas_grp.attrs["position-pattern.grid.jlength"] = shape_y
         meas_grp.attrs["timing-settings.scanRate"] = 1.0  # Dummy value to satisfy reader
 
+    def close_file(self):
+        """Close the h5 file if it is open."""
+        if self.h5file is not None:
+            if self.h5file:
+                self.h5file.close()
+            self.h5file = None
+
     def save_image(self, image_data: np.ndarray, image_name: str, z_unit: str, idx: int):
         """
         Save an image dataset to the h5 file.
@@ -638,7 +645,7 @@ def make_num_min_characters(num: int, min_chars: int = 3):
     return "0" * (min_chars - len(string_num)) + string_num
 
 
-def find_unused_filename(original_path: Path) -> Path:
+def find_unused_filename(original_path: Path, temp: bool = False) -> Path:
     """
     Find an unused filename by appending a number to the base name.
 
@@ -646,6 +653,8 @@ def find_unused_filename(original_path: Path) -> Path:
     ----------
     original_path : Path
         The original file path used to derive the HDF5 file name.
+    temp : bool
+        Whether to create a temporary file name. Default is False.
 
     Returns
     -------
@@ -653,9 +662,15 @@ def find_unused_filename(original_path: Path) -> Path:
         An unused HDF5 file path.
     """
     # Determine the path for the H5 file, ensuring it does not overwrite an existing file
-    h5_path = original_path.parent / f"{original_path.stem}.h5-jpk"
+    if temp:
+        h5_path = original_path.parent / f"temp_{original_path.stem}.h5-jpk"
+    else:
+        h5_path = original_path.parent / f"{original_path.stem}.h5-jpk"
     i = 0
     while h5_path.exists():
-        h5_path = original_path.parent / f"{original_path.stem}_{i}.h5-jpk"
+        if temp:
+            h5_path = original_path.parent / f"temp_{original_path.stem}_{i}.h5-jpk"
+        else:
+            h5_path = original_path.parent / f"{original_path.stem}_{i}.h5-jpk"
         i += 1
     return h5_path
