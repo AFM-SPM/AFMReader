@@ -1145,6 +1145,8 @@ class ARDFVolume(CurvesVolume):
             flip_image = self.flip_image
         if flip_image:
             y = self.shape[0] - 1 - y
+        if not (0 <= y < self.shape[0] and 0 <= x < self.shape[1]):
+            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
         return self._reader.get_curve(y, x, reverse_curve_points=self.reverse_curve_points)
 
     def iter_indices(self) -> Iterable[Index]:
