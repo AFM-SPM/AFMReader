@@ -18,8 +18,8 @@ from AFMReader.io import coerce_metadata_value
 from AFMReader.data_classes import (
     AFMLoad,
     CurvesDataset,
-    CurvesMetadata,
     CurvesVolume,
+    CurvesVolumeMetadata,
 )
 
 logger.enable(__package__)
@@ -290,6 +290,90 @@ def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> d
     return {f"frame {i}": timestamp for i, timestamp in enumerate(timestamps)}
 
 
+class CurvesH5Metadata(CurvesVolumeMetadata):
+    """
+    Metadata class for H5 JPK data that provides access to metadata on demand.
+
+    Parameters
+    ----------
+    curve_meta_group : h5py.Group
+        The HDF5 group containing the curve metadata.
+    shape : tuple[int, int]
+        The shape of the image as (rows, columns).
+    channel_units : dict[str, str]
+        A dictionary mapping channel names to their units.
+    segment_names : list[str]
+        The names of the curve segments available in this volume.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is ``True``.
+    """
+
+    # pylint: disable=too-many-positional-arguments
+    def __init__(
+        self,
+        curve_meta_group: h5py.Group,
+        shape: tuple[int, int],
+        channel_units: dict[str, str],
+        segment_names: list[str],
+        flip_image: bool = True,
+    ):
+        """
+        Initialise the CurvesH5Metadata instance.
+
+        Parameters
+        ----------
+        curve_meta_group : h5py.Group
+            The HDF5 group containing the curve metadata.
+        shape : tuple[int, int]
+            The shape of the image as (rows, columns).
+        channel_units : dict[str, str]
+            A dictionary mapping channel names to their units.
+        segment_names : list[str]
+            The names of the curve segments available in this volume.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is ``True``.
+        """
+        super().__init__(shape=shape, channel_units=channel_units, segment_names=segment_names, flip_image=flip_image)
+        self.curve_meta_group = curve_meta_group
+
+    def get_point_metadata(self, y: int, x: int, segment_name: str | None = None):
+        """
+        Fetch metadata for a specific pixel (x, y) on demand.
+
+        Parameters
+        ----------
+        y : int
+            The row index.
+        x : int
+            The column index.
+        segment_name : str, optional
+            The name of the segment for segment metadata, required if segment metadata is needed.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the fetched metadata.
+        """
+        if self.curve_meta_group is None:
+            return {}
+        if y < 0 or y >= self.shape[0] or x < 0 or x >= self.shape[1]:
+            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
+        if self.flip_image:
+            y = self.shape[0] - 1 - y
+        idx = (y * self.shape[1]) + x
+        if segment_name is not None:
+            idx = (idx * len(self.segment_names)) + self.segment_names.index(segment_name)
+        meta_dict = {}
+        for key in self.curve_meta_group:
+            if key.startswith(f"{'segment' if segment_name is not None else 'curve'}."):
+                new_key = key.split(".", 1)[1]
+                if isinstance(self.curve_meta_group[key], h5py.Dataset):
+                    meta_dict[new_key] = coerce_metadata_value(self.curve_meta_group[key][idx])
+                else:
+                    meta_dict[new_key] = self.curve_meta_group[key]
+        return meta_dict
+
+
 class CurvesH5Volume(CurvesVolume):
     """
     A CurvesVolume implementation for HDF5 curve data that provides lazy loading of curve data for each pixel.
@@ -300,14 +384,12 @@ class CurvesH5Volume(CurvesVolume):
     ----------
     name : str
         The name of the curve volume.
-    shape_x : int
-        The number of columns in the image.
-    shape_y : int
-        The number of rows in the image.
+    shape : tuple[int, int]
+        The shape of the image as (rows, columns).
     volume_data_group : h5py.Group
         The HDF5 group containing the volume data.
-    channel_units : dict[str, str]
-        A dictionary mapping channel names to their units.
+    metadata : CurvesH5Metadata
+        Metadata associated with this HDF5 curve volume.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
     """
@@ -315,38 +397,34 @@ class CurvesH5Volume(CurvesVolume):
     def __init__(
         self,
         name: str,
-        shape_x: int,
-        shape_y: int,
+        shape: tuple[int, int],
         volume_data_group: h5py.Group,
-        channel_units: dict[str, str],
+        metadata: CurvesH5Metadata,
         flip_image: bool = True,
     ):
         """
-        Initialize the CurvesH5Volume instance.
+        Initialise the CurvesH5Volume instance.
 
         Parameters
         ----------
         name : str
             The name of the curve volume.
-        shape_x : int
-            The number of columns in the image.
-        shape_y : int
-            The number of rows in the image.
+        shape : tuple[int, int]
+            The shape of the image as (rows, columns).
         volume_data_group : h5py.Group
             The HDF5 group containing the volume data.
-        channel_units : dict[str, str]
-            A dictionary mapping channel names to their units.
+        metadata : CurvesH5Metadata
+            Metadata associated with this HDF5 curve volume.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
         """
+        self.volume_data_group = volume_data_group
         super().__init__(
             name=name,
-            shape_x=shape_x,
-            shape_y=shape_y,
-            channel_units=channel_units,
+            shape=shape,
+            metadata=metadata,
             flip_image=flip_image,
         )
-        self.volume_data_group = volume_data_group
 
     def __iter__(self):  # noqa: C901
         """
@@ -381,26 +459,26 @@ class CurvesH5Volume(CurvesVolume):
                 if channel not in indices_map:
                     indices_map[channel] = {}
                 indices_map[channel][segment] = segment_group["Indices"][channel][:]
-        for y_idx in range(self.shape_y):
+        for y_idx in range(self.shape[0]):
             data: dict[str, dict[str, np.ndarray]] = {}
-            y = self.shape_y - 1 - y_idx if flip_image else y_idx
+            y = self.shape[0] - 1 - y_idx if flip_image else y_idx
             for segment, segment_group in self.volume_data_group.items():
                 for channel in segment_group["Indices"]:
                     if channel not in data:
                         data[channel] = {}
                     indices = indices_map[channel][segment]
-                    start_idx = int(indices[self.shape_x * y])
-                    end_idx = int(indices[self.shape_x * (y + 1)])
+                    start_idx = int(indices[self.shape[1] * y])
+                    end_idx = int(indices[self.shape[1] * (y + 1)])
 
                     data[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
-            for x in range(self.shape_x):
+            for x in range(self.shape[1]):
                 curve_data: dict[str, dict[str, np.ndarray]] = {}
                 for channel, channel_data in data.items():
                     curve_data[channel] = {}
                     for segment, segment_data in channel_data.items():
                         indices = indices_map[channel][segment]
-                        start_idx = int(indices[self.shape_x * y + x]) - int(indices[self.shape_x * y])
-                        end_idx = int(indices[self.shape_x * y + x + 1]) - int(indices[self.shape_x * y])
+                        start_idx = int(indices[self.shape[1] * y + x]) - int(indices[self.shape[1] * y])
+                        end_idx = int(indices[self.shape[1] * y + x + 1]) - int(indices[self.shape[1] * y])
                         curve_data[channel][segment] = segment_data[start_idx:end_idx]
                 yield curve_data
 
@@ -422,14 +500,14 @@ class CurvesH5Volume(CurvesVolume):
         dict
             A dictionary containing the QI curve data for the specified pixel.
         """
-        if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
+        if y < 0 or y >= self.shape[0] or x < 0 or x >= self.shape[1]:
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
         curve_dict: dict[str, dict[str, Any]] = {}
         if flip_image is None:
             flip_image = self.flip_image
         if flip_image:
-            y = self.shape_y - 1 - y
-        curve_num = self.shape_x * y + x
+            y = self.shape[0] - 1 - y
+        curve_num = self.shape[1] * y + x
         for segment, segment_group in self.volume_data_group.items():
             for channel in segment_group["Indices"]:
                 start_idx = int(segment_group["Indices"][channel][curve_num])
@@ -438,122 +516,6 @@ class CurvesH5Volume(CurvesVolume):
                     curve_dict[channel] = {}
                 curve_dict[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
         return curve_dict
-
-    def load_all_curves(self):
-        """
-        Load all QI curve data into memory.
-
-        Returns
-        -------
-        list
-            A 2D list containing dictionaries with QI curve data for each pixel.
-        """
-        all_curves = [[{} for _ in range(self.shape_x)] for _ in range(self.shape_y)]
-        for segment, segment_group in self.volume_data_group.items():
-            for channel in segment_group["Indices"]:
-                indices = segment_group["Indices"][channel][:]
-                data = segment_group["Data"][channel][:]
-                for i in range(len(indices) - 1):
-                    start_idx = int(indices[i])
-                    end_idx = int(indices[i + 1])
-                    x = i % self.shape_x
-                    y = i // self.shape_x
-                    if self.flip_image:
-                        y = self.shape_y - 1 - y
-                    if channel not in all_curves[y][x]:
-                        all_curves[y][x][channel] = {}
-                    all_curves[y][x][channel][segment] = data[start_idx:end_idx]
-
-        return all_curves
-
-
-class CurvesH5Metadata(CurvesMetadata):
-    """
-    Metadata class for H5 JPK data that provides access to metadata on demand.
-
-    Parameters
-    ----------
-    curve_meta_group : h5py.Group
-        The HDF5 group containing the curve metadata.
-    all_global_metadata : dict[str, Any]
-        The dictionary containing all global metadata.
-    essential_global_metadata : dict[str, Any]
-        The dictionary containing essential global metadata.
-    shape_x : int
-        The number of columns in the image.
-    shape_y : int
-        The number of rows in the image.
-    flip_image : bool, optional
-        Whether to flip the image vertically. Default is ``True``.
-    """
-
-    # pylint: disable=too-many-positional-arguments
-    def __init__(
-        self,
-        curve_meta_group: h5py.Group,
-        all_global_metadata: dict[str, Any],
-        essential_global_metadata: dict[str, Any],
-        shape_x: int,
-        shape_y: int,
-        flip_image: bool = True,
-    ):
-        """
-        Initialize the CurvesH5Metadata instance.
-
-        Parameters
-        ----------
-        curve_meta_group : h5py.Group
-            The HDF5 group containing the curve metadata.
-        all_global_metadata : dict[str, Any]
-            The dictionary containing all global metadata.
-        essential_global_metadata : dict[str, Any]
-            The dictionary containing essential global metadata.
-        shape_x : int
-            The number of columns in the image.
-        shape_y : int
-            The number of rows in the image.
-        flip_image : bool, optional
-            Whether to flip the image vertically. Default is ``True``.
-        """
-        super().__init__(all_global_metadata, essential_global_metadata, shape_x, shape_y, flip_image)
-        self.curve_meta_group = curve_meta_group
-
-    def get_point_metadata(self, y: int, x: int, direction: int | None = None):
-        """
-        Fetch metadata for a specific pixel (x, y) on demand.
-
-        Parameters
-        ----------
-        y : int
-            The row index.
-        x : int
-            The column index.
-        direction : int, optional
-            The direction index for segment metadata (0 or 1), required if meta_type is "segment".
-
-        Returns
-        -------
-        dict
-            A dictionary containing the fetched metadata.
-        """
-        if self.curve_meta_group is None:
-            return {}
-        if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
-            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
-        if self.flip_image:
-            y = self.shape_y - 1 - y
-        idx = (y * self.shape_x) + x
-        if direction is not None:
-            idx = (idx * 2) + direction
-        meta_dict = {}
-        for key in self.curve_meta_group:
-            if key.startswith(f"{'segment' if direction is not None else 'curve'}."):
-                new_key = key.split(".", 1)[1]
-                if isinstance(self.curve_meta_group[key], h5py.Dataset):
-                    meta_dict[new_key] = coerce_metadata_value(self.curve_meta_group[key][idx])
-                else:
-                    meta_dict[new_key] = self.curve_meta_group[key]
-        return meta_dict
 
 
 class CurvesH5Dataset(CurvesDataset):
@@ -564,26 +526,36 @@ class CurvesH5Dataset(CurvesDataset):
     ----------
     volumes : dict[str, CurvesVolume]
         A dictionary mapping volume names to their corresponding CurvesVolume instances.
-    metadata : CurvesMetadata
-        An instance of CurvesMetadata containing the metadata for the curves.
+    metadata : dict
+        Global metadata for the curves dataset.
+    essential_metadata : dict
+        Essential global metadata for the curves dataset.
     h5file : h5py.File
         The underlying HDF5 file object.
     """
 
-    def __init__(self, volumes: dict[str, CurvesVolume], metadata: CurvesMetadata, h5file: h5py.File):
+    def __init__(
+        self,
+        volumes: dict[str, CurvesVolume],
+        metadata: dict,
+        essential_metadata: dict,
+        h5file: h5py.File,
+    ):
         """
-        Initialize the CurvesH5Dataset instance.
+        Initialise the CurvesH5Dataset instance.
 
         Parameters
         ----------
         volumes : dict[str, CurvesVolume]
             A dictionary mapping volume names to their corresponding CurvesVolume instances.
-        metadata : CurvesMetadata
-            An instance of CurvesMetadata containing the metadata for the curves.
+        metadata : dict
+            Global metadata for the curves dataset.
+        essential_metadata : dict
+            Essential global metadata for the curves dataset.
         h5file : h5py.File
             The underlying HDF5 file object.
         """
-        super().__init__(volumes, metadata)
+        super().__init__(volumes, metadata, essential_metadata)
         self.h5file = h5file
 
     def close(self):
@@ -705,29 +677,34 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
         for name, group in curve_data_group.items():
             if name.endswith("_VOLM"):
                 volume_name = name.split("_VOLM")[0]
+                data_group = group["Data"]
+                segment_names = [seg_name for seg_name, item in data_group.items() if isinstance(item, h5py.Group)]
+                if "Metadata" not in group:
+                    curve_meta_group = None
+                else:
+                    curve_meta_group = group["Metadata"]
+                curves_metadata = CurvesH5Metadata(
+                    curve_meta_group=curve_meta_group,
+                    shape=(shape_y, shape_x),
+                    channel_units=channels_units,
+                    segment_names=segment_names,
+                    flip_image=flip_image,
+                )
                 curves_volume = CurvesH5Volume(
                     name=volume_name,
-                    shape_x=shape_x,
-                    shape_y=shape_y,
-                    volume_data_group=group,
-                    channel_units=channels_units,
+                    shape=(shape_y, shape_x),
+                    volume_data_group=data_group,
+                    metadata=curves_metadata,
                     flip_image=flip_image,
                 )
                 volumes[volume_name] = curves_volume
-        if "Curve_Metadata" not in curve_data_group:
-            curve_meta_group = None
-        else:
-            curve_meta_group = curve_data_group["Curve_Metadata"]
-        curves_metadata = CurvesH5Metadata(
-            curve_meta_group=curve_meta_group,
-            all_global_metadata=top_level_meta,
-            essential_global_metadata=essential_global_metadata,
-            shape_x=shape_x,
-            shape_y=shape_y,
-            flip_image=flip_image,
-        )
 
-        curves_data = CurvesH5Dataset(volumes=volumes, metadata=curves_metadata, h5file=h5file)
+        curves_data = CurvesH5Dataset(
+            volumes=volumes,
+            metadata=top_level_meta,
+            essential_metadata=essential_global_metadata,
+            h5file=h5file,
+        )
 
         return AFMLoad(
             image=image_stack,

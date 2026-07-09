@@ -11,90 +11,84 @@ import numpy as np
 # pylint: disable=too-few-public-methods,fixme
 
 
-class CurvesMetadata:
+class CurvesVolumeMetadata:
     """
-    A class representing the metadata for a dataset of curves, providing lazy loaded access to pixel metadata.
+    A class representing metadata for a curve volume, providing lazy loaded access to point metadata.
 
     This is a parent class that should be subclassed for specific file formats to implement
-    the get_pixel_metadata method, which defines how the metadata is retrieved from the
+    the get_point_metadata method, which defines how the metadata is retrieved from the
     underlying data source.
 
     Parameters
     ----------
-    all_global_metadata : dict
-        A dictionary containing all global metadata for the dataset.
-    essential_global_metadata : dict
-        A dictionary containing essential global metadata for the dataset.
-    shape_x : int
-        The number of columns in the image.
-    shape_y : int
-        The number of rows in the image.
+    shape : tuple[int, int]
+        The shape of the image as (rows, columns).
+    channel_units : dict[str, str]
+        A dictionary mapping channel names to their units.
+    segment_names : list[str]
+        The names of the curve segments available in this volume.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
     """
 
     def __init__(
         self,
-        all_global_metadata: dict,
-        essential_global_metadata: dict,
-        shape_x: int,
-        shape_y: int,
+        shape: tuple[int, int],
+        channel_units: dict[str, str],
+        segment_names: list[str],
         flip_image: bool = True,
     ):
         """
-        Initialise CurvesMetadata.
+        Initialise CurvesVolumeMetadata.
 
         Parameters
         ----------
-        all_global_metadata : dict
-            A dictionary containing all global metadata for the dataset.
-        essential_global_metadata : dict
-            A dictionary containing essential global metadata for the dataset.
-        shape_x : int
-            The number of columns in the image.
-        shape_y : int
-            The number of rows in the image.
+        shape : tuple[int, int]
+            The shape of the image as (rows, columns).
+        channel_units : dict[str, str]
+            A dictionary mapping channel names to their units.
+        segment_names : list[str]
+            The names of the curve segments available in this volume.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
         """
-        self.all_global_metadata = all_global_metadata
-        self.essential_global_metadata = essential_global_metadata
-        self.shape_x = shape_x
-        self.shape_y = shape_y
+        self.shape = shape
+        self.channel_units = channel_units
+        self.segment_names = segment_names
         self.flip_image = flip_image
 
     def __getitem__(self, keys):
         """
-        Fetch the metadata for a specific pixel or pixel direction.
+        Fetch the metadata for a specific pixel or segment.
 
         For example, metadata[y, x] would return the metadata for the pixel at row y and column x, while
-        metadata[y, x, 0] would return the metadata for specifically the first direction of that pixel
-        (usually the approach).
+        metadata[y, x, segment_name] would return the metadata for specifically the segment of that pixel
+        if segment metadata is available.
 
         Parameters
         ----------
         keys : tuple
-            A tuple of (y, x) or (y, x, direction) representing the indices.
+            A tuple of (y, x) or (y, x, segment_name) representing the indices.
 
         Returns
         -------
         dict
-            The metadata for the specified pixel or direction.
+            The metadata for the specified pixel or segment.
         """
         if isinstance(keys, tuple) and len(keys) == 2:
             y, x = keys
             return self.get_point_metadata(y, x)
         if isinstance(keys, tuple) and len(keys) == 3:
-            y, x, direction = keys
-            return self.get_point_metadata(y, x, direction)
+            y, x, segment_name = keys
+            return self.get_point_metadata(y, x, segment_name)
         raise IndexError(
-            f"Invalid indexing. Expected (y, x) or (y, x, direction) for point metadata indexing. Got {keys}."
+            f"Invalid indexing. Expected (y, x) or (y, x, segment_name) for point metadata indexing. Got {keys}."
         )
 
     # pylint: disable=unused-argument
-    def get_point_metadata(self, y: int, x: int, direction: int | None = None):
+    def get_point_metadata(self, y: int, x: int, segment_name: str | None = None):
         """
-        Fetch the metadata for a specific pixel/ point, optionally for a specific direction.
+        Fetch the metadata for a specific pixel/point, optionally for a specific segment.
 
         Should be implemented by subclasses if there exists per point metadata to define how the metadata is retrieved
         from the underlying data source. If there is no per point metadata, this can simply return an empty dict.
@@ -105,13 +99,13 @@ class CurvesMetadata:
             Row index of the pixel.
         x : int
             Column index of the pixel.
-        direction : int, optional
-            The index of the direction to fetch metadata for. If None, returns metadata for the entire pixel.
+        segment_name : str, optional
+            The name of the segment to fetch metadata for. If None, returns metadata for the entire pixel.
 
         Returns
         -------
         dict
-            The metadata for the specified pixel (or direction, if provided).
+            The metadata for the specified pixel or segment.
         """
         return {}
 
@@ -126,26 +120,20 @@ class CurvesVolume:
     ----------
     name : str
         The name of the curve volume.
-    shape_x : int
-        The number of columns in the image.
-    shape_y : int
-        The number of rows in the image.
-    channel_units : dict[str, str]
-        A dictionary mapping channel names to their units.
+    shape : tuple[int, int]
+        The shape of the image as (rows, columns).
+    metadata : CurvesVolumeMetadata
+        Metadata associated with this curve volume.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
-    reverse_curve_points : bool, optional
-        Whether to reverse the points in each curve segment. Default is False.
     """
 
     def __init__(
         self,
         name: str,
-        shape_x: int,
-        shape_y: int,
-        channel_units: dict[str, str],
+        shape: tuple[int, int],
+        metadata: CurvesVolumeMetadata,
         flip_image: bool = True,
-        reverse_curve_points: bool = False,
     ):
         """
         Initialise CurvesVolume.
@@ -154,24 +142,17 @@ class CurvesVolume:
         ----------
         name : str
             The name of the curve volume.
-        shape_x : int
-            The number of columns in the image.
-        shape_y : int
-            The number of rows in the image.
-        channel_units : dict[str, str]
-            A dictionary mapping channel names to their units.
+        shape : tuple[int, int]
+            The shape of the image as (rows, columns).
+        metadata : CurvesVolumeMetadata
+            Metadata associated with this curve volume.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
-        reverse_curve_points : bool, optional
-            Whether to reverse the points in each curve segment. Default is False.
         """
-        self.shape_x = shape_x
-        self.shape_y = shape_y
-        self.dims = (shape_y, shape_x)
-        self.flip_image = flip_image
         self.name = name
-        self.channel_units = channel_units
-        self.reverse_curve_points = reverse_curve_points
+        self.shape = shape
+        self.metadata = metadata
+        self.flip_image = flip_image
 
         # Store analysis results in a dict, with the values being numpy arrays of the results for each pixel.
         self.analysis_results: dict[str, np.ndarray] = {}
@@ -185,7 +166,7 @@ class CurvesVolume:
         int
             The total number of pixels in the image.
         """
-        return self.shape_x * self.shape_y
+        return self.shape[0] * self.shape[1]
 
     def __getitem__(self, keys):
         """
@@ -199,18 +180,16 @@ class CurvesVolume:
         Returns
         -------
         dict
-            The QI curve data for the specified pixel.
+            The curve data for the specified pixel.
         """
         if not isinstance(keys, tuple) or len(keys) != 2:
             raise IndexError(f"Invalid indexing. Expected (y, x) for pixel indexing. Got {keys}.")
         y, x = keys
-        if y < 0 or y >= self.shape_y or x < 0 or x >= self.shape_x:
-            raise IndexError(f"Pixel index ({y}, {x}) is out of bounds for image of shape {self.dims}.")
         return self.get_curve(y, x)
 
     def get_curve(self, y: int, x: int, flip_image: bool | None = None) -> dict:
         """
-        Fetch the curve data for a specific pixel.
+        Purely overridable method to fetch the curve data for a specific pixel.
 
         Should be implemented by subclasses to define how the curve data is retrieved from the underlying data source.
 
@@ -246,8 +225,8 @@ class CurvesVolume:
         """
         if flip_image is None:
             flip_image = self.flip_image
-        for y in range(self.shape_y):
-            for x in range(self.shape_x):
+        for y in range(self.shape[0]):
+            for x in range(self.shape[1]):
                 yield self.get_curve(y, x, flip_image=flip_image)
 
     def get_analysis_results(self, y: int, x: int, flip_image: bool | None = None) -> dict:
@@ -271,7 +250,7 @@ class CurvesVolume:
         if flip_image is None:
             flip_image = self.flip_image
         if flip_image:
-            y = self.shape_y - 1 - y  # Flip the y index if needed
+            y = self.shape[0] - 1 - y  # Flip the y index if needed
         return {key: value[y, x] for key, value in self.analysis_results.items() if value is not None}
 
     def __iter__(self):
@@ -295,16 +274,21 @@ class CurvesDataset:
     volumes : dict[str, CurvesVolume]
         A dictionary mapping curve names to CurvesVolume instances that
         provide access to the curve data for each pixel.
-    metadata : CurvesMetadata
-        An instance of CurvesMetadata that provides access to the metadata
-        for each curve.
+    metadata : dict
+        Global metadata for the curve dataset.
+    essential_metadata : dict
+        Essential global metadata for the curve dataset.
     default_volume_name : str, optional
         The name of the default volume to use when accessing curve data.
         If None, the first volume in the dictionary is used.
     """
 
     def __init__(
-        self, volumes: dict[str, CurvesVolume], metadata: CurvesMetadata, default_volume_name: str | None = None
+        self,
+        volumes: dict[str, CurvesVolume],
+        metadata: dict,
+        essential_metadata: dict,
+        default_volume_name: str | None = None,
     ):
         """
         Initialise CurvesDataset.
@@ -314,15 +298,17 @@ class CurvesDataset:
         volumes : dict[str, CurvesVolume]
             A dictionary mapping curve names to CurvesVolume instances that
             provide access to the curve data for each pixel.
-        metadata : CurvesMetadata
-            An instance of CurvesMetadata that provides access to the metadata
-            for each curve.
+        metadata : dict
+            A dictionary containing metadata for each curve.
+        essential_metadata : dict
+            A dictionary containing essential metadata for each curve.
         default_volume_name : str | None, optional
             The name of the default volume to use when accessing curve data.
             If None, the first volume in the dictionary is used.
         """
         self.volumes: dict[str, CurvesVolume] = volumes
-        self.metadata: CurvesMetadata = metadata
+        self.metadata: dict = metadata
+        self.essential_metadata: dict = essential_metadata
         self.default_volume_name: str = default_volume_name or next(
             iter(volumes)
         )  # Use the first volume as default if not specified

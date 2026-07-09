@@ -26,7 +26,7 @@ from collections.abc import Collection, Iterable
 from typing import TypeAlias, Any
 
 from tqdm import tqdm
-from AFMReader.data_classes import AFMLoad, CurvesMetadata, CurvesVolume, CurvesDataset
+from AFMReader.data_classes import AFMLoad, CurvesVolume, CurvesDataset, CurvesVolumeMetadata
 from AFMReader.h5_saver import H5Saver, find_unused_filename
 from AFMReader.io import coerce_metadata_dict, load_config
 from AFMReader.logging import logger
@@ -667,6 +667,7 @@ class ARDFFFMReader:
     # and nonexistent segments get a zero. For regular/FFM data, we'll just
     # assume that the second offset maps to our "split" concept.
     seg_offsets: tuple
+    segment_names: tuple[str, ...]
     up: bool
     trace: bool
     vtype: int
@@ -681,6 +682,7 @@ class ARDFFFMReader:
         lines: int,
         channels: Any,
         vchns: list[ARDFVchan],
+        segment_names: list[str],
         curve_height_offset: float = 0.0,
     ) -> "ARDFFFMReader":
         """
@@ -698,6 +700,8 @@ class ARDFFFMReader:
             The channel mapping.
         vchns : list[ARDFVchan]
             The list of channel definitions.
+        segment_names : list[str]
+            The curve segment names from the VDEF section.
 
         Returns
         -------
@@ -742,6 +746,7 @@ class ARDFFFMReader:
             array_offset=first_vdat.array_offset,
             channels=[channel[0] for channel in channels.values()],
             seg_offsets=first_vdat.seg_offsets,
+            segment_names=tuple(segment_names),
             up=up,
             trace=trace,
             vtype=first_vset.vtype,
@@ -770,24 +775,25 @@ class ARDFFFMReader:
         with memoryview(self.data):  # assert data is open, and hold it open
             x = self.array_view[r, c, self.channels]  # advanced indexing copies
         x = x.astype("f4", copy=False)
-        num_phases = 2 if (self.vtype & 0x2) else 1
-        reshaped = x.reshape((len(self.channels), num_phases, -1))
-
-        if num_phases == 2:
-            seg_keys = ["Segment_0", "Segment_1"]
+        if len(self.segment_names) == 2 and len(self.seg_offsets) > 1:
+            segment_length = self.seg_offsets[1]
+            segment_bounds = [(0, segment_length), (segment_length, 2 * segment_length)]
         else:
-            seg_keys = ["Segment_1"] if self.is_retrace else ["Segment_0"]
+            segment_bounds = [
+                (start, stop) for start, stop in zip(self.seg_offsets, self.seg_offsets[1:]) if stop > start
+            ][: len(self.segment_names)]
 
         curve_dict = {}
         for idx, chan_idx in enumerate(self.channels):
             chan_name = self.vchns[chan_idx].name
             curve_dict[chan_name] = {}
-            for phase_idx, seg_name in enumerate(seg_keys):
+            for (start, stop), seg_name in zip(segment_bounds, self.segment_names):
                 # Map channel and segment name to its respective slice
+                segment_data = x[idx, start:stop]
                 if reverse_curve_points and chan_name == "Raw":
-                    curve_dict[chan_name][seg_name] = self.curve_height_offset - reshaped[idx, phase_idx]
+                    curve_dict[chan_name][seg_name] = self.curve_height_offset - segment_data
                 else:
-                    curve_dict[chan_name][seg_name] = reshaped[idx, phase_idx]
+                    curve_dict[chan_name][seg_name] = segment_data
 
         return curve_dict
 
@@ -1061,14 +1067,12 @@ class ARDFVolume(CurvesVolume):
     ----------
     name : str
         The name of the volume.
-    shape_x : int
-        The number of columns in the image.
-    shape_y : int
-        The number of rows in the image.
+    shape : tuple[int, int]
+        The shape of the image as (rows, columns).
+    metadata : CurvesVolumeMetadata
+        Metadata associated with the volume.
     reader : ARDFForceMapReader | ARDFFFMReader
         The reader used to load curve data.
-    channel_units : dict[str, str]
-        A dictionary mapping channel names to their units.
     step_info : StepInfo
         Step size and unit information for each axis.
     flip_image : bool, optional
@@ -1087,10 +1091,9 @@ class ARDFVolume(CurvesVolume):
     def __init__(
         self,
         name: str,
-        shape_x: int,
-        shape_y: int,
+        shape: tuple[int, int],
+        metadata: CurvesVolumeMetadata,
         reader: ARDFForceMapReader | ARDFFFMReader,
-        channel_units: dict[str, str],
         step_info: StepInfo,
         flip_image: bool = True,
         reverse_curve_points: bool = True,
@@ -1102,14 +1105,12 @@ class ARDFVolume(CurvesVolume):
         ----------
         name : str
             The name of the volume.
-        shape_x : int
-            The number of columns in the image.
-        shape_y : int
-            The number of rows in the image.
+        shape : tuple[int, int]
+            The shape of the image as (rows, columns).
         reader : ARDFForceMapReader | ARDFFFMReader
             The reader used to load curve data.
-        channel_units : dict[str, str]
-            A dictionary mapping channel names to their units.
+        metadata : CurvesVolumeMetadata
+            Metadata associated with the volume.
         step_info : StepInfo
             Step size and unit information for each axis.
         flip_image : bool, optional
@@ -1117,9 +1118,7 @@ class ARDFVolume(CurvesVolume):
         reverse_curve_points : bool, optional
             Whether to reverse the points in each curve segment. Default is True.
         """
-        super().__init__(
-            name=name, shape_x=shape_x, shape_y=shape_y, channel_units=channel_units, flip_image=flip_image
-        )
+        super().__init__(name=name, shape=shape, metadata=metadata, flip_image=flip_image)
         self.reverse_curve_points = reverse_curve_points
         self.step_info = step_info
         self._reader = reader
@@ -1145,7 +1144,7 @@ class ARDFVolume(CurvesVolume):
         if flip_image is None:
             flip_image = self.flip_image
         if flip_image:
-            y = self.shape_y - 1 - y
+            y = self.shape[0] - 1 - y
         return self._reader.get_curve(y, x, reverse_curve_points=self.reverse_curve_points)
 
     def iter_indices(self) -> Iterable[Index]:
@@ -1179,7 +1178,7 @@ class ARDFDataset(CurvesDataset):
     ----------
     volumes : dict[str, ARDFVolume]
         A dictionary of ARDFVolume instances keyed by their names.
-    metadata : CurvesMetadata
+    metadata : dict[str, Any]
         Metadata associated with the dataset.
     mmap_file : mmap.mmap
         The memory map backing the ARDF data.
@@ -1190,7 +1189,8 @@ class ARDFDataset(CurvesDataset):
     def __init__(
         self,
         volumes: dict[str, ARDFVolume],
-        metadata: CurvesMetadata,
+        metadata: dict[str, Any],
+        essential_metadata: dict[str, Any],
         mmap_file: mmap.mmap,
         default_volume_name: str | None = None,
     ):
@@ -1201,14 +1201,21 @@ class ARDFDataset(CurvesDataset):
         ----------
         volumes : dict[str, ARDFVolume]
             A dictionary of ARDFVolume instances keyed by their names.
-        metadata : CurvesMetadata
+        metadata : dict[str, Any]
             Metadata associated with the dataset.
+        essential_metadata : dict[str, Any]
+            Essential metadata associated with the dataset.
         mmap_file : mmap.mmap
             The memory map backing the ARDF data.
         default_volume_name : str | None
             The name of the default volume to use when accessing curve data.
         """
-        super().__init__(volumes=volumes, metadata=metadata, default_volume_name=default_volume_name)
+        super().__init__(
+            volumes=volumes,
+            metadata=metadata,
+            essential_metadata=essential_metadata,
+            default_volume_name=default_volume_name,
+        )
         self.mmap_file = mmap_file
 
     def close(self):
@@ -1295,7 +1302,13 @@ def parse_volm(volm_header: ARDFHeader, flip_image: bool = True, curve_height_of
     first_vset_header = ARDFHeader.unpack(data, vtoc.pointers[0])
     if complete and not np.any(np.diff(np.diff(vtoc.pointers))):
         reader = ARDFFFMReader.parse(
-            first_vset_header, points, lines, channels, vchn_list, curve_height_offset=curve_height_offset
+            first_vset_header,
+            points,
+            lines,
+            channels,
+            vchn_list,
+            seg_names,
+            curve_height_offset=curve_height_offset,
         )
         name = "Trace" if reader.trace else "Retrace"
     else:
@@ -1313,10 +1326,11 @@ def parse_volm(volm_header: ARDFHeader, flip_image: bool = True, curve_height_of
 
     return ARDFVolume(
         name=name,
-        shape_x=points,
-        shape_y=lines,
+        shape=(lines, points),
+        metadata=CurvesVolumeMetadata(
+            shape=(lines, points), channel_units=channel_units, segment_names=seg_names, flip_image=flip_image
+        ),
         reader=reader,
-        channel_units=channel_units,
         step_info=((x_step, x_unit), (y_step, y_unit), (t_step, t_unit)),
         flip_image=flip_image,
         reverse_curve_points=True,
@@ -1442,7 +1456,8 @@ class ARDFReader:
 
         with h5_saver.create_file(source=self.filepath.suffix):
             # Save metadata
-            h5_saver.setup_curves_group(channel_units=next(iter(self.volumes.values())).channel_units)
+            first_volume = next(iter(self.volumes.values()))
+            h5_saver.setup_curves_group(channel_units=first_volume.metadata.channel_units)
             size_x_m = self.size_x / NANOMETER_UNIT_CONVERSION
             size_y_m = self.size_y / NANOMETER_UNIT_CONVERSION
             h5_saver.save_global_meta(
@@ -1455,19 +1470,27 @@ class ARDFReader:
 
             # Save volumes
             for volume_name, ardf_volume in self.volumes.items():
+                shape_y, shape_x = ardf_volume.shape
+                num_curves = shape_y * shape_x
                 h5_saver.setup_volume(ardf_volume)
-                logger.debug(f"Volume channel units before saving: {ardf_volume.channel_units}")
+                logger.debug(f"Volume channel units before saving: {ardf_volume.metadata.channel_units}")
                 for curve_idx, curve in enumerate(
                     tqdm(
                         ardf_volume.iter_curves(flip_image=False),
-                        total=ardf_volume.shape_x * ardf_volume.shape_y,
+                        total=num_curves,
                         desc=f"Saving curves for volume '{volume_name}'",
                     )
                 ):
-                    h5_saver.save_curve(curve, curve_idx, ardf_volume.shape_x * ardf_volume.shape_y, volume_name)
+                    h5_saver.save_curve(
+                        curve,
+                        curve_idx,
+                        num_curves,
+                        volume_name,
+                        ardf_volume.metadata.segment_names,
+                    )
 
                 h5_saver.complete_saving(ardf_volume)
-                logger.debug(f"Channel units after saving: {ardf_volume.channel_units}")
+                logger.debug(f"Channel units after saving: {ardf_volume.metadata.channel_units}")
 
             # Save images
             for idx, (image_name, ardf_image) in enumerate(self.images.items()):
@@ -1525,16 +1548,10 @@ class ARDFReader:
         default_volume_name = "Trace" if self.trace else "Retrace"
         self.metadata["global.time_step"] = self.volumes[default_volume_name].step_info[-1][0]
         self.essential_metadata = self.filter_essential_metadata(self.metadata)
-        curves_metadata = CurvesMetadata(
-            self.metadata,
-            self.essential_metadata,
-            self.shape_x,
-            self.shape_y,
-            self.flip_image,
-        )
         curves_dataset = ARDFDataset(
             self.volumes,
-            curves_metadata,
+            self.metadata,
+            self.essential_metadata,
             self.mmap_file,
             default_volume_name=default_volume_name,
         )

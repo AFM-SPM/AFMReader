@@ -56,8 +56,8 @@ class H5Saver:
         self.volume_datasets: dict[str, dict[str, dict[str, dict[str, h5py.Dataset]]]] = {}
         self.volumes_dims: dict[str, tuple[int, int]] = {}
 
-        self.curves_meta_buffer: dict[str, list] = {}
-        self.curves_meta_datasets: dict[str, h5py.Dataset] = {}
+        self.curves_meta_buffer: dict[str, dict[str, list]] = {}
+        self.curves_meta_datasets: dict[str, dict[str, h5py.Dataset]] = {}
 
         # The number of points saved so far for each channel and segment, structured as [volume_name][segment][channel]
         self.volume_points_saved: dict[str, dict[str, dict[str, int]]] = {}
@@ -71,10 +71,10 @@ class H5Saver:
         self.curve_data_group: h5py.Group | None = None
         self.global_meta_group: h5py.Group | None = None
         self.curves_meta_group: h5py.Group | None = None
-        self.curve_work: list[tuple[bytes, h5py.Dataset, list[str]]] = []
-        self.curve_search_terms: list[bytes] = []
-        self.seg_work: list[tuple[bytes, h5py.Dataset, list[str]]] = []
-        self.segment_search_terms: list[bytes] = []
+        self.curve_work: dict[str, list[tuple[bytes, h5py.Dataset, list[str]]]] = {}
+        self.curve_search_terms: dict[str, list[bytes]] = {}
+        self.seg_work: dict[str, list[tuple[bytes, h5py.Dataset, list[str]]]] = {}
+        self.segment_search_terms: dict[str, list[bytes]] = {}
 
         # Chunk size for H5 datasets
         self.DATA_CHUNKSIZE = 512 * 1024
@@ -131,58 +131,6 @@ class H5Saver:
             for channel_name, unit in channel_units.items():
                 self.global_meta_group.attrs[f"channel.unit.{channel_name}"] = unit
 
-    def setup_curve_metadata_structure(self, changing_curve_keys: set, changing_segment_keys: set, num_of_curves: int):
-        """
-        Set up structure in the h5 file for saving curve data and metadata.
-
-        Parameters
-        ----------
-        changing_curve_keys : set
-            Keys of metadata that change across curves.
-        changing_segment_keys : set
-            Keys of metadata that change across segments.
-        num_of_curves : int
-            Total number of curves.
-        """
-        assert (
-            self.h5file is not None
-        ), "existing h5 file must be passed or create_file called before setup_curve_metadata_structure"
-        # Create the main group for the curve data that all the curve data will be in
-        self.curve_data_group = self.h5file.require_group("Curve_Data")
-
-        # Establish empty groups for global metadata and curve metadata
-        self.global_meta_group = self.curve_data_group.require_group("Global_Metadata")
-        self.curves_meta_group = self.curve_data_group.require_group("Curve_Metadata")
-
-        for key in changing_curve_keys:
-            self.curves_meta_datasets[f"curve.{key}"] = self.curves_meta_group.create_dataset(
-                name=f"curve.{key}",
-                shape=(num_of_curves,),
-                maxshape=(None,),
-                chunks=self.META_CHUNKSIZE,
-                dtype=h5py.string_dtype(encoding="utf-8"),
-            )
-            self.curves_meta_buffer[f"curve.{key}"] = []
-        self.curve_work = [
-            (f"{k}=".encode(), self.curves_meta_datasets[f"curve.{k}"], self.curves_meta_buffer[f"curve.{k}"])
-            for k in changing_curve_keys
-        ]
-        self.curve_search_terms = [f"{k}=".encode() for k in changing_curve_keys]
-        for key in changing_segment_keys:
-            self.curves_meta_datasets[f"segment.{key}"] = self.curves_meta_group.create_dataset(
-                name=f"segment.{key}",
-                shape=(num_of_curves * 2,),
-                maxshape=(None,),
-                chunks=self.META_CHUNKSIZE,
-                dtype=h5py.string_dtype(encoding="utf-8"),
-            )
-            self.curves_meta_buffer[f"segment.{key}"] = []
-        self.seg_work = [
-            (f"{k}=".encode(), self.curves_meta_datasets[f"segment.{k}"], self.curves_meta_buffer[f"segment.{k}"])
-            for k in changing_segment_keys
-        ]
-        self.segment_search_terms = [f"{k}=".encode() for k in changing_segment_keys]
-
     def complete_saving(self, volume: CurvesVolume):
         """
         Resize datasets and finalize the saved file.
@@ -194,17 +142,14 @@ class H5Saver:
         """
         assert self.h5file is not None, "existing h5 file must be passed or create_file called before complete_saving"
         # Add the last index to the indices datasets to mark the end of the last curve
-        for volume_name, segments in self.volume_datasets.items():
-            for direction in range(2):
-                seg_name = f"Segment_{direction}"
-                for channel_name in volume.channel_units:
-                    current_dataset = segments[seg_name][channel_name]["Data"]
-                    indices_dataset = segments[seg_name][channel_name]["Indices"]
-                    indices_dataset[-1] = current_dataset.shape[0]
+        for segment_name in volume.metadata.segment_names:
+            for channel_name in volume.metadata.channel_units:
+                indices_dataset = self.volume_datasets[volume.name][segment_name][channel_name]["Indices"]
+                indices_dataset[-1] = self.volume_points_saved[volume.name][segment_name][channel_name]
 
-                    segments[seg_name][channel_name]["Data"].resize(
-                        (self.volume_points_saved[volume_name][seg_name][channel_name],)
-                    )
+                self.volume_datasets[volume.name][segment_name][channel_name]["Data"].resize(
+                    (self.volume_points_saved[volume.name][segment_name][channel_name],)
+                )
         self.h5file.flush()
 
     def get_curves_sample(self, shape_x: int, shape_y: int, minimum_sample_size: int = 20):
@@ -234,7 +179,7 @@ class H5Saver:
             step -= 1
         return range(0, num_of_curves, step)
 
-    def predict_total_points(self, curves_volume: CurvesVolume) -> dict[int, dict[str, int]]:
+    def predict_total_points(self, curves_volume: CurvesVolume) -> dict[str, dict[str, int]]:
         """
         Predict the total number of points for each channel and segment.
 
@@ -252,25 +197,26 @@ class H5Saver:
             A dictionary containing the predicted total points for each channel and segment.
         """
         # Get a sample of curve (indices)
-        curves_to_check = self.get_curves_sample(curves_volume.shape_x, curves_volume.shape_y)
-        num_of_curves = curves_volume.shape_x * curves_volume.shape_y
-        points_for_channel_segment: dict[int, dict[str, list[int]]] = {}
+        shape_y, shape_x = curves_volume.shape
+        curves_to_check = self.get_curves_sample(shape_x, shape_y)
+        num_of_curves = shape_y * shape_x
+        points_for_channel_segment: dict[str, dict[str, list[int]]] = {}
 
         # Iterate through the segments, channels and our curve indices
-        for direction in range(2):
-            points_for_channel_segment[direction] = {}
-            for channel in curves_volume.channel_units:
-                points_for_channel_segment[direction][channel] = []
+        for segment_name in curves_volume.metadata.segment_names:
+            points_for_channel_segment[segment_name] = {}
+            for channel in curves_volume.metadata.channel_units:
+                points_for_channel_segment[segment_name][channel] = []
         for curve_num in curves_to_check:
             # Loop until we successfully retrieve some data
             while True:
                 try:
                     # Count points in extracted data
-                    sampled_curve = curves_volume[curve_num // curves_volume.shape_x, curve_num % curves_volume.shape_x]
-                    for direction in range(2):
-                        for channel in points_for_channel_segment[direction]:
-                            raw_array = sampled_curve[channel][f"Segment_{direction}"]
-                            points_for_channel_segment[direction][channel].append(len(raw_array))
+                    sampled_curve = curves_volume[curve_num // shape_x, curve_num % shape_x]
+                    for segment_name in curves_volume.metadata.segment_names:
+                        for channel in points_for_channel_segment[segment_name]:
+                            raw_array = sampled_curve[channel][segment_name]
+                            points_for_channel_segment[segment_name][channel].append(len(raw_array))
                     break
 
                 except KeyError:
@@ -281,18 +227,23 @@ class H5Saver:
                         break
                     curve_num += 1
                     continue
-        predicted_points_per_channel_segment: dict[int, dict[str, int]] = {}
+        predicted_points_per_channel_segment: dict[str, dict[str, int]] = {}
         # Calculate a prediction for total number of points based on maximum number of points then assuming
         # maximum points throughout data is no more than 10% higher
-        for direction in range(2):
-            predicted_points_per_channel_segment[direction] = {}
-            for channel in points_for_channel_segment[direction]:
-                predicted_points_per_channel_segment[direction][channel] = (
-                    int(np.max(points_for_channel_segment[direction][channel]) * 1.1) * num_of_curves
+        for segment_name in curves_volume.metadata.segment_names:
+            predicted_points_per_channel_segment[segment_name] = {}
+            for channel in points_for_channel_segment[segment_name]:
+                predicted_points_per_channel_segment[segment_name][channel] = (
+                    int(np.max(points_for_channel_segment[segment_name][channel]) * 1.1) * num_of_curves
                 )
         return predicted_points_per_channel_segment
 
-    def setup_volume(self, curves_volume: CurvesVolume) -> h5py.Group:
+    def setup_volume(
+        self,
+        curves_volume: CurvesVolume,
+        changing_curve_keys: set[str] | None = None,
+        changing_segment_keys: set[str] | None = None,
+    ) -> h5py.Group:
         """
         Set up a dataset in the h5 file for saving volume data.
 
@@ -300,16 +251,67 @@ class H5Saver:
         ----------
         curves_volume : CurvesVolume
             The CurvesVolume instance containing the curve data for each pixel.
+        changing_curve_keys : set[str] | None
+            Curve metadata keys that can vary between curves.
+        changing_segment_keys : set[str] | None
+            Segment metadata keys that can vary between segments.
 
         Returns
         -------
         h5py.Group
             The HDF5 group created or retrieved for the volume data.
         """
+        if changing_curve_keys is None:
+            changing_curve_keys = set()
+        if changing_segment_keys is None:
+            changing_segment_keys = set()
         assert self.h5file is not None, "existing h5 file must be passed or create_file called before setup_volume"
         self.curve_data_group = self.h5file.require_group("Curve_Data")
-        volume_data_group = self.curve_data_group.require_group(f"{curves_volume.name}_VOLM")
-        self.volumes_dims[curves_volume.name] = curves_volume.dims
+        volume_group = self.curve_data_group.require_group(f"{curves_volume.name}_VOLM")
+
+        volume_meta_group = volume_group.require_group("Metadata")
+        volume_data_group = volume_group.require_group("Data")
+        self.curves_meta_datasets[curves_volume.name] = {}
+        self.curves_meta_buffer[curves_volume.name] = {}
+
+        for key in changing_curve_keys:
+            self.curves_meta_datasets[curves_volume.name][f"curve.{key}"] = volume_meta_group.create_dataset(
+                name=f"curve.{key}",
+                shape=(len(curves_volume),),
+                maxshape=(None,),
+                chunks=self.META_CHUNKSIZE,
+                dtype=h5py.string_dtype(encoding="utf-8"),
+            )
+            self.curves_meta_buffer[curves_volume.name][f"curve.{key}"] = []
+        self.curve_work[curves_volume.name] = [
+            (
+                f"{k}=".encode(),
+                self.curves_meta_datasets[curves_volume.name][f"curve.{k}"],
+                self.curves_meta_buffer[curves_volume.name][f"curve.{k}"],
+            )
+            for k in changing_curve_keys
+        ]
+        self.curve_search_terms[curves_volume.name] = [f"{k}=".encode() for k in changing_curve_keys]
+        for key in changing_segment_keys:
+            self.curves_meta_datasets[curves_volume.name][f"segment.{key}"] = volume_meta_group.create_dataset(
+                name=f"segment.{key}",
+                shape=(len(curves_volume) * len(curves_volume.metadata.segment_names),),
+                maxshape=(None,),
+                chunks=self.META_CHUNKSIZE,
+                dtype=h5py.string_dtype(encoding="utf-8"),
+            )
+            self.curves_meta_buffer[curves_volume.name][f"segment.{key}"] = []
+        self.seg_work[curves_volume.name] = [
+            (
+                f"{k}=".encode(),
+                self.curves_meta_datasets[curves_volume.name][f"segment.{k}"],
+                self.curves_meta_buffer[curves_volume.name][f"segment.{k}"],
+            )
+            for k in changing_segment_keys
+        ]
+        self.segment_search_terms[curves_volume.name] = [f"{k}=".encode() for k in changing_segment_keys]
+
+        self.volumes_dims[curves_volume.name] = curves_volume.shape
         curve_groups: dict[str, dict[str, h5py.Group]] = {"Data": {}, "Indices": {}}
         self.volume_datasets[curves_volume.name] = {}
         self.volumes_data_buffer[curves_volume.name] = {}
@@ -317,42 +319,42 @@ class H5Saver:
         self.volume_points_read[curves_volume.name] = {}
 
         predicted_points_per_channel_segment = self.predict_total_points(curves_volume)
+        shape_y, shape_x = curves_volume.shape
 
-        for direction in range(2):
-            # For each segment direction, establish necessary group structure that will contain each channel dataset
-            seg_name = f"Segment_{direction}"
-            dir_group = volume_data_group.require_group(seg_name)
-            self.volume_datasets[curves_volume.name][seg_name] = {}
-            self.volumes_data_buffer[curves_volume.name][seg_name] = {}
-            self.volume_points_saved[curves_volume.name][seg_name] = {}
-            self.volume_points_read[curves_volume.name][seg_name] = {}
+        for segment_name in curves_volume.metadata.segment_names:
+            # For each segment, establish the group structure that will contain each channel dataset.
+            dir_group = volume_data_group.require_group(segment_name)
+            self.volume_datasets[curves_volume.name][segment_name] = {}
+            self.volumes_data_buffer[curves_volume.name][segment_name] = {}
+            self.volume_points_saved[curves_volume.name][segment_name] = {}
+            self.volume_points_read[curves_volume.name][segment_name] = {}
             # Create the Data and Indices subfolders and store their references
-            curve_groups["Data"][seg_name] = dir_group.require_group("Data")
-            curve_groups["Indices"][seg_name] = dir_group.require_group("Indices")
-            for chan in curves_volume.channel_units:
-                self.volume_datasets[curves_volume.name][seg_name][chan] = {}
+            curve_groups["Data"][segment_name] = dir_group.require_group("Data")
+            curve_groups["Indices"][segment_name] = dir_group.require_group("Indices")
+            for chan in curves_volume.metadata.channel_units:
+                self.volume_datasets[curves_volume.name][segment_name][chan] = {}
                 # For each channel, create an empty dataset
-                self.volume_datasets[curves_volume.name][seg_name][chan]["Data"] = curve_groups["Data"][
-                    seg_name
+                self.volume_datasets[curves_volume.name][segment_name][chan]["Data"] = curve_groups["Data"][
+                    segment_name
                 ].create_dataset(
                     name=chan,
-                    shape=(predicted_points_per_channel_segment[direction][chan],),
+                    shape=(predicted_points_per_channel_segment[segment_name][chan],),
                     maxshape=(None,),
                     chunks=(self.DATA_CHUNKSIZE,),
                     dtype=np.float32,
                 )
-                self.volume_datasets[curves_volume.name][seg_name][chan]["Indices"] = curve_groups["Indices"][
-                    seg_name
+                self.volume_datasets[curves_volume.name][segment_name][chan]["Indices"] = curve_groups["Indices"][
+                    segment_name
                 ].create_dataset(
                     name=chan,
-                    shape=(curves_volume.shape_y * curves_volume.shape_x + 1,),
+                    shape=(shape_y * shape_x + 1,),
                     maxshape=(None,),
                     chunks=(self.INDICES_CHUNKSIZE,),
                     dtype=np.int32,
                 )
-                self.volumes_data_buffer[curves_volume.name][seg_name][chan] = {"Data": [], "Indices": []}
-                self.volume_points_saved[curves_volume.name][seg_name][chan] = 0
-                self.volume_points_read[curves_volume.name][seg_name][chan] = 0
+                self.volumes_data_buffer[curves_volume.name][segment_name][chan] = {"Data": [], "Indices": []}
+                self.volume_points_saved[curves_volume.name][segment_name][chan] = 0
+                self.volume_points_read[curves_volume.name][segment_name][chan] = 0
         return volume_data_group
 
     def save_curve_segment(
@@ -360,7 +362,7 @@ class H5Saver:
         volume_name: str,
         segment_data: np.ndarray,
         curve_num: int,
-        direction: int,
+        segment_name: str,
         channel_name: str,
         num_of_curves: int,
     ) -> None:
@@ -375,28 +377,27 @@ class H5Saver:
             The curve segment's data to be saved.
         curve_num : int
             The number of the curve being saved.
-        direction : int
-            The direction of the curve segment (0 for trace, 1 for retrace).
+        segment_name : str
+            The name of the segment that the curve segment belongs to.
         channel_name : str
             The name of the channel that the curve segment belongs to.
         num_of_curves : int
             The total number of curves in the dataset (used to determine when to flush buffer).
         """
-        seg_name = f"Segment_{direction}"
-        buf = self.volumes_data_buffer[volume_name][seg_name][channel_name]
-        indices_set = self.volume_datasets[volume_name][seg_name][channel_name]["Indices"]
+        buf = self.volumes_data_buffer[volume_name][segment_name][channel_name]
+        indices_set = self.volume_datasets[volume_name][segment_name][channel_name]["Indices"]
 
         # The starting index for this curve segment's data in the dataset is the
         # number of points already read for this channel and segment
-        start_offset = self.volume_points_read[volume_name][seg_name][channel_name]
+        start_offset = self.volume_points_read[volume_name][segment_name][channel_name]
 
         buf["Data"].append(segment_data.astype(np.float32))
-        self.volume_points_read[volume_name][seg_name][channel_name] += len(segment_data)
+        self.volume_points_read[volume_name][segment_name][channel_name] += len(segment_data)
 
         # If the buffer is full or if this is the last curve segment, empty buffer into the dataset
         if len(buf["Data"]) >= self.BUFFER_SIZE or curve_num == num_of_curves - 1:
-            filled_size = self.volume_points_saved[volume_name][seg_name][channel_name]
-            data_set = self.volume_datasets[volume_name][seg_name][channel_name]["Data"]
+            filled_size = self.volume_points_saved[volume_name][segment_name][channel_name]
+            data_set = self.volume_datasets[volume_name][segment_name][channel_name]["Data"]
 
             buffered_data = np.concatenate(buf["Data"])
             required_size = filled_size + len(buffered_data)
@@ -407,7 +408,7 @@ class H5Saver:
             # Add the buffer to the dataset
             data_set[filled_size:required_size] = buffered_data
             # Update the filled size for this channel and segment
-            self.volume_points_saved[volume_name][seg_name][channel_name] = required_size
+            self.volume_points_saved[volume_name][segment_name][channel_name] = required_size
             # Clear the buffer
             buf["Data"].clear()
 
@@ -427,7 +428,12 @@ class H5Saver:
             buf["Indices"].clear()
 
     def save_curve(
-        self, curve_data: dict[str, dict[str, np.ndarray]], curve_num: int, num_of_curves: int, volume_name: str
+        self,
+        curve_data: dict[str, dict[str, np.ndarray]],
+        curve_num: int,
+        num_of_curves: int,
+        volume_name: str,
+        segment_names: list[str],
     ):
         """
         Save a curve's data and metadata to the h5 file.
@@ -442,41 +448,55 @@ class H5Saver:
             The total number of curves in the dataset (used to determine when to flush buffer).
         volume_name : str
             The name of the volume to which the curve belongs.
+        segment_names : list[str]
+            Segment names to save for the curve.
         """
-        for direction in range(2):
+        for segment_name in segment_names:
             for channel_name, segment_data in curve_data.items():
                 self.save_curve_segment(
                     volume_name=volume_name,
-                    segment_data=segment_data[f"Segment_{direction}"],
+                    segment_data=segment_data[segment_name],
                     curve_num=curve_num,
-                    direction=direction,
+                    segment_name=segment_name,
                     channel_name=channel_name,
                     num_of_curves=num_of_curves,
                 )
 
-    def get_segment_search_terms(self) -> list[bytes]:
+    def get_segment_search_terms(self, volume_name: str) -> list[bytes]:
         """
         Get the list of segment search terms.
+
+        Parameters
+        ----------
+        volume_name : str
+            The name of the volume.
 
         Returns
         -------
         list[bytes]
             List of segment search terms.
         """
-        return self.segment_search_terms
+        return self.segment_search_terms[volume_name]
 
-    def get_curve_search_terms(self) -> list[bytes]:
+    def get_curve_search_terms(self, volume_name: str) -> list[bytes]:
         """
         Get the list of curve search terms.
+
+        Parameters
+        ----------
+        volume_name : str
+            The name of the volume.
 
         Returns
         -------
         list[bytes]
             List of curve search terms.
         """
-        return self.curve_search_terms
+        return self.curve_search_terms[volume_name]
 
-    def save_curve_meta_attr(self, curve_num: int, attr_idx: int, value: Any, num_of_curves: int) -> None:
+    def save_curve_meta_attr(
+        self, curve_num: int, attr_idx: int, value: Any, volume_name: str, num_of_curves: int
+    ) -> None:
         """
         Save a curve metadata attribute.
 
@@ -488,10 +508,12 @@ class H5Saver:
             The index of the attribute.
         value : str
             The value of the attribute to save.
+        volume_name : str
+            The name of the volume to which the curve belongs.
         num_of_curves : int
             The total number of curves.
         """
-        attr_name, meta_set, meta_buffer = self.curve_work[attr_idx]
+        attr_name, meta_set, meta_buffer = self.curve_work[volume_name][attr_idx]
         if meta_buffer is not None:
             meta_buffer.append(str(value))
             if len(meta_buffer) >= self.BUFFER_SIZE or curve_num == num_of_curves - 1:
@@ -503,8 +525,16 @@ class H5Saver:
                 f"metadata for curve {curve_num}"
             )
 
+    # pylint: disable-next=too-many-arguments
     def save_segment_meta_attr(
-        self, curve_num: int, direction: int, attr_idx: int, value: Any, num_of_curves: int
+        self,
+        curve_num: int,
+        segment_idx: int,
+        attr_idx: int,
+        value: Any,
+        volume_name: str,
+        num_of_curves: int,
+        num_of_segments: int,
     ) -> None:
         """
         Save a segment metadata attribute.
@@ -513,26 +543,30 @@ class H5Saver:
         ----------
         curve_num : int
             The number of the curve.
-        direction : int
-            The direction of the segment (0 or 1).
+        segment_idx : int
+            The index of the segment.
         attr_idx : int
             The index of the attribute.
         value : str
             The value of the attribute to save.
+        volume_name : str
+            The name of the volume to which the segment belongs.
         num_of_curves : int
             The total number of curves.
+        num_of_segments : int
+            The number of segments per curve.
         """
-        attr_name, meta_set, meta_buffer = self.seg_work[attr_idx]
+        attr_name, meta_set, meta_buffer = self.seg_work[volume_name][attr_idx]
         if meta_buffer is not None:
             meta_buffer.append(str(value))
             if len(meta_buffer) >= self.BUFFER_SIZE or curve_num == num_of_curves - 1:
-                idx = curve_num * 2 + direction
+                idx = curve_num * num_of_segments + segment_idx
                 meta_set[idx - len(meta_buffer) + 1 : idx + 1] = meta_buffer
                 meta_buffer.clear()
         else:
             logger.error(
                 f"Metadata dataset for key {attr_name.decode('utf-8')} not found when trying to save "
-                f"metadata for curve {curve_num}, direction {direction}"
+                f"metadata for curve {curve_num}, segment {segment_idx}"
             )
 
     def save_global_meta(self, global_meta: dict[str, Any], size_x: float, size_y: float, shape_x: int, shape_y: int):
