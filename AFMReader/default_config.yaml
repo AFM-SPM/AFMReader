@@ -78,3 +78,16 @@ ardf:
     scan_lines:
       - FastMapScanLines
       - FMapScanLines
+
+standard_curve:
+  segment_names:
+    Extend:
+      - Extend
+      - extend
+      - Ext
+      - approach
+      - Approach
+    Retract:
+      - Retract
+      - retract
+      - Ret

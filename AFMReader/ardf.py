@@ -1094,6 +1094,7 @@ class ARDFVolume(CurvesVolume):
         shape: tuple[int, int],
         metadata: CurvesVolumeMetadata,
         reader: ARDFForceMapReader | ARDFFFMReader,
+        segment_mapping: dict[str, str],
         step_info: StepInfo,
         flip_image: bool = True,
         reverse_curve_points: bool = True,
@@ -1120,6 +1121,7 @@ class ARDFVolume(CurvesVolume):
         """
         super().__init__(name=name, shape=shape, metadata=metadata, flip_image=flip_image)
         self.reverse_curve_points = reverse_curve_points
+        self.segment_mapping = segment_mapping
         self.step_info = step_info
         self._reader = reader
 
@@ -1147,7 +1149,14 @@ class ARDFVolume(CurvesVolume):
             y = self.shape[0] - 1 - y
         if not (0 <= y < self.shape[0] and 0 <= x < self.shape[1]):
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
-        return self._reader.get_curve(y, x, reverse_curve_points=self.reverse_curve_points)
+        curve = self._reader.get_curve(y, x, reverse_curve_points=self.reverse_curve_points)
+        return {
+            channel_name: {
+                self.segment_mapping.get(segment_name, segment_name): segment_data
+                for segment_name, segment_data in channel_data.items()
+            }
+            for channel_name, channel_data in curve.items()
+        }
 
     def iter_indices(self) -> Iterable[Index]:
         """
@@ -1227,7 +1236,27 @@ class ARDFDataset(CurvesDataset):
             self.mmap_file = None
 
 
-def parse_volm(volm_header: ARDFHeader, flip_image: bool = True, curve_height_offset: float = 0.0) -> ARDFVolume:
+def _get_standard_segment_mapping(
+    seg_names: list[str], segment_names_map: dict[str, list[str]] | None
+) -> dict[str, str]:
+    """Map source segment names to canonical segment names."""
+    if segment_names_map is None:
+        return {}
+    new_segment_mapping = {}
+    for key, names in segment_names_map.items():
+        for name in names:
+            if name in seg_names:
+                new_segment_mapping[name] = key
+                break
+    return new_segment_mapping
+
+
+def parse_volm(
+    volm_header: ARDFHeader,
+    flip_image: bool = True,
+    curve_height_offset: float = 0.0,
+    segment_names_map: dict[str, list[str]] | None = None,
+) -> ARDFVolume:
     """
     Parse a volume section from its header.
 
@@ -1269,6 +1298,8 @@ def parse_volm(volm_header: ARDFHeader, flip_image: bool = True, curve_height_of
     complete = points * lines == nsets
     x_unit, y_unit, t_unit, seg_names = list(map(decode_cstring, cstrings))
     seg_names = seg_names.split(";")[:-1]
+    new_segment_mapping = _get_standard_segment_mapping(seg_names, segment_names_map)
+
     assert nseg == len(seg_names)
 
     # Implicit table of channels here smh
@@ -1325,6 +1356,7 @@ def parse_volm(volm_header: ARDFHeader, flip_image: bool = True, curve_height_of
             vchn_list,
         )
         name = "FMAP"
+    seg_names = [new_segment_mapping[key] if key in new_segment_mapping else key for key in seg_names]
 
     return ARDFVolume(
         name=name,
@@ -1334,6 +1366,7 @@ def parse_volm(volm_header: ARDFHeader, flip_image: bool = True, curve_height_of
         ),
         reader=reader,
         step_info=((x_step, x_unit), (y_step, y_unit), (t_step, t_unit)),
+        segment_mapping=new_segment_mapping,
         flip_image=flip_image,
         reverse_curve_points=True,
     )
@@ -1377,6 +1410,7 @@ class ARDFReader:
         self.flip_image = flip_image
         self.config_path = config_path
         self.mmap_file = mmap_path_read_only(filepath)
+        self.config = load_config(config_path)
         file_header = self.check_type(self.mmap_file)
         ftoc_header = ARDFHeader.unpack(self.mmap_file, offset=file_header.size)
         if ftoc_header.name != b"FTOC":
@@ -1402,7 +1436,12 @@ class ARDFReader:
                 item = ARDFImage.parse_imag(item)
                 self.images[item.name] = item
             elif item.name == b"VOLM":
-                item = parse_volm(item, flip_image=self.flip_image, curve_height_offset=curve_height_offset)
+                item = parse_volm(
+                    item,
+                    flip_image=self.flip_image,
+                    curve_height_offset=curve_height_offset,
+                    segment_names_map=self.config.get("standard_curve", {}).get("segment_names", {}),
+                )
                 self.volumes[item.name] = item
             else:
                 raise RuntimeError(f"Unknown TOC entry {item.name}.", item)
@@ -1430,7 +1469,7 @@ class ARDFReader:
         dict[str, Any]
             A dictionary keyed by canonical metadata names.
         """
-        essential_key_options = load_config(self.config_path).get("ardf", {}).get("essential_metadata_keys", {})
+        essential_key_options = self.config.get("ardf", {}).get("essential_metadata_keys", {})
         filtered_metadata = {}
         for target_name, source_keys in essential_key_options.items():
             for source_key in source_keys:
