@@ -1328,7 +1328,6 @@ def parse_volm(
     mlov_header.validate()
 
     channel_units = {channel_name: channel.unit for channel_name, (i, channel) in channels.items()}
-    logger.debug(f"Channel units: {channel_units}")
 
     # Check if each offset is regularly spaced
     # optimize for LARGE regular case (FMaps are SMALL)
@@ -1514,7 +1513,6 @@ class ARDFReader:
                 shape_y, shape_x = ardf_volume.shape
                 num_curves = shape_y * shape_x
                 h5_saver.setup_volume(ardf_volume)
-                logger.debug(f"Volume channel units before saving: {ardf_volume.metadata.channel_units}")
                 for curve_idx, curve in enumerate(
                     tqdm(
                         ardf_volume.iter_curves(flip_image=False),
@@ -1531,7 +1529,6 @@ class ARDFReader:
                     )
 
                 h5_saver.complete_saving(ardf_volume)
-                logger.debug(f"Channel units after saving: {ardf_volume.metadata.channel_units}")
 
             # Save images
             for idx, (image_name, ardf_image) in enumerate(self.images.items()):
