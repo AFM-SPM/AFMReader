@@ -25,6 +25,35 @@ from AFMReader.logging import logger
 from AFMReader import jpk
 
 
+def _get_standard_segment_mapping(
+    seg_names: list[str], segment_names_map: dict[str, list[str]] | None
+) -> dict[str, str]:
+    """
+    Map source segment names to canonical segment names.
+
+    Parameters
+    ----------
+    seg_names : list[str]
+        Source segment names present in the curve data.
+    segment_names_map : dict[str, list[str]] | None
+        Dictionary mapping canonical segment names to their accepted aliases.
+
+    Returns
+    -------
+    dict[str, str]
+        Dictionary mapping source segment names to canonical segment names.
+    """
+    if segment_names_map is None:
+        return {}
+    new_segment_mapping = {}
+    for key, names in segment_names_map.items():
+        for name in names:
+            if name in seg_names:
+                new_segment_mapping[name] = key
+                break
+    return new_segment_mapping
+
+
 class CurvesJPKDataset(CurvesDataset):
     """
     A dataset class for JPK QI data that holds the raw data as well as metadata.
@@ -170,6 +199,8 @@ class CurvesJPKVolume(CurvesVolume):
         Metadata associated with this JPK curve volume.
     channel_scaling : dict[str, dict[str, float]]
         A dictionary mapping channel names to their scaling factors.
+    segment_mapping : dict[str, str]
+        A dictionary mapping source segment names to canonical segment names.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
     """
@@ -181,6 +212,7 @@ class CurvesJPKVolume(CurvesVolume):
         archive: zipfile.ZipFile,
         metadata: CurvesJPKMetadata,
         channel_scaling: dict[str, dict[str, float]],
+        segment_mapping: dict[str, str],
         flip_image: bool = True,
     ):
         """
@@ -198,6 +230,8 @@ class CurvesJPKVolume(CurvesVolume):
             Metadata associated with this JPK curve volume.
         channel_scaling : dict[str, dict[str, float]]
             A dictionary mapping channel names to their scaling factors.
+        segment_mapping : dict[str, str]
+            A dictionary mapping source segment names to canonical segment names.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
         """
@@ -209,6 +243,7 @@ class CurvesJPKVolume(CurvesVolume):
         )
         self.archive = archive
         self.channel_scaling = channel_scaling
+        self.segment_mapping = segment_mapping
 
     def get_curve(self, y: int, x: int, flip_image: bool | None = None):
         """
@@ -245,7 +280,10 @@ class CurvesJPKVolume(CurvesVolume):
                     # Access the file directly without re-parsing the ZIP directory
                     with self.archive.open(dat_path) as f:
                         raw_array = np.frombuffer(f.read(), dtype=">i4")
-                        curve_data[channel_name][segment_name] = (raw_array * scale["multiplier"]) + scale["offset"]
+                        standard_segment_name = self.segment_mapping.get(segment_name, segment_name)
+                        curve_data[channel_name][standard_segment_name] = (raw_array * scale["multiplier"]) + scale[
+                            "offset"
+                        ]
                 except KeyError as e:
                     raise KeyError(
                         f"Internal data file missing for pixel ({x}, {y}), "
@@ -365,6 +403,8 @@ class JPKQILoader:
         self.flip_image = flip_image
         self.save_as_h5 = save_as_h5
 
+        self.config = load_config(self.config_path)
+
         # Open the ZIP archive once and keep it open for the duration of the loading process
         self.qi_archive = zipfile.ZipFile(self.filepath, "r")  # pylint: disable=consider-using-with
         logger.info(f"Opened JPK QI archive at {self.filepath}")
@@ -399,6 +439,7 @@ class JPKQILoader:
         self.curve_meta: dict[str, Any] = {}
         self.segment_meta: dict[str, Any] = {}
         self.segment_names: list[str] = []
+        self.segment_mapping: dict[str, str] = {}
 
         # Define the image shape and size attributes
         self.size_x: float = np.nan
@@ -495,6 +536,7 @@ class JPKQILoader:
             archive=self.qi_archive,
             metadata=self.volume_metadata,
             channel_scaling=self.channel_scaling,
+            segment_mapping=self.segment_mapping,
             flip_image=bool(self.flip_image),
         )
         self.curves_dataset = CurvesJPKDataset(
@@ -611,6 +653,7 @@ class JPKQILoader:
             archive=self.qi_archive,
             metadata=self.volume_metadata,
             channel_scaling=self.channel_scaling,
+            segment_mapping=self.segment_mapping,
             flip_image=bool(self.flip_image),
         )
         # Determine the path for the H5 file, ensuring it does not overwrite an existing file
@@ -1053,6 +1096,13 @@ class JPKQILoader:
                     shared_meta.get(f"force-segment-header-info.{seg_idx}.settings.style", f"Segment {seg_idx}")
                     for seg_idx in range(segment_count)
                 ]
+                self.segment_mapping = _get_standard_segment_mapping(
+                    self.segment_names,
+                    self.config.get("standard_curve", {}).get("segment_names", {}),
+                )
+                self.segment_names = [
+                    self.segment_mapping.get(segment_name, segment_name) for segment_name in self.segment_names
+                ]
 
                 # Add all the data from the shared header to the top level metadata with a prefix to avoid key clashes
                 for key, value in shared_meta.items():
@@ -1096,7 +1146,7 @@ class JPKQILoader:
         dict[str, Any]
             A dictionary containing only the essential metadata keys.
         """
-        essential_key_options = load_config(self.config_path).get("jpk_qi", {}).get("essential_metadata_keys", {})
+        essential_key_options = self.config.get("jpk_qi", {}).get("essential_metadata_keys", {})
         filtered_metadata = {}
         for target_name, source_keys in essential_key_options.items():
             for source_key in source_keys:
