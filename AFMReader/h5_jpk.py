@@ -482,6 +482,26 @@ class CurvesH5Volume(CurvesVolume):
                         curve_data[channel][segment] = segment_data[start_idx:end_idx]
                 yield curve_data
 
+    def iter_segments(self, channel_segment_pairs: list[tuple[str, str]], batch_size: int = 1):
+        indices_map: dict[str, dict[str, np.ndarray]] = {}
+        for segment_name, channel_name in channel_segment_pairs:
+            if segment_name in self.volume_data_group:
+                segment_group = self.volume_data_group[segment_name]
+                if channel_name in segment_group["Indices"]:
+                    if segment_name not in indices_map:
+                        indices_map[segment_name] = {}
+                    indices_map[segment_name][channel_name] = segment_group["Indices"][channel_name][:]
+        for idx in range(0, len(self), batch_size):
+            data_batch: list[tuple[np.ndarray, np.ndarray]] = []
+            for segment_name, channel_name in channel_segment_pairs:
+                # TODO are the indicies correct here
+                indicies = indices_map[segment_name][channel_name][idx : idx + batch_size]
+                data = self.volume_data_group[segment_name]["Data"][channel_name][indicies[0] : indicies[-1]]
+                data_batch.append((indicies, data))
+            yield data_batch
+
+
+
     def get_curve(self, y: int, x: int, flip_image: bool | None = None):
         """
         Fetch the QI curve data for a specific pixel (x, y) on demand.
