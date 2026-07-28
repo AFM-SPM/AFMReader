@@ -1095,6 +1095,7 @@ class ARDFVolume(CurvesVolume):
         metadata: CurvesVolumeMetadata,
         reader: ARDFForceMapReader | ARDFFFMReader,
         segment_mapping: dict[str, str],
+        channel_mapping: dict[str, str],
         step_info: StepInfo,
         flip_image: bool = True,
         reverse_curve_points: bool = True,
@@ -1112,6 +1113,10 @@ class ARDFVolume(CurvesVolume):
             The reader used to load curve data.
         metadata : CurvesVolumeMetadata
             Metadata associated with the volume.
+        segment_mapping : dict[str, str]
+            Mapping from source segment names to canonical names.
+        channel_mapping : dict[str, str]
+            Mapping from source channel names to canonical names.
         step_info : StepInfo
             Step size and unit information for each axis.
         flip_image : bool, optional
@@ -1122,6 +1127,7 @@ class ARDFVolume(CurvesVolume):
         super().__init__(name=name, shape=shape, metadata=metadata, flip_image=flip_image)
         self.reverse_curve_points = reverse_curve_points
         self.segment_mapping = segment_mapping
+        self.channel_mapping = channel_mapping
         self.step_info = step_info
         self._reader = reader
 
@@ -1151,7 +1157,7 @@ class ARDFVolume(CurvesVolume):
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
         curve = self._reader.get_curve(y, x, reverse_curve_points=self.reverse_curve_points)
         return {
-            channel_name: {
+            self.channel_mapping.get(channel_name, channel_name): {
                 self.segment_mapping.get(segment_name, segment_name): segment_data
                 for segment_name, segment_data in channel_data.items()
             }
@@ -1251,11 +1257,27 @@ def _get_standard_segment_mapping(
     return new_segment_mapping
 
 
+def _get_standard_channel_mapping(
+    channel_names: list[str], channel_names_map: dict[str, list[str]] | None
+) -> dict[str, str]:
+    """Map at most one source channel name to each canonical channel name."""
+    if channel_names_map is None:
+        return {}
+    channel_mapping = {}
+    for key, names in channel_names_map.items():
+        for name in names:
+            if name in channel_names:
+                channel_mapping[name] = key
+                break
+    return channel_mapping
+
+
 def parse_volm(
     volm_header: ARDFHeader,
     flip_image: bool = True,
     curve_height_offset: float = 0.0,
     segment_names_map: dict[str, list[str]] | None = None,
+    channel_names_map: dict[str, list[str]] | None = None,
 ) -> ARDFVolume:
     """
     Parse a volume section from its header.
@@ -1266,6 +1288,12 @@ def parse_volm(
         The VOLM section header.
     flip_image : bool
         Whether to flip the image vertically.
+    curve_height_offset : float
+        Offset used when converting the raw height channel.
+    segment_names_map : dict[str, list[str]] | None
+        Canonical segment names and their ordered source aliases.
+    channel_names_map : dict[str, list[str]] | None
+        Canonical channel names and their ordered source aliases.
 
     Returns
     -------
@@ -1317,6 +1345,7 @@ def parse_volm(
         raise RuntimeError("Got too many channels.", channels)
 
     channels: ChanMap = {vchn.name: (i, vchn) for i, vchn in enumerate(vchn_list)}
+    channel_mapping = _get_standard_channel_mapping(list(channels), channel_names_map)
 
     xdef = ARDFXdef.unpack(header)
     vtoc_header = ARDFHeader.unpack(data, xdef.offset + xdef.size)
@@ -1327,7 +1356,9 @@ def parse_volm(
         raise ValueError("Malformed volume table of contents.", mlov_header)
     mlov_header.validate()
 
-    channel_units = {channel_name: channel.unit for channel_name, (i, channel) in channels.items()}
+    channel_units = {
+        channel_mapping.get(channel_name, channel_name): channel.unit for channel_name, (i, channel) in channels.items()
+    }
 
     # Check if each offset is regularly spaced
     # optimize for LARGE regular case (FMaps are SMALL)
@@ -1366,6 +1397,7 @@ def parse_volm(
         reader=reader,
         step_info=((x_step, x_unit), (y_step, y_unit), (t_step, t_unit)),
         segment_mapping=new_segment_mapping,
+        channel_mapping=channel_mapping,
         flip_image=flip_image,
         reverse_curve_points=True,
     )
@@ -1440,6 +1472,7 @@ class ARDFReader:
                     flip_image=self.flip_image,
                     curve_height_offset=curve_height_offset,
                     segment_names_map=self.config.get("standard_curve", {}).get("segment_names", {}),
+                    channel_names_map=self.config.get("standard_curve", {}).get("channel_names", {}),
                 )
                 self.volumes[item.name] = item
             else:

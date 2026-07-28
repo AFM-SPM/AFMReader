@@ -482,25 +482,40 @@ class CurvesH5Volume(CurvesVolume):
                         curve_data[channel][segment] = segment_data[start_idx:end_idx]
                 yield curve_data
 
-    def iter_segments(self, channel_segment_pairs: list[tuple[str, str]], batch_size: int = 1):
-        indices_map: dict[str, dict[str, np.ndarray]] = {}
-        for segment_name, channel_name in channel_segment_pairs:
+    def iter_segments(self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1):
+        """
+        Iterate over selected segment channels in batches.
+
+        Parameters
+        ----------
+        channel_segment_sets : dict[str, list[str]]
+            Mapping of segment names to the channel names to include.
+        batch_size : int, optional
+            Maximum number of curves to include in each batch.
+
+        Yields
+        ------
+        list[tuple[np.ndarray, list[np.ndarray]]]
+            Relative indices and channel data for each selected segment.
+        """
+        indices_map: dict[str, np.ndarray] = {}
+        for segment_name, channel_list in channel_segment_sets.items():
             if segment_name in self.volume_data_group:
                 segment_group = self.volume_data_group[segment_name]
-                if channel_name in segment_group["Indices"]:
-                    if segment_name not in indices_map:
-                        indices_map[segment_name] = {}
-                    indices_map[segment_name][channel_name] = segment_group["Indices"][channel_name][:]
+                indices_map[segment_name] = segment_group["Indices"][channel_list[0]][:]
         for idx in range(0, len(self), batch_size):
-            data_batch: list[tuple[np.ndarray, np.ndarray]] = []
-            for segment_name, channel_name in channel_segment_pairs:
+            data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
+            for segment_name, channel_list in channel_segment_sets.items():
                 # TODO are the indicies correct here
-                indicies = indices_map[segment_name][channel_name][idx : idx + batch_size]
-                data = self.volume_data_group[segment_name]["Data"][channel_name][indicies[0] : indicies[-1]]
-                data_batch.append((indicies, data))
+                indicies = indices_map[segment_name][idx : idx + batch_size + 1]
+                data = []
+                for channel_name in channel_list:
+                    channel_data = self.volume_data_group[segment_name]["Data"][channel_name][
+                        indicies[0] : indicies[-1]
+                    ]
+                    data.append(channel_data)
+                data_batch.append((indicies - indicies[0], data))
             yield data_batch
-
-
 
     def get_curve(self, y: int, x: int, flip_image: bool | None = None):
         """

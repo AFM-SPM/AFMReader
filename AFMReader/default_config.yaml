@@ -91,3 +91,17 @@ standard_curve:
       - Retract
       - retract
       - Ret
+  channel_names:
+    Vertical Deflection:
+      - Vertical Deflection
+      - vDeflection
+      - Defl
+    Lateral Deflection:
+      - Lateral Deflection
+      - hDeflection
+      - lDeflection
+    Height (Measured):
+      - Height (Measured)
+      - measuredHeight
+      - Raw
+      - Drive

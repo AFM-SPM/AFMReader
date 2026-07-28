@@ -54,6 +54,35 @@ def _get_standard_segment_mapping(
     return new_segment_mapping
 
 
+def _get_standard_channel_mapping(
+    channel_names: list[str], channel_names_map: dict[str, list[str]] | None
+) -> dict[str, str]:
+    """
+    Map at most one source channel name to each canonical channel name.
+
+    Parameters
+    ----------
+    channel_names : list[str]
+        Source channel names present in the curve data.
+    channel_names_map : dict[str, list[str]] | None
+        Dictionary mapping canonical channel names to their accepted aliases.
+
+    Returns
+    -------
+    dict[str, str]
+        Dictionary mapping source channel names to canonical channel names.
+    """
+    if channel_names_map is None:
+        return {}
+    channel_mapping = {}
+    for key, names in channel_names_map.items():
+        for name in names:
+            if name in channel_names:
+                channel_mapping[name] = key
+                break
+    return channel_mapping
+
+
 class CurvesJPKDataset(CurvesDataset):
     """
     A dataset class for JPK QI data that holds the raw data as well as metadata.
@@ -201,6 +230,8 @@ class CurvesJPKVolume(CurvesVolume):
         A dictionary mapping channel names to their scaling factors.
     segment_mapping : dict[str, str]
         A dictionary mapping source segment names to canonical segment names.
+    channel_mapping : dict[str, str]
+        A dictionary mapping source channel names to canonical channel names.
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
     """
@@ -213,6 +244,7 @@ class CurvesJPKVolume(CurvesVolume):
         metadata: CurvesJPKMetadata,
         channel_scaling: dict[str, dict[str, float]],
         segment_mapping: dict[str, str],
+        channel_mapping: dict[str, str],
         flip_image: bool = True,
     ):
         """
@@ -232,6 +264,8 @@ class CurvesJPKVolume(CurvesVolume):
             A dictionary mapping channel names to their scaling factors.
         segment_mapping : dict[str, str]
             A dictionary mapping source segment names to canonical segment names.
+        channel_mapping : dict[str, str]
+            A dictionary mapping source channel names to canonical channel names.
         flip_image : bool, optional
             Whether to flip the image vertically. Default is True.
         """
@@ -244,6 +278,7 @@ class CurvesJPKVolume(CurvesVolume):
         self.archive = archive
         self.channel_scaling = channel_scaling
         self.segment_mapping = segment_mapping
+        self.channel_mapping = channel_mapping
 
     def get_curve(self, y: int, x: int, flip_image: bool | None = None):
         """
@@ -273,7 +308,8 @@ class CurvesJPKVolume(CurvesVolume):
         curve_data: dict[str, Any] = {}
 
         for channel_name, scale in self.channel_scaling.items():
-            curve_data[channel_name] = {}
+            standard_channel_name = self.channel_mapping.get(channel_name, channel_name)
+            curve_data[standard_channel_name] = {}
             for segment_idx, segment_name in enumerate(self.metadata.segment_names):
                 dat_path = f"index/{curve_num}/segments/{segment_idx}/channels/{channel_name}.dat"
                 try:
@@ -281,9 +317,9 @@ class CurvesJPKVolume(CurvesVolume):
                     with self.archive.open(dat_path) as f:
                         raw_array = np.frombuffer(f.read(), dtype=">i4")
                         standard_segment_name = self.segment_mapping.get(segment_name, segment_name)
-                        curve_data[channel_name][standard_segment_name] = (raw_array * scale["multiplier"]) + scale[
-                            "offset"
-                        ]
+                        curve_data[standard_channel_name][standard_segment_name] = (
+                            raw_array * scale["multiplier"]
+                        ) + scale["offset"]
                 except KeyError as e:
                     raise KeyError(
                         f"Internal data file missing for pixel ({x}, {y}), "
@@ -440,6 +476,7 @@ class JPKQILoader:
         self.segment_meta: dict[str, Any] = {}
         self.segment_names: list[str] = []
         self.segment_mapping: dict[str, str] = {}
+        self.channel_mapping: dict[str, str] = {}
 
         # Define the image shape and size attributes
         self.size_x: float = np.nan
@@ -537,6 +574,7 @@ class JPKQILoader:
             metadata=self.volume_metadata,
             channel_scaling=self.channel_scaling,
             segment_mapping=self.segment_mapping,
+            channel_mapping=self.channel_mapping,
             flip_image=bool(self.flip_image),
         )
         self.curves_dataset = CurvesJPKDataset(
@@ -654,6 +692,7 @@ class JPKQILoader:
             metadata=self.volume_metadata,
             channel_scaling=self.channel_scaling,
             segment_mapping=self.segment_mapping,
+            channel_mapping=self.channel_mapping,
             flip_image=bool(self.flip_image),
         )
         # Determine the path for the H5 file, ensuring it does not overwrite an existing file
@@ -926,7 +965,7 @@ class JPKQILoader:
                 segment_data=segment_array,
                 curve_num=curve_num,
                 segment_name=segment_name,
-                channel_name=chan_name,
+                channel_name=self.channel_mapping.get(chan_name, chan_name),
                 num_of_curves=self.num_of_curves,
             )
 
@@ -1131,6 +1170,14 @@ class JPKQILoader:
         self.channels_units = {seg_chan["name"]: seg_chan["unit"] for seg_chan in self.segment_channels}
         # Lookup map for binary scaling
         self.channel_scaling = {chan["name"]: chan for chan in self.segment_channels}
+        self.channel_mapping = _get_standard_channel_mapping(
+            list(self.channel_scaling),
+            self.config.get("standard_curve", {}).get("channel_names", {}),
+        )
+        self.channels_units = {
+            self.channel_mapping.get(channel_name, channel_name): unit
+            for channel_name, unit in self.channels_units.items()
+        }
 
     def filter_essential_metadata(self, raw_metadata: dict[str, Any]) -> dict[str, Any]:
         """
