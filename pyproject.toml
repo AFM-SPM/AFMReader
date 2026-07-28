@@ -34,10 +34,13 @@ keywords = [
 ]
 
 dependencies = [
+  "attrs",
   "h5py",
   "igor2",
   "loguru",
   "matplotlib",
+  "numpy",
+  "packaging",
   "pySPM",
   "tifffile",
   "tqdm",
