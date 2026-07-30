@@ -2,16 +2,18 @@
 
 from importlib import resources
 from pathlib import Path
+from io import BytesIO
 
 import numpy as np
 import tifffile
 
 from AFMReader.io import read_yaml
 from AFMReader.logging import logger
+from AFMReader.data_classes import AFMLoad
 
 logger.enable(__package__)
 
-# pylint: disable=too-many-locals
+# pylint: disable=too-many-locals,too-many-positional-arguments,fixme
 
 
 def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: dict[str, int]) -> float:
@@ -171,9 +173,72 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
     return scaling, offset
 
 
+def _get_jpk_channels(
+    file: Path | BytesIO, filename: str, file_path: Path | str, config_path: Path | str | None = None
+):
+    """
+    Retrieve the list of available channels from a JPK TIFF file.
+
+    Parameters
+    ----------
+    file : Path | BytesIO
+        Path to the JPK TIFF file.
+    filename : str
+        Name of the JPK TIFF file.
+    file_path : Path | str
+        Path to the JPK TIFF file.
+    config_path : Path | str | None, optional
+        Path to a configuration file. If ''None'' (default) then the packages
+        default configuration is loaded from ''default_config.yaml''.
+
+    Returns
+    -------
+    dict
+        Dictionary of available channels with their corresponding page indices.
+    """
+    jpk_tags = _load_jpk_tags(config_path)
+    try:
+        tif = tifffile.TiffFile(file)
+    except FileNotFoundError:
+        logger.error(f"[{filename}] File not found : {file_path}")
+        raise
+    # Obtain channel list for all channels in file
+    channel_list = {}
+    for i, page in enumerate(tif.pages[1:]):  # [0] is thumbnail
+        available_channel = page.tags[jpk_tags["channel_name"]].value  # keys are hexadecimal values
+        if page.tags[jpk_tags["trace_retrace"]].value == 0:  # whether img is trace or retrace
+            tr_rt = "trace"
+        else:
+            tr_rt = "retrace"
+        channel_list[f"{available_channel}_{tr_rt}"] = i + 1
+    return channel_list
+
+
+def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = None) -> list[str]:
+    """
+    Get the list of channels available in the .jpk file.
+
+    Parameters
+    ----------
+    file_path : Path | str
+        Path to the .jpk file.
+    config_path : Path | str | None
+        Path to a configuration file. If ''None'' (default) then the packages
+        default configuration is loaded from ''default_config.yaml''.
+
+    Returns
+    -------
+    list[str]
+        List of available channels.
+    """
+    file_path = Path(file_path)
+    filename = file_path.stem
+    return _get_jpk_channels(file_path, filename, file_path, config_path)
+
+
 def load_jpk(
-    file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool | None = True
-) -> tuple[np.ndarray, float]:
+    file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True
+) -> AFMLoad:
     """
     Load image from JPK Instruments .jpk files.
 
@@ -186,13 +251,13 @@ def load_jpk(
     config_path : Path | str | None
         Path to a configuration file. If ''None'' (default) then the packages default configuration is loaded from
         ''default_config.yaml''.
-    flip_image : bool, optional
+    flip_image : bool
         Whether to flip the image vertically. Default is ``True``.
 
     Returns
     -------
-    tuple[npt.NDArray, float]
-        A tuple containing the image and its pixel to nanometre scaling value.
+    AFMLoad
+        An AFMLoad object containing the image and its pixel to nanometre scaling value.
 
     Raises
     ------
@@ -206,18 +271,64 @@ def load_jpk(
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_jpk
-    >>> image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk",
-    >>>                                                     channel="height_trace",
-    >>>                                                     flip_image=True)
+    >>> afm_load = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
+    >>> image = afm_load.image
+    >>> pixel_to_nanometre_scaling_factor = afm_load.px2nm
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
     filename = file_path.stem
+    image, px2nm = _load_jpk(
+        file=file_path,
+        filename=filename,
+        channel=channel,
+        file_suffix=file_path.suffix,
+        config_path=config_path,
+        flip_image=flip_image,
+    )
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=px2nm)
+
+
+def _load_jpk(
+    file: Path | BytesIO,
+    filename: str,
+    channel: str,
+    file_suffix: str,
+    config_path: Path | str | None = None,
+    flip_image: bool = True,
+    convert_to_nm: bool = True,
+) -> tuple[np.ndarray, float]:
+    """
+    Load image data and pixel scaling from a JPK TIFF file for a given channel.
+
+    Parameters
+    ----------
+    file : Path | BytesIO
+        Path to the JPK TIFF file.
+    filename : str
+        Name of the JPK TIFF file.
+    channel : str
+        The channel to extract from the JPK TIFF file.
+    file_suffix : str
+        The file suffix of the JPK TIFF file.
+    config_path : Path | str | None, optional
+        Path to a configuration file. If ''None'' (default) then the packages default configuration is
+        loaded from ''default_config.yaml''.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
+    convert_to_nm : bool, optional
+        Whether to convert the image to nanometres. Default is True.
+
+    Returns
+    -------
+    tuple[np.ndarray, float]
+        A tuple containing the image and its pixel to nanometre scaling value.
+    """
     jpk_tags = _load_jpk_tags(config_path)
     try:
-        tif = tifffile.TiffFile(file_path)
+        tif = tifffile.TiffFile(file)
     except FileNotFoundError:
-        logger.error(f"[{filename}] File not found : {file_path}")
+        logger.error(f"[{filename}] File not found : {file}")
         raise
     # Obtain channel list for all channels in file
     channel_list = {}
@@ -231,8 +342,8 @@ def load_jpk(
     try:
         channel_idx = channel_list[channel]
     except KeyError as e:
-        logger.error(f"'{channel}' not in {file_path.suffix} channel list: {channel_list}")
-        raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {channel_list}") from e
+        logger.error(f"'{channel}' not in {file_suffix} channel list: {channel_list}")
+        raise ValueError(f"'{channel}' not in {file_suffix} channel list: {channel_list}") from e
 
     # Get image and if applicable, scale it
     channel_page = tif.pages[channel_idx]
@@ -242,7 +353,7 @@ def load_jpk(
     if flip_image is True:
         image = np.flipud(image)
 
-    if channel_page.tags[jpk_tags["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
+    if convert_to_nm and channel_page.tags[jpk_tags["channel_name"]].value in ("height", "measuredHeight", "amplitude"):
         image = image * 1e9
 
     # Get page for common metadata between scans

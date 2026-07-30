@@ -33,17 +33,14 @@ def test_load_spm(
     image_sum: float,
 ) -> None:
     """Test the normal operation of loading a .spm file."""
-    result_image = np.ndarray
-    result_pixel_to_nm_scaling = float
-
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling = spm.load_spm(file_path, channel=channel)
+    afm_load = spm.load_spm(file_path, channel=channel)
 
-    assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
-    assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == image_shape
-    assert result_image.dtype == image_dtype
-    assert result_image.sum() == pytest.approx(image_sum)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
+    assert isinstance(afm_load.image, np.ndarray)
+    assert afm_load.image.shape == image_shape
+    assert afm_load.image.dtype == image_dtype
+    assert afm_load.image.sum() == pytest.approx(image_sum)
 
 
 @patch("pySPM.SPM.SPM_image")
@@ -132,7 +129,7 @@ def test_load_spm_file_not_found() -> None:
     ],
 )
 def test_load_spm_channel_not_found(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture,
     channel: str,
     message: str,
     error: bool,
@@ -143,4 +140,31 @@ def test_load_spm_channel_not_found(
             spm.load_spm(RESOURCES / "sample_0.spm", channel)
     else:
         spm.load_spm(RESOURCES / "sample_0.spm", channel)
-    assert message in caplog.text
+    captured = capsys.readouterr()
+    assert message in captured.err
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected_channels"),
+    [
+        pytest.param(
+            "sample_0.spm",
+            [
+                "Height Sensor",
+                "Peak Force Error",
+                "DMTModulus",
+                "LogDMTModulus",
+                "Adhesion",
+                "Deformation",
+                "Dissipation",
+                "Height",
+            ],
+            id="sample_0.spm",
+        ),
+    ],
+)
+def test_get_spm_channels(file_name: str, expected_channels: list[str]) -> None:
+    """Test get_spm_channels."""
+    file_path = RESOURCES / file_name
+    channels = spm.get_spm_channels(file_path)
+    assert channels == expected_channels
