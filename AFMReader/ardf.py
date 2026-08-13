@@ -662,12 +662,14 @@ class ARDFFFMReader:
     array_view: np.ndarray = field(repr=False)
     array_offset: int  # hard to recover from views
     channels: list[int]  # [z, d]
+    channel_index_map: dict[str, int]
     # seg_offsets is weird. you'd think it would contain the starting index
     # for each segment. However, it always has a trailing value of 1-nfloats,
     # and nonexistent segments get a zero. For regular/FFM data, we'll just
     # assume that the second offset maps to our "split" concept.
     seg_offsets: tuple
     segment_names: tuple[str, ...]
+    segment_bounds: list[tuple[int, int]] = field(repr=False)
     up: bool
     trace: bool
     vtype: int
@@ -728,6 +730,14 @@ class ARDFFFMReader:
         if first_vdat_header.name != b"VDAT":
             raise ValueError("Malformed volume data")
         first_vdat = ARDFVdata.unpack(first_vdat_header)
+        if len(segment_names) == 2 and len(first_vdat.seg_offsets) > 1:
+            segment_length = first_vdat.seg_offsets[1]
+            segment_bounds = [(0, segment_length), (segment_length, 2 * segment_length)]
+        else:
+            segment_bounds = [
+                (start, stop) for start, stop in zip(first_vdat.seg_offsets, first_vdat.seg_offsets[1:]) if stop > start
+            ][: len(segment_names)]
+        channel_index_map = {channel.name: idx for idx, channel in enumerate(vchns)}
         return cls(
             data=data,
             array_view=np.ndarray(
@@ -745,12 +755,14 @@ class ARDFFFMReader:
             )[:: 1 if up else -1, :: 1 if trace else -1],
             array_offset=first_vdat.array_offset,
             channels=[channel[0] for channel in channels.values()],
+            channel_index_map=channel_index_map,
             seg_offsets=first_vdat.seg_offsets,
             segment_names=tuple(segment_names),
             up=up,
             trace=trace,
             vtype=first_vset.vtype,
             vchns=vchns,
+            segment_bounds=segment_bounds,
             curve_height_offset=curve_height_offset,
         )
 
@@ -775,19 +787,12 @@ class ARDFFFMReader:
         with memoryview(self.data):  # assert data is open, and hold it open
             x = self.array_view[r, c, self.channels]  # advanced indexing copies
         x = x.astype("f4", copy=False)
-        if len(self.segment_names) == 2 and len(self.seg_offsets) > 1:
-            segment_length = self.seg_offsets[1]
-            segment_bounds = [(0, segment_length), (segment_length, 2 * segment_length)]
-        else:
-            segment_bounds = [
-                (start, stop) for start, stop in zip(self.seg_offsets, self.seg_offsets[1:]) if stop > start
-            ][: len(self.segment_names)]
 
         curve_dict = {}
         for idx, chan_idx in enumerate(self.channels):
             chan_name = self.vchns[chan_idx].name
             curve_dict[chan_name] = {}
-            for (start, stop), seg_name in zip(segment_bounds, self.segment_names):
+            for (start, stop), seg_name in zip(self.segment_bounds, self.segment_names):
                 # Map channel and segment name to its respective slice
                 segment_data = x[idx, start:stop]
                 if reverse_curve_points and chan_name == "Raw":
@@ -796,6 +801,59 @@ class ARDFFFMReader:
                     curve_dict[chan_name][seg_name] = segment_data
 
         return curve_dict
+
+    def get_curve_segments(
+        self,
+        curve_start: int,
+        curve_end: int,
+        channel: str,
+        segment_num: int,
+        reverse_curve_points: bool = False,
+    ) -> np.ndarray:
+        # Start and stop indices for the segment within the curve (this is the same for all curves)
+        segment_start, segment_stop = self.segment_bounds[segment_num]
+
+        # Preallocate the output array to minimize memory allocations
+        segment_length = segment_stop - segment_start
+        curve_count = curve_end - curve_start
+        output = np.empty((curve_count, segment_length), dtype=np.float32)
+
+        channel_index = self.channel_index_map[channel]
+        columns = self.array_view.shape[1]
+
+        # Indicates the current index of the curve at the start of the current row with respect to the entire volume
+        curve_position = curve_start
+        # Indicates the current index (or curve number) we are at in the output array
+        output_position = 0
+
+        # Assert data is open, and hold it open
+        with memoryview(self.data):
+
+            # We loop through the curves row by row, copying segments into the output array.
+            while curve_position < curve_end:
+                # Determine the row and column of the current curve position
+                row, column = divmod(curve_position, columns)
+
+                # Note that for middle rows in the batch, column is 0, so this variable is the whole row as desired
+                number_of_curves_left_in_row = columns - column
+                total_number_of_curves_left_to_copy = curve_end - curve_position
+                # Curves to copy cannot exceed the number of curves left in the current row or the total left to copy
+                curves_to_copy = min(total_number_of_curves_left_to_copy, number_of_curves_left_in_row)
+                # Copy the segment data for the current row into the output array
+                output[output_position : output_position + curves_to_copy] = self.array_view[
+                    row,
+                    column : column + curves_to_copy,
+                    channel_index,
+                    segment_start:segment_stop,
+                ]
+                # Update the curve_position and output_position for the next iteration
+                curve_position += curves_to_copy
+                output_position += curves_to_copy
+
+        if reverse_curve_points and channel == "Raw":
+            # We use np.subtract to avoid creating a temporary array
+            np.subtract(self.curve_height_offset, output, out=output)
+        return output.reshape(-1)
 
     def iter_indices(self) -> Iterable[Index]:
         """
@@ -1185,6 +1243,54 @@ class ARDFVolume(CurvesVolume):
             An iterable yielding curve data.
         """
         return self.iter_curves()
+
+    def iter_segments(self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1):
+        """
+        Iterate over segments for specified channels in batches.
+
+        Parameters
+        ----------
+        channel_segment_sets : dict[str, list[str]]
+            A dictionary mapping segment names to lists of channel names to iterate over.
+        batch_size : int, optional
+            The number of pixels to process in each batch. Default is 1.
+
+        Yields
+        ------
+        list[tuple[np.ndarray, list[np.ndarray]]]
+            Relative indices and channel data for each selected segment.
+        """
+        if batch_size <= 0:
+            raise ValueError("batch_size must be greater than zero")
+
+        new_channel_segment_sets = {}
+        channel_source_mapping = {v: k for k, v in self.channel_mapping.items()}
+        for segment_name, channel_list in channel_segment_sets.items():
+            source_channels = [channel_source_mapping.get(channel_name, channel_name) for channel_name in channel_list]
+            new_channel_segment_sets[segment_name] = source_channels
+        segment_name_to_index = {name: i for i, name in enumerate(self.metadata.segment_names)}
+
+        num_of_curves = self.shape[0] * self.shape[1]
+
+        for idx in range(0, num_of_curves, batch_size):
+            data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
+            for segment_name, channel_list in new_channel_segment_sets.items():
+                segment_index = segment_name_to_index[segment_name]
+                segment_bounds = self._reader.segment_bounds[segment_index]
+                segment_length = segment_bounds[1] - segment_bounds[0]
+
+                data = []
+                for channel_name in channel_list:
+                    channel_data = self._reader.get_curve_segments(
+                        curve_start=idx,
+                        curve_end=min(idx + batch_size, num_of_curves),
+                        channel=channel_name,
+                        segment_num=segment_index,
+                        reverse_curve_points=self.reverse_curve_points,
+                    )
+                    data.append(channel_data)
+                data_batch.append((np.arange(min(batch_size, num_of_curves - idx) + 1) * segment_length, data))
+            yield data_batch
 
 
 class ARDFDataset(CurvesDataset):
