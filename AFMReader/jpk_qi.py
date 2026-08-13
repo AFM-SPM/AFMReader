@@ -328,6 +328,67 @@ class CurvesJPKVolume(CurvesVolume):
 
         return curve_data
 
+    def iter_segments(self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1):
+        """
+        Iterate over segments for specified channels in batches.
+
+        Parameters
+        ----------
+        channel_segment_sets : dict[str, list[str]]
+            A dictionary mapping segment names to lists of channel names to iterate over.
+        batch_size : int, optional
+            The number of pixels to process in each batch. Default is 1.
+
+        Yields
+        ------
+        list[tuple[np.ndarray, list[np.ndarray]]]
+            Relative indices and channel data for each selected segment.
+        """
+        if batch_size <= 0:
+            raise ValueError("batch_size must be greater than zero")
+
+        new_channel_segment_sets = {}
+        channel_source_mapping = {v: k for k, v in self.channel_mapping.items()}
+        segment_index_mapping = {segment_name: index for index, segment_name in enumerate(self.metadata.segment_names)}
+        for segment_name, channel_list in channel_segment_sets.items():
+            source_channels = [channel_source_mapping.get(channel_name, channel_name) for channel_name in channel_list]
+            new_channel_segment_sets[segment_name] = source_channels
+
+        num_of_curves = self.shape[0] * self.shape[1]
+
+        for idx in range(0, num_of_curves, batch_size):
+            data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
+            for segment_name, channel_list in new_channel_segment_sets.items():
+                segment_index = segment_index_mapping[segment_name]
+                indices = [0]
+                read_indices = False
+                data = []
+                for channel_name in channel_list:
+                    scale = self.channel_scaling[channel_name]
+                    channel_data = []
+                    current_index = 0
+                    for offset in range(batch_size):
+                        curve_num = idx + offset
+                        if curve_num >= num_of_curves:
+                            break
+                        dat_path = f"index/{curve_num}/segments/{segment_index}" f"/channels/{channel_name}.dat"
+                        try:
+                            with self.archive.open(dat_path) as f:
+                                raw_array = np.frombuffer(f.read(), dtype=">i4")
+                                channel_data.append((raw_array * scale["multiplier"]) + scale["offset"])
+                                if not read_indices:
+                                    current_index += len(raw_array)
+                                    indices.append(current_index)
+                        except KeyError as e:
+                            raise KeyError(
+                                f"Internal data file missing for pixel ({curve_num}), "
+                                f"segment {segment_name}, channel {channel_name}"
+                            ) from e
+                    read_indices = True
+                    data.append(np.concatenate(channel_data))
+                data_batch.append((np.array(indices), data))
+            yield data_batch
+
 
 def _get_channel_scaling(props: dict, channel_index: str) -> tuple[float, float, str]:
     """
