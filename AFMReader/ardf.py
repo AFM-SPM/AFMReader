@@ -812,28 +812,22 @@ class ARDFFFMReader:
     ) -> np.ndarray:
         # Start and stop indices for the segment within the curve (this is the same for all curves)
         segment_start, segment_stop = self.segment_bounds[segment_num]
-
         # Preallocate the output array to minimize memory allocations
         segment_length = segment_stop - segment_start
         curve_count = curve_end - curve_start
         output = np.empty((curve_count, segment_length), dtype=np.float32)
-
         channel_index = self.channel_index_map[channel]
         columns = self.array_view.shape[1]
-
         # Indicates the current index of the curve at the start of the current row with respect to the entire volume
         curve_position = curve_start
         # Indicates the current index (or curve number) we are at in the output array
         output_position = 0
-
         # Assert data is open, and hold it open
         with memoryview(self.data):
-
             # We loop through the curves row by row, copying segments into the output array.
             while curve_position < curve_end:
                 # Determine the row and column of the current curve position
                 row, column = divmod(curve_position, columns)
-
                 # Note that for middle rows in the batch, column is 0, so this variable is the whole row as desired
                 number_of_curves_left_in_row = columns - column
                 total_number_of_curves_left_to_copy = curve_end - curve_position
@@ -1258,7 +1252,9 @@ class ARDFVolume(CurvesVolume):
         Yields
         ------
         list[tuple[np.ndarray, list[np.ndarray]]]
-            Relative indices and channel data for each selected segment.
+            A list of the segments as tuples. This first item in the tuple in a numpy array of the indices then we
+            have a list of numpy arrays (all the curves concatenated together) for each channel in the order they
+            were requested.
         """
         if batch_size <= 0:
             raise ValueError("batch_size must be greater than zero")

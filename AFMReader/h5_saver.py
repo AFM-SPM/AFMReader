@@ -695,11 +695,11 @@ def find_unused_filename(original_path: Path, temp: bool = False) -> Path:
     Path
         An unused HDF5 file path.
     """
-    # Determine the path for the H5 file, ensuring it does not overwrite an existing file
     if temp:
         h5_path = original_path.parent / f"temp_{original_path.stem}.h5-jpk"
     else:
         h5_path = original_path.parent / f"{original_path.stem}.h5-jpk"
+    # Determine the path for the H5 file, ensuring it does not overwrite an existing file
     i = 0
     while h5_path.exists():
         if temp:

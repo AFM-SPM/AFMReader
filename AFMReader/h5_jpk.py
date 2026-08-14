@@ -453,15 +453,21 @@ class CurvesH5Volume(CurvesVolume):
         """
         if flip_image is None:
             flip_image = self.flip_image
+
+        # We read all the indices into memory first for all the segments and channels (as these are small)
         indices_map: dict[str, dict[str, np.ndarray]] = {}
         for segment, segment_group in self.volume_data_group.items():
             for channel in segment_group["Indices"]:
                 if channel not in indices_map:
                     indices_map[channel] = {}
                 indices_map[channel][segment] = segment_group["Indices"][channel][:]
+
+        # Iterate row by row
         for y_idx in range(self.shape[0]):
             data: dict[str, dict[str, np.ndarray]] = {}
             y = self.shape[0] - 1 - y_idx if flip_image else y_idx
+
+            # The whole row is read in one go for each segment and channel
             for segment, segment_group in self.volume_data_group.items():
                 for channel in segment_group["Indices"]:
                     if channel not in data:
@@ -471,7 +477,11 @@ class CurvesH5Volume(CurvesVolume):
                     end_idx = int(indices[self.shape[1] * (y + 1)])
 
                     data[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
+
+            # Then we yield each pixel's data in the row
             for x in range(self.shape[1]):
+
+                # Constructing it from the data we have already read for the row
                 curve_data: dict[str, dict[str, np.ndarray]] = {}
                 for channel, channel_data in data.items():
                     curve_data[channel] = {}
@@ -496,30 +506,44 @@ class CurvesH5Volume(CurvesVolume):
         Yields
         ------
         list[tuple[np.ndarray, list[np.ndarray]]]
-            Relative indices and channel data for each selected segment.
+            A list of the segments as tuples. This first item in the tuple in a numpy array of the indices then we
+            have a list of numpy arrays (all the curves concatenated together) for each channel in the order they
+            were requested.
         """
+        # First read all the indices for the selected segments and channels into memory (these are small)
         indices_map: dict[str, np.ndarray] = {}
         for segment_name, channel_list in channel_segment_sets.items():
             if segment_name in self.volume_data_group:
                 segment_group = self.volume_data_group[segment_name]
+
+                # TODO: Currently we use the first channel to get the indicies. We should remove the duplicated
+                # storing of indices and just store it once per segment during saving to h5.
                 indices_map[segment_name] = segment_group["Indices"][channel_list[0]][:]
+
+        # Then iterate over the curves in batches, yielding the data for each batch
         for idx in range(0, len(self), batch_size):
+
             data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
             for segment_name, channel_list in channel_segment_sets.items():
-                # TODO are the indicies correct here
+
+                # Get the indicies for this batch of curves for the current segment
                 indicies = indices_map[segment_name][idx : idx + batch_size + 1]
                 data = []
                 for channel_name in channel_list:
+
+                    # Extract data for the channel and add it to the list
                     channel_data = self.volume_data_group[segment_name]["Data"][channel_name][
                         indicies[0] : indicies[-1]
                     ]
                     data.append(channel_data)
+
+                # Add the indicies and data for this segment to the batch
                 data_batch.append((indicies - indicies[0], data))
             yield data_batch
 
     def get_curve(self, y: int, x: int, flip_image: bool | None = None):
         """
-        Fetch the QI curve data for a specific pixel (x, y) on demand.
+        Fetch the curve data for a specific pixel (x, y) on demand.
 
         Parameters
         ----------
@@ -533,16 +557,18 @@ class CurvesH5Volume(CurvesVolume):
         Returns
         -------
         dict
-            A dictionary containing the QI curve data for the specified pixel.
+            A dictionary containing the curve data for the specified pixel.
         """
         if y < 0 or y >= self.shape[0] or x < 0 or x >= self.shape[1]:
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
-        curve_dict: dict[str, dict[str, Any]] = {}
         if flip_image is None:
             flip_image = self.flip_image
         if flip_image:
             y = self.shape[0] - 1 - y
         curve_num = self.shape[1] * y + x
+
+        # Instantiate a dictionary to hold the curve data for each channel and segment for this pixel
+        curve_dict: dict[str, dict[str, Any]] = {}
         for segment, segment_group in self.volume_data_group.items():
             for channel in segment_group["Indices"]:
                 start_idx = int(segment_group["Indices"][channel][curve_num])
@@ -686,30 +712,46 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
         logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
         px2nm = _jpk_pixel_to_nm_scaling_h5(measurement_group)
 
+        # Check if the file contains curve data, if not curve data should not be loaded even if it was requested
         if "Curve_Data" not in h5_file:
             load_curves = False
 
+    # If we need to load curves, we need to reopen the file so that we can keep it open for lazy loading of the curves.
     if load_curves:
         try:
+            # Open the file in read/write mode to allow for potential modifications (such as adding a volume)
             h5file = h5py.File(file_path, "r+")
         except (PermissionError, OSError):
+            # If we cannot open in read/write mode, fall back to read-only mode
             h5file = h5py.File(file_path, "r")
+
         logger.info(f"[{file_path.stem}] : Found Force Curves data in file.")
         curve_data_group = h5file["Curve_Data"]
+
+        # Initialise dictionaries for various items of metadata
         channels_units = {}
         top_level_meta = {}
         essential_global_metadata = {}
+
+        # Extract global metadata and channel units
         for key, value in curve_data_group["Global_Metadata"].attrs.items():
             value = coerce_metadata_value(value)
+
+            # We decide what to do based on the prefix of the key, the real key is the part after the first dot
+            # which we extract using `split(".", 1)[-1]`
             if key.startswith("essential."):
                 essential_global_metadata[key.split(".", 1)[-1]] = value
             else:
                 if key.startswith("channel.unit."):
                     channels_units[key.split(".")[-1]] = value
                 top_level_meta[key] = value
+
+        # Extract curve volumes into a dictionary of CurvesVolume objects for lazy loading
         volumes: dict[str, CurvesVolume] = {}
 
         for name, group in curve_data_group.items():
+
+            # If the current sub group is a volume, we create a lazy loaded volume and metadata object for it
             if name.endswith("_VOLM"):
                 volume_name = name.split("_VOLM")[0]
                 data_group = group["Data"]
@@ -718,6 +760,8 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
                     curve_meta_group = None
                 else:
                     curve_meta_group = group["Metadata"]
+
+                # Initialise the CurvesH5Metadata and CurvesH5Volume objects for this volume with the references
                 curves_metadata = CurvesH5Metadata(
                     curve_meta_group=curve_meta_group,
                     shape=(shape_y, shape_x),
@@ -734,6 +778,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
                 )
                 volumes[volume_name] = curves_volume
 
+        # Create a CurvesH5Dataset object to hold the volumes and metadata to return in the AFMLoad object
         curves_data = CurvesH5Dataset(
             volumes=volumes,
             metadata=top_level_meta,
