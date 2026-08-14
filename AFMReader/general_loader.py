@@ -3,7 +3,6 @@
 from pathlib import Path
 from typing import Any
 
-
 from AFMReader import ardf, asd, gwy, h5_jpk, ibw, jpk, raw_bin, spm, stp, top, topostats, jpk_qi
 from AFMReader.data_classes import AFMLoad
 from AFMReader.logging import logger
@@ -108,7 +107,7 @@ class LoadFile:
             logger.error(f"{e}")
             raise e
 
-    def get_available_channels(self, kwargs: dict | None = None):  # noqa: C901
+    def get_available_channels(self, kwargs: dict | None = None) -> list[str] | dict[str, int]:  # noqa: C901
         """
         Get the available channels for the file type.
 
@@ -147,7 +146,7 @@ class LoadFile:
             raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
         return available_channels
 
-    def get_additional_params(self):
+    def get_additional_params(self) -> dict[str, Any]:
         """
         Get any additional parameters for the file type.
 

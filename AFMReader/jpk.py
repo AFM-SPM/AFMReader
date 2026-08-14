@@ -182,7 +182,7 @@ def _get_z_scaling(tif: tifffile.tifffile, channel_idx: int, jpk_tags: dict[str,
 
 def _get_jpk_channels(
     file: Path | IO[bytes], filename: str, file_path: Path | str, config_path: Path | str | None = None
-):
+) -> dict[str, int]:
     """
     Retrieve the list of available channels from a JPK TIFF file.
 
@@ -221,7 +221,7 @@ def _get_jpk_channels(
     return channel_list
 
 
-def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = None) -> list[str]:
+def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = None) -> dict[str, int]:
     """
     Get the list of channels available in the .jpk file.
 

@@ -6,6 +6,9 @@ lazy manner (i.e. loading data on demand rather than all at once) across differe
 formats. This is necessary for handling large datasets with massive memory consumption.
 """
 
+from collections.abc import Iterator
+from typing import Any
+
 import numpy as np
 
 # pylint: disable=too-few-public-methods,fixme
@@ -57,7 +60,7 @@ class CurvesVolumeMetadata:
         self.segment_names = segment_names
         self.flip_image = flip_image
 
-    def __getitem__(self, keys):
+    def __getitem__(self, keys: tuple[int, int] | tuple[int, int, str]) -> dict[str, Any]:
         """
         Fetch the metadata for a specific pixel or segment.
 
@@ -86,7 +89,7 @@ class CurvesVolumeMetadata:
         )
 
     # pylint: disable=unused-argument
-    def get_point_metadata(self, y: int, x: int, segment_name: str | None = None):
+    def get_point_metadata(self, y: int, x: int, segment_name: str | None = None) -> dict[str, Any]:
         """
         Fetch the metadata for a specific pixel/point, optionally for a specific segment.
 
@@ -157,7 +160,7 @@ class CurvesVolume:
         # Store analysis results in a dict, with the values being numpy arrays of the results for each pixel.
         self.analysis_results: dict[str, np.ndarray] = {}
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         Return the total number of pixels in the image.
 
@@ -168,7 +171,7 @@ class CurvesVolume:
         """
         return self.shape[0] * self.shape[1]
 
-    def __getitem__(self, keys):
+    def __getitem__(self, keys: tuple[int, int]) -> dict[str, dict[str, np.ndarray]]:
         """
         Allow numpy style indexing to fetch curve data for a specific pixel.
 
@@ -187,7 +190,7 @@ class CurvesVolume:
         y, x = keys
         return self.get_curve(y, x)
 
-    def get_curve(self, y: int, x: int, flip_image: bool | None = None) -> dict:
+    def get_curve(self, y: int, x: int, flip_image: bool | None = None) -> dict[str, dict[str, np.ndarray]]:
         """
         Purely overridable method to fetch the curve data for a specific pixel.
 
@@ -209,7 +212,7 @@ class CurvesVolume:
         """
         raise NotImplementedError("This method should be implemented by subclasses to fetch curve data on demand.")
 
-    def iter_curves(self, flip_image: bool | None = None):
+    def iter_curves(self, flip_image: bool | None = None) -> Iterator[dict[str, dict[str, np.ndarray]]]:
         """
         Iterate over all pixels in the image, yielding the curve data for each pixel.
 
@@ -253,7 +256,7 @@ class CurvesVolume:
             y = self.shape[0] - 1 - y  # Flip the y index if needed
         return {key: value[y, x] for key, value in self.analysis_results.items() if value is not None}
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[dict[str, dict[str, np.ndarray]]]:
         """
         Iterate over all pixels in the image.
 

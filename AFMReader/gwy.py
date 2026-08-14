@@ -11,7 +11,7 @@ from AFMReader.data_classes import AFMLoad
 from AFMReader.io import read_char, read_double, read_null_terminated_string, read_uint32
 
 
-def get_gwy_channels(file_path):
+def get_gwy_channels(file_path: Path | str) -> list[str]:
     """
     Extract a list of available channels and their corresponding dictionary key ids from the `.gwy` file.
 

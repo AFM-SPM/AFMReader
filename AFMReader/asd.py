@@ -291,7 +291,7 @@ def load_asd(file_path: str | Path, channel: str) -> AFMLoad:
         return AFMLoad(image=frames, px2nm=pixel_to_nanometre_scaling_factor, z_units=unit, metadata=header_dict)
 
 
-def get_asd_channels(file_path: Path):
+def get_asd_channels(file_path: Path) -> list[str]:
     """
     Get the channels available in given .asd file.
 
@@ -874,7 +874,7 @@ def create_animation(file_name: str, frames: npt.NDArray, file_format: str = ".g
     """
     fig, axis = plt.subplots()
 
-    def update(frame: npt.NDArray):
+    def update(frame: npt.NDArray) -> plt.Axes:
         """
         Update the image with the latest frame.
 

@@ -56,7 +56,7 @@ def _ibw_pixel_to_nm_scaling(scan: dict, channel: str) -> tuple[float, str]:
     )[0], z_units
 
 
-def get_ibw_channels(file_path: Path | str):
+def get_ibw_channels(file_path: Path | str) -> list[str]:
     """
     Extract a list of available channels and their corresponding dictionary key ids from the `.ibw` file.
 

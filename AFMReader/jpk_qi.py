@@ -11,6 +11,7 @@ and supports exporting to HDF5 format.
 
 import io
 import zipfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -172,7 +173,7 @@ class CurvesJPKMetadata(CurvesVolumeMetadata):
         super().__init__(shape, channel_units, segment_names, flip_image)
         self.archive = archive
 
-    def get_point_metadata(self, y: int, x: int, segment_name: str | None = None):
+    def get_point_metadata(self, y: int, x: int, segment_name: str | None = None) -> dict[str, Any]:
         """
         Fetch the metadata for a specific pixel or segment.
 
@@ -280,7 +281,7 @@ class CurvesJPKVolume(CurvesVolume):
         self.segment_mapping = segment_mapping
         self.channel_mapping = channel_mapping
 
-    def get_curve(self, y: int, x: int, flip_image: bool | None = None):
+    def get_curve(self, y: int, x: int, flip_image: bool | None = None) -> dict[str, dict[str, np.ndarray]]:
         """
         Fetch the curve data for a specific pixel.
 
@@ -328,7 +329,9 @@ class CurvesJPKVolume(CurvesVolume):
 
         return curve_data
 
-    def iter_segments(self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1):
+    def iter_segments(
+        self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1
+    ) -> Iterator[list[tuple[np.ndarray, list[np.ndarray]]]]:
         """
         Iterate over segments for specified channels and segments, yielding data in batches.
 
@@ -569,7 +572,7 @@ class JPKQILoader:
         self.parse_dimension_data()
         self.essential_metadata = self.filter_essential_metadata(self.top_level_meta)
 
-    def get_available_channels(self):
+    def get_available_channels(self) -> dict[str, int]:
         """
         Retrieve available channels from the .jpk-qi-image file within the archive.
 
@@ -808,7 +811,7 @@ class JPKQILoader:
             self.saved_to_h5 = True
             return self.h5_path
 
-    def get_changing_keys(self, h5_saver: H5Saver):  # noqa: C901
+    def get_changing_keys(self, h5_saver: H5Saver) -> tuple[set[str], set[str]]:  # noqa: C901
         """
         Check a sample of curves to see which metadata keys change across curves and segments.
 
@@ -881,7 +884,7 @@ class JPKQILoader:
                 self.top_level_meta[f"segment.{key}"] = values[0]
         return changing_curve_keys, changing_segment_keys
 
-    def get_collated_metadata(self):
+    def get_collated_metadata(self) -> dict[str, Any]:
         """
         Collate metadata from being split by curve to being split by attribute.
 

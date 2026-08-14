@@ -6,7 +6,8 @@ timestamps based on scan metadata.
 """
 
 import shutil
-from contextlib import nullcontext
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -59,7 +60,7 @@ def _parse_channel_name(channel: str) -> tuple[str, str]:
     return channel_type, trace_type
 
 
-def _get_channel_info(h5py_file: h5py.File, channel: str):
+def _get_channel_info(h5py_file: h5py.File, channel: str) -> tuple[h5py.Group, h5py.Group, str]:
     """
     Retrieve channel-related HDF5 groups and dataset name.
 
@@ -336,7 +337,7 @@ class CurvesH5Metadata(CurvesVolumeMetadata):
         super().__init__(shape=shape, channel_units=channel_units, segment_names=segment_names, flip_image=flip_image)
         self.curve_meta_group = curve_meta_group
 
-    def get_point_metadata(self, y: int, x: int, segment_name: str | None = None):
+    def get_point_metadata(self, y: int, x: int, segment_name: str | None = None) -> dict[str, Any]:
         """
         Fetch metadata for a specific pixel (x, y) on demand.
 
@@ -426,7 +427,7 @@ class CurvesH5Volume(CurvesVolume):
             flip_image=flip_image,
         )
 
-    def __iter__(self):  # noqa: C901
+    def __iter__(self) -> Iterator[dict[str, dict[str, np.ndarray]]]:  # noqa: C901
         """
         Efficiently iterate over the QI curve data, loading one row at a time.
 
@@ -437,7 +438,7 @@ class CurvesH5Volume(CurvesVolume):
         """
         return self.iter_curves()
 
-    def iter_curves(self, flip_image: bool | None = None):
+    def iter_curves(self, flip_image: bool | None = None) -> Iterator[dict[str, dict[str, np.ndarray]]]:
         """
         Iterate over the QI curve data, yielding one pixel's data at a time.
 
@@ -492,7 +493,9 @@ class CurvesH5Volume(CurvesVolume):
                         curve_data[channel][segment] = segment_data[start_idx:end_idx]
                 yield curve_data
 
-    def iter_segments(self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1):
+    def iter_segments(
+        self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1
+    ) -> Iterator[list[tuple[np.ndarray, list[np.ndarray]]]]:
         """
         Iterate over selected segment channels in batches.
 
@@ -541,7 +544,7 @@ class CurvesH5Volume(CurvesVolume):
                 data_batch.append((indicies - indicies[0], data))
             yield data_batch
 
-    def get_curve(self, y: int, x: int, flip_image: bool | None = None):
+    def get_curve(self, y: int, x: int, flip_image: bool | None = None) -> dict[str, dict[str, np.ndarray]]:
         """
         Fetch the curve data for a specific pixel (x, y) on demand.
 
@@ -798,7 +801,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
     return AFMLoad(image=image_stack, px2nm=px2nm, z_units=z_units, timestamps=timestamps, metadata=metadata)
 
 
-def get_h5jpk_channels(file_path: Path | str):
+def get_h5jpk_channels(file_path: Path | str) -> list[str]:
     """
     Get available channels from a .h5-jpk file.
 
@@ -846,7 +849,7 @@ def copy_h5_file(src_path: Path | str | h5py.File, dest_path: Path | str | h5py.
         _copy_h5_group(src_file, dest_file, _filter_without(without))
 
 
-def _h5_context(file: Path | str | h5py.File, mode: str):
+def _h5_context(file: Path | str | h5py.File, mode: str) -> AbstractContextManager[h5py.File]:
     """
     Get a context manager for an HDF5 file without closing caller-owned files.
 
@@ -895,7 +898,7 @@ def _copy_h5_group(src_group: h5py.File | h5py.Group, dest_group: h5py.File | h5
             src_group.copy(key, dest_group, name=key)
 
 
-def _filter_without(without: list[str]):
+def _filter_without(without: list[str]) -> list[str]:
     """
     Normalise excluded HDF5 paths and remove redundant nested entries.
 

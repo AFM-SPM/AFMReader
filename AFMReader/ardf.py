@@ -22,7 +22,7 @@ import mmap
 import struct
 from pathlib import Path
 from bisect import bisect_left
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Iterator
 from typing import TypeAlias, Any
 
 from tqdm import tqdm
@@ -1227,7 +1227,7 @@ class ARDFVolume(CurvesVolume):
         """
         return self._reader.iter_indices()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[dict[str, dict[str, np.ndarray]]]:
         """
         Iterate over curves using the instance's flip setting.
 
@@ -1238,7 +1238,9 @@ class ARDFVolume(CurvesVolume):
         """
         return self.iter_curves()
 
-    def iter_segments(self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1):
+    def iter_segments(
+        self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1
+    ) -> Iterator[list[tuple[np.ndarray, list[np.ndarray]]]]:
         """
         Iterate over segments for specified channels in batches.
 

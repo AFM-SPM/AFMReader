@@ -2,6 +2,7 @@
 
 import math
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -96,7 +97,7 @@ def load_bin(
     return AFMLoad(image=image, px2nm=px2nm, z_units=z_unit)
 
 
-def get_bin_params():
+def get_bin_params() -> dict[str, Any]:
     """
     Get the expected keyword arguments for loading a binary file.
 

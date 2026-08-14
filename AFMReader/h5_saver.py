@@ -152,7 +152,7 @@ class H5Saver:
                 )
         self.h5file.flush()
 
-    def get_curves_sample(self, shape_x: int, shape_y: int, minimum_sample_size: int = 20):
+    def get_curves_sample(self, shape_x: int, shape_y: int, minimum_sample_size: int = 20) -> range:
         """
         Get a sample of curve numbers distributed evenly across the dataset.
 
@@ -365,7 +365,7 @@ class H5Saver:
         segment_name: str,
         channel_name: str,
         num_of_curves: int,
-    ) -> None:
+    ):
         """
         Save a curve segment's data and indices to the h5 file.
 
@@ -494,9 +494,7 @@ class H5Saver:
         """
         return self.curve_search_terms[volume_name]
 
-    def save_curve_meta_attr(
-        self, curve_num: int, attr_idx: int, value: Any, volume_name: str, num_of_curves: int
-    ) -> None:
+    def save_curve_meta_attr(self, curve_num: int, attr_idx: int, value: Any, volume_name: str, num_of_curves: int):
         """
         Save a curve metadata attribute.
 
@@ -657,7 +655,7 @@ class H5Saver:
         chan_grp.create_dataset(dataset_name, data=frame_stack)
 
 
-def make_num_min_characters(num: int, min_chars: int = 3):
+def make_num_min_characters(num: int, min_chars: int = 3) -> str:
     """
     Zero-pad an integer to a minimum number of characters.
 
