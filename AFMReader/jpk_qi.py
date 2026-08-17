@@ -411,6 +411,10 @@ def _get_channel_scaling(props: dict, channel_index: str) -> tuple[float, float,
     """
     Parse the JPK properties dictionary to find cumulative multiplier and offset for a specific channel index.
 
+    The idea is that we should keep multiplying the multipliers and adding the offsets as we go through the
+    conversion chain, storing the current step or slot in conversion_slot, and keeping going until there is
+    no longer a pointer to the next conversion step, meaning we have reached the final scaling for the channel.
+
     Parameters
     ----------
     props : dict
@@ -429,40 +433,41 @@ def _get_channel_scaling(props: dict, channel_index: str) -> tuple[float, float,
     """
     prefix = f"lcd-info.{channel_index}."
 
-    current_slot = props.get(f"{prefix}conversion-set.conversions.default")
+    # Track each conversion step from the raw encoded values to the final calibrated units.
+    conversion_slot = props.get(f"{prefix}conversion-set.conversions.default")
 
-    if not current_slot:
-        mult = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
-        off = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
+    if not conversion_slot:
+        encoder_multiplier = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
+        encoder_offset = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
         unit = props.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
-        return mult, off, unit
+        return encoder_multiplier, encoder_offset, unit
 
     cumulative_multiplier = 1.0
     cumulative_offset = 0.0
-    unit = props.get(f"{prefix}conversion-set.conversion.{current_slot}.scaling.unit.unit")
+    unit = props.get(f"{prefix}conversion-set.conversion.{conversion_slot}.scaling.unit.unit")
 
-    while current_slot:
-        slot_prefix = f"{prefix}conversion-set.conversion.{current_slot}."
+    while conversion_slot:
+        conversion_prefix = f"{prefix}conversion-set.conversion.{conversion_slot}."
 
-        if f"{slot_prefix}scaling.multiplier" in props:
-            m = float(props[f"{slot_prefix}scaling.multiplier"])
-            c = float(props[f"{slot_prefix}scaling.offset"])
+        if f"{conversion_prefix}scaling.multiplier" in props:
+            scaling_multiplier = float(props[f"{conversion_prefix}scaling.multiplier"])
+            scaling_offset = float(props[f"{conversion_prefix}scaling.offset"])
 
-            cumulative_offset = (cumulative_multiplier * c) + cumulative_offset
-            cumulative_multiplier *= m
+            cumulative_offset = (cumulative_multiplier * scaling_offset) + cumulative_offset
+            cumulative_multiplier *= scaling_multiplier
 
-            current_slot = props.get(f"{slot_prefix}base-calibration-slot")
+            conversion_slot = props.get(f"{conversion_prefix}base-calibration-slot")
 
-            if current_slot == props.get(f"{prefix}conversion-set.conversions.base"):
+            if conversion_slot == props.get(f"{prefix}conversion-set.conversions.base"):
                 break
         else:
             break
 
-    enc_m = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
-    enc_c = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
+    encoder_multiplier = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
+    encoder_offset = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
 
-    final_multiplier = cumulative_multiplier * enc_m
-    final_offset = (cumulative_multiplier * enc_c) + cumulative_offset
+    final_multiplier = cumulative_multiplier * encoder_multiplier
+    final_offset = (cumulative_multiplier * encoder_offset) + cumulative_offset
     if not unit:
         unit = props.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
 
@@ -527,7 +532,7 @@ class JPKQILoader:
         # For holding the reference to where the actual .jqk-qi image is (not the metadata).
         self.path_to_image: str | None = None
 
-        # Chunk size for H5 datasets
+        # Chunk size for H5 datasets. Chunking is necessary to allow the resizing of h5 datasets and continual writing
         self.DATA_CHUNKSIZE = 512 * 1024
         # Chunk size for indices datasets
         self.INDICES_CHUNKSIZE = 64 * 1024
@@ -688,11 +693,11 @@ class JPKQILoader:
             logger.warning("Summary of missing files (up to 10 shown):")
 
             # Output the first 10 failed loads with details
-            for i, (curve_num, segment, chan_name) in enumerate(self.failed_curves):
+            for i, (curve_num, segment, channel_name) in enumerate(self.failed_curves):
                 if i < 10:
-                    if chan_name:
+                    if channel_name:
                         logger.warning(
-                            f"Failed to load data for curve {curve_num}, segment {segment}, channel {chan_name}"
+                            f"Failed to load data for curve {curve_num}, segment {segment}, channel {channel_name}"
                         )
                     else:
                         if segment is not None:
@@ -705,9 +710,9 @@ class JPKQILoader:
             # If there are no failed loads, log that all data was loaded successfully
             logger.info("Successfully loaded all curve data without any missing files.")
 
-    def extract_data_to_h5(self, h5_saver: H5Saver, include_metadata: bool = True):
+    def extract_and_save_per_curve_data(self, h5_saver: H5Saver, include_metadata: bool = True):
         """
-        Load all curve data and optionally metadata from the JPK QI archive into HDF5 datasets.
+        Load all curve data and optionally metadata from the JPK QI archive and save into HDF5 datasets.
 
         Parameters
         ----------
@@ -733,7 +738,7 @@ class JPKQILoader:
                         curve_num=curve_num,
                         segment_idx=segment_idx,
                         segment_name=segment_name,
-                        chan_name=chan["name"],
+                        channel_name=chan["name"],
                     )
 
                 if include_metadata:
@@ -804,7 +809,7 @@ class JPKQILoader:
             )
 
             # Extract data from the JPK QI archive and save to H5 datasets
-            self.extract_data_to_h5(
+            self.extract_and_save_per_curve_data(
                 h5_saver,
                 include_metadata=include_per_curve_metadata,
             )
@@ -819,7 +824,7 @@ class JPKQILoader:
             logger.info(f"QI data copied to h5 data {file.filename}")
 
             # Save a lite form of the images (precalculated) if saving to a file
-            self.save_lite_data(h5_saver)
+            self.save_image_data(h5_saver)
 
             self.output_summary()
             self.saved_to_h5 = True
@@ -972,9 +977,9 @@ class JPKQILoader:
             flip_image=bool(flip_image),
         )
 
-    def save_lite_data(self, h5_saver: H5Saver):
+    def save_image_data(self, h5_saver: H5Saver):
         """
-        Save a lite form of the data (e.g., the calculated image data) to H5.
+        Save the image data and the metadata required to interpret it to H5.
 
         Parameters
         ----------
@@ -1018,7 +1023,13 @@ class JPKQILoader:
             h5_saver.save_image(channel_image, image_name=h5_channel, z_unit=z_unit, idx=i)
 
     def extract_dat_file(
-        self, h5_saver: H5Saver, volume_name: str, curve_num: int, segment_idx: int, segment_name: str, chan_name: str
+        self,
+        h5_saver: H5Saver,
+        volume_name: str,
+        curve_num: int,
+        segment_idx: int,
+        segment_name: str,
+        channel_name: str,
     ):
         """
         Extract the data from a .dat file in the JPK QI archive.
@@ -1037,13 +1048,13 @@ class JPKQILoader:
             The segment index associated with the .dat file, parsed from the filename.
         segment_name : str
             The segment name associated with the .dat file, parsed from the filename.
-        chan_name : str
+        channel_name : str
             The channel name associated with the .dat file, parsed from the filename.
         """
-        if chan_name in self.channel_scaling:
+        if channel_name in self.channel_scaling:
             # Get data structures for this channel and segment
-            scale = self.channel_scaling[chan_name]
-            dat_path = f"index/{curve_num}/segments/{segment_idx}/channels/{chan_name}.dat"
+            scale = self.channel_scaling[channel_name]
+            dat_path = f"index/{curve_num}/segments/{segment_idx}/channels/{channel_name}.dat"
 
             try:
                 with self.qi_archive.open(dat_path) as f:
@@ -1056,13 +1067,13 @@ class JPKQILoader:
                     segment_array = (raw_array * scale["multiplier"]) + scale["offset"]
 
             except KeyError:
-                self.failed_curves.add((curve_num, segment_idx, chan_name))
+                self.failed_curves.add((curve_num, segment_idx, channel_name))
 
                 # Limit the number of warnings to avoid spamming the logs
                 if len(self.failed_curves) < 10:
                     logger.warning(
                         f"Data file {dat_path} not found in archive. Skipping data for curve {curve_num}, "
-                        f"segment {segment_name}, channel {chan_name}."
+                        f"segment {segment_name}, channel {channel_name}."
                     )
                 elif len(self.failed_curves) == 10:
                     logger.warning(
@@ -1074,16 +1085,16 @@ class JPKQILoader:
                 segment_data=segment_array,
                 curve_num=curve_num,
                 segment_name=segment_name,
-                channel_name=self.channel_mapping.get(chan_name, chan_name),
+                channel_name=self.channel_mapping.get(channel_name, channel_name),
                 num_of_curves=self.num_of_curves,
             )
 
         else:
             # Log if curve failed
-            self.failed_curves.add((curve_num, segment_idx, chan_name))
+            self.failed_curves.add((curve_num, segment_idx, channel_name))
             if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
                 logger.warning(
-                    f"Channel {chan_name} not found in scaling information. Skipping data for curve {curve_num}, "
+                    f"Channel {channel_name} not found in scaling information. Skipping data for curve {curve_num}, "
                     f"segment {segment_name}."
                 )
 
