@@ -660,7 +660,7 @@ class JPKQILoader:
             flip_image=bool(self.flip_image),
         )
         self.curves_volume = CurvesJPKVolume(
-            name="Trace",
+            name="Original",
             shape=(self.shape_y, self.shape_x),
             archive=self.qi_archive,
             metadata=self.volume_metadata,
@@ -670,7 +670,7 @@ class JPKQILoader:
             flip_image=bool(self.flip_image),
         )
         self.curves_dataset = CurvesJPKDataset(
-            volumes={"Trace": self.curves_volume},
+            volumes={"Original": self.curves_volume},
             metadata=self.top_level_meta,
             essential_metadata=self.essential_metadata,
             archive=self.qi_archive,
@@ -725,8 +725,8 @@ class JPKQILoader:
             f"Loading all curve data from JPK QI archive with {len(self.list_of_all_paths)} files "
             f"{'' if include_metadata else 'not '}including metadata"
         )
-        curve_search_terms = h5_saver.get_curve_search_terms("Trace")
-        segment_search_terms = h5_saver.get_segment_search_terms("Trace")
+        curve_search_terms = h5_saver.get_curve_search_terms("Original")
+        segment_search_terms = h5_saver.get_segment_search_terms("Original")
         num_of_segments = len(self.segment_names)
         for curve_num in tqdm(range(self.num_of_curves)):
             for segment_idx, segment_name in enumerate(self.segment_names):
@@ -734,7 +734,7 @@ class JPKQILoader:
                     # Save the actual curve data to the h5 datasets
                     self.extract_dat_file(
                         h5_saver=h5_saver,
-                        volume_name="Trace",
+                        volume_name="Original",
                         curve_num=curve_num,
                         segment_idx=segment_idx,
                         segment_name=segment_name,
@@ -748,14 +748,14 @@ class JPKQILoader:
                         curve_num=curve_num,
                         segment_idx=segment_idx,
                         search_terms=segment_search_terms,
-                        volume_name="Trace",
+                        volume_name="Original",
                         num_of_segments=num_of_segments,
                     )
 
             if include_metadata:
                 # Extract and store the curve metadata for later saving
                 self.extract_curve_metadata(
-                    h5_saver=h5_saver, curve_num=curve_num, search_terms=curve_search_terms, volume_name="Trace"
+                    h5_saver=h5_saver, curve_num=curve_num, search_terms=curve_search_terms, volume_name="Original"
                 )
 
     def save_to_h5(
@@ -783,7 +783,7 @@ class JPKQILoader:
             flip_image=bool(self.flip_image),
         )
         self.curves_volume = CurvesJPKVolume(
-            name="Trace",
+            name="Original",
             shape=(self.shape_y, self.shape_x),
             archive=self.qi_archive,
             metadata=self.volume_metadata,
