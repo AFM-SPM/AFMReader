@@ -583,10 +583,16 @@ class JPKQILoader:
         metadata_options : dict
             A dictionary of options for what metadata to return.
         """
-        # Look for the jpk-qi-image file in the archive
+        # Look for a jpk-qi-image file in the archive
         if self.path_to_image is None:
             for file_name in self.list_of_all_paths:
                 if file_name.endswith(".jpk-qi-image"):
+                    self.path_to_image = file_name
+
+        # Look for a force file in the archive if no jpk-qi-image file is found
+        if self.path_to_image is None:
+            for file_name in self.list_of_all_paths:
+                if file_name.endswith(".force"):
                     self.path_to_image = file_name
 
         if self.path_to_image is None:
@@ -936,11 +942,18 @@ class JPKQILoader:
         if flip_image is None:
             flip_image = bool(self.flip_image)
 
-        # Search through the namelist to find the .jpk-qi-image file
+        # Search through the namelist to find .jpk-qi-image file
         path_to_image = None
         for file_name in self.list_of_all_paths:
             if file_name.endswith(".jpk-qi-image"):
                 path_to_image = file_name
+
+        # Search through the namelist to find .force file if no .jpk-qi-image file is found
+        if path_to_image is None:
+            for file_name in self.list_of_all_paths:
+                if file_name.endswith(".force"):
+                    path_to_image = file_name
+
         if path_to_image is None:
             raise FileNotFoundError(f"{path_to_image} not found in JPK archive")
 
@@ -976,6 +989,16 @@ class JPKQILoader:
             if file_name.endswith(".jpk-qi-image"):
                 path_to_image = file_name
                 break
+
+        # If no jpk-qi-image file is found, look for a .force file in the archive
+        if path_to_image is None:
+            for file_name in self.list_of_all_paths:
+                if file_name.endswith(".force"):
+                    path_to_image = file_name
+                    break
+
+        if path_to_image is None:
+            raise FileNotFoundError(f"No .jpk-qi-image or .force file found in {self.filepath}")
         # Add the channels which exist in the jpk-qi-image file
         h5_channels: dict[str, int] = {}
         if path_to_image:

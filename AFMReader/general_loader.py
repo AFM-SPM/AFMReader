@@ -86,7 +86,7 @@ class LoadFile:
                 afm_load = spm.load_spm(self.filepath, self.channel)
             elif self.suffix == ".h5-jpk":
                 afm_load = h5_jpk.load_h5jpk(self.filepath, self.channel)
-            elif self.suffix == ".jpk-qi-data":
+            elif self.suffix in [".jpk-qi-data", ".jpk-force-map"]:
                 afm_load = jpk_qi.load_jpk_data(
                     filepath=self.filepath, channel=self.channel, cached_data=self.cached_data
                 )
@@ -137,7 +137,7 @@ class LoadFile:
             available_channels = spm.get_spm_channels(self.filepath)
         elif self.suffix == ".h5-jpk":
             available_channels = h5_jpk.get_h5jpk_channels(self.filepath)
-        elif self.suffix == ".jpk-qi-data":
+        elif self.suffix in [".jpk-qi-data", ".jpk-force-map"]:
             available_channels = jpk_qi.get_jpk_data_channels(self.filepath, self.cached_data)
         elif self.suffix == ".topostats":
             available_channels = topostats.get_topostats_channels()
@@ -158,7 +158,7 @@ class LoadFile:
         """
         if self.suffix == ".bin":
             return raw_bin.get_bin_params()
-        if self.suffix == ".jpk-qi-data":
+        if self.suffix in [".jpk-qi-data", ".jpk-force-map"]:
             return jpk_qi.get_jpk_data_params()
         if self.suffix == ".ardf":
             return ardf.get_ardf_params()
@@ -166,7 +166,7 @@ class LoadFile:
 
     def save_to_h5(self):
         """Save the loaded data to an h5 file."""
-        if self.suffix == ".jpk-qi-data":
+        if self.suffix in [".jpk-qi-data", ".jpk-force-map"]:
             h5_path = jpk_qi.save_jpk_data_to_h5(filepath=self.filepath, cached_data=self.cached_data)
         elif self.suffix == ".ardf":
             h5_path = ardf.save_ardf_to_h5(filepath=self.filepath, cached_data=self.cached_data)
