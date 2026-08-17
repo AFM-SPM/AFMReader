@@ -37,7 +37,7 @@ def test_load_top(
     file_path = RESOURCES / file_name
     afm_load = load_top(file_path=file_path)
 
-    assert afm_load.px2nm == pytest.approx(expected_pixel_to_nm_scaling)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(expected_pixel_to_nm_scaling)
     assert isinstance(afm_load.image, np.ndarray)
     assert afm_load.image.shape == expected_image_shape
     assert afm_load.image.dtype == expected_image_dtype

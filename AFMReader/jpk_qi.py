@@ -525,7 +525,7 @@ class JPKQILoader:
         # Store the list of all paths in the archive to avoid having to call namelist() multiple times
         self.list_of_all_paths = self.qi_archive.namelist()
         # For holding the reference to where the actual .jqk-qi image is (not the metadata).
-        self.path_to_image = None
+        self.path_to_image: str | None = None
 
         # Chunk size for H5 datasets
         self.DATA_CHUNKSIZE = 512 * 1024
@@ -588,6 +588,9 @@ class JPKQILoader:
             for file_name in self.list_of_all_paths:
                 if file_name.endswith(".jpk-qi-image"):
                     self.path_to_image = file_name
+
+        if self.path_to_image is None:
+            raise FileNotFoundError(f"No .jpk-qi-image file found in {self.filepath}")
 
         # Add the channels which exist in the jpk-qi-image file
         with self.qi_archive.open(self.path_to_image, "r") as image_file:
@@ -665,7 +668,12 @@ class JPKQILoader:
         # Load the image
         self.image, _, self.z_unit = self.get_image()
 
-        return AFMLoad(image=self.image, px2nm=self.px2nm, z_units=self.z_unit, curves_dataset=self.curves_dataset)
+        return AFMLoad(
+            image=self.image,
+            pixel_to_nanometre_scaling=self.pixel_to_nanometre_scaling,
+            z_units=self.z_unit,
+            curves_dataset=self.curves_dataset,
+        )
 
     def output_summary(self):
         """Output a summary of the loading process, including any failed curve loads and their details."""
@@ -969,7 +977,7 @@ class JPKQILoader:
                 path_to_image = file_name
                 break
         # Add the channels which exist in the jpk-qi-image file
-        h5_channels = []
+        h5_channels: dict[str, int] = {}
         if path_to_image:
             with self.qi_archive.open(path_to_image, "r") as image_file:
                 h5_channels = jpk._get_jpk_channels(
@@ -1185,7 +1193,7 @@ class JPKQILoader:
         # Calculate the pixel to nano metre scaling as an average of the scale for each axis
         pixel_to_nm_scaling_factor_x = self.size_x / self.shape_x * 1e9 if self.shape_x > 0 else 1.0
         pixel_to_nm_scaling_factor_y = self.size_y / self.shape_y * 1e9 if self.shape_y > 0 else 1.0
-        self.px2nm = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
+        self.pixel_to_nanometre_scaling = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
 
         # Establish number of curves
         self.num_of_curves = self.shape_x * self.shape_y

@@ -44,7 +44,7 @@ def test_load_spm(
     file_path = RESOURCES / file_name
     afm_load = spm.load_spm(file_path, channel=channel)
 
-    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
     assert isinstance(afm_load.image, np.ndarray)
     assert afm_load.image.shape == image_shape
     assert afm_load.image.dtype == image_dtype
@@ -55,7 +55,7 @@ def test_load_spm(
 
 @patch("pySPM.SPM.SPM_image")
 @pytest.mark.parametrize(
-    ("filename", "size", "expected_px2nm"),
+    ("filename", "size", "expected_pixel_to_nanometre_scaling"),
     [
         pytest.param(
             "square",
@@ -75,19 +75,19 @@ def test_spm_pixel_to_nm_scaling_(
     mock_spm: "MagicMock",
     filename: str,
     size: dict[str, dict[str, int | str]],
-    expected_px2nm: float,
+    expected_pixel_to_nanometre_scaling: float,
 ) -> None:
     """Test obtaining scaling directly when ``pixel_to_nm_scale`` attribute is zero."""
     # Mock the pxs attribute to be zero which triggers derivation of sacling from the size attributes
     mock_spm.pxs.return_value = [(0, "nm"), (0, "nm")]
     mock_spm.size = size
     result = spm.spm_pixel_to_nm_scaling(filename, mock_spm)
-    assert result == expected_px2nm
+    assert result == expected_pixel_to_nanometre_scaling
 
 
 @patch("pySPM.SPM.SPM_image.pxs")
 @pytest.mark.parametrize(
-    ("filename", "unit", "x", "y", "expected_px2nm"),
+    ("filename", "unit", "x", "y", "expected_pixel_to_nanometre_scaling"),
     [
         pytest.param("square_mm", "mm", 0.01, 0.01, 10000, id="mm units; square"),
         pytest.param("square_um", "um", 1.5, 1.5, 1500, id="um units; square"),
@@ -104,12 +104,12 @@ def test__spm_pixel_to_nm_scaling(
     unit: str,
     x: int,
     y: int,
-    expected_px2nm: float,
+    expected_pixel_to_nanometre_scaling: float,
 ) -> None:
     """Test extraction of pixels to nanometer scaling."""
     mock_pxs.return_value = [(x, unit), (y, unit)]  # issue is that pxs is a func that returns the data
     result = spm.spm_pixel_to_nm_scaling(filename, spm_channel_data)
-    assert result == expected_px2nm
+    assert result == expected_pixel_to_nanometre_scaling
 
 
 def test_load_spm_file_not_found() -> None:

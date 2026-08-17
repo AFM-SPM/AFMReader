@@ -113,7 +113,7 @@ def load_ibw(file_path: Path | str, channel: str) -> AFMLoad:
     >>> from AFMReader.ibw import load_ibw
     >>> afm_load = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
     >>> image = afm_load.image
-    >>> pixel_to_nanometre_scaling_factor = afm_load.px2nm
+    >>> pixel_to_nanometre_scaling_factor = afm_load.pixel_to_nanometre_scaling
     >>> z_units = afm_load.z_units
     """
     logger.info(f"Loading image from : {file_path}")
@@ -133,7 +133,7 @@ def load_ibw(file_path: Path | str, channel: str) -> AFMLoad:
                     labels.append(label.decode())
         channel_idx = labels.index(channel)
 
-        px2nm, z_units = _ibw_pixel_to_nm_scaling(scan=scan, channel=channel)
+        pixel_to_nanometre_scaling, z_units = _ibw_pixel_to_nm_scaling(scan=scan, channel=channel)
 
         if z_units == "m":
             image = scan["wave"]["wData"][:, :, channel_idx].T * 1e9  # Convert from m to nm
@@ -153,4 +153,4 @@ def load_ibw(file_path: Path | str, channel: str) -> AFMLoad:
         raise e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return AFMLoad(image=image, px2nm=px2nm, z_units=z_units)
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=z_units)

@@ -122,6 +122,7 @@ class LoadFile:
             List of available channels.
         """
         self.kwargs = kwargs if kwargs else self.kwargs
+        available_channels: list[str] | dict[str, int]
         if self.suffix == ".ardf":
             available_channels = ardf.get_ardf_channels(self.filepath, self.cached_data)
         elif self.suffix == ".asd":

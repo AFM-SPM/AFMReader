@@ -137,7 +137,7 @@ def test_load(capsys: pytest.CaptureFixture, filepath: Path, channel: str, error
     else:
         afm_load = loader.load()
         assert isinstance(afm_load.image, np.ndarray)
-        assert isinstance(afm_load.px2nm, float)
+        assert isinstance(afm_load.pixel_to_nanometre_scaling, float)
     # check output logs
     captured = capsys.readouterr()
     assert message in captured.err

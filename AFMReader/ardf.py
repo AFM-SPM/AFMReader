@@ -1589,7 +1589,7 @@ class ARDFReader:
         if self.images:
             first_image = next(iter(self.images.values()))
             self.shape_x, self.shape_y = first_image.shape
-        self.px2nm = self.size_x / self.shape_x
+        self.pixel_to_nanometre_scaling = self.size_x / self.shape_x
 
     def filter_essential_metadata(self, raw_metadata: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1738,7 +1738,7 @@ class ARDFReader:
 
         return AFMLoad(
             image=image,
-            px2nm=self.px2nm,
+            pixel_to_nanometre_scaling=self.pixel_to_nanometre_scaling,
             z_units=z_units,
             curves_dataset=curves_dataset,
         )

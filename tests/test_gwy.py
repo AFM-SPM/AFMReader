@@ -34,8 +34,8 @@ def test_load_gwy(
     assert isinstance(afm_load.image, np.ndarray)
     assert afm_load.image.shape == image_shape
     assert afm_load.image.sum() == pytest.approx(image_sum)
-    assert isinstance(afm_load.px2nm, float)
-    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert isinstance(afm_load.pixel_to_nanometre_scaling, float)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
     assert afm_load.z_units == unit
 
 

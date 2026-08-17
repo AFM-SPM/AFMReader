@@ -128,7 +128,7 @@ def test_load_jpk_qi_data(  # pylint: disable=too-many-arguments,too-many-positi
     jpk_qi_loader = jpk_qi.JPKQILoader(file_path, channel)
     afm_load = jpk_qi_loader.load()
 
-    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
     assert isinstance(afm_load.image, np.ndarray)
     assert afm_load.image.shape == image_shape
     assert afm_load.image.dtype == image_dtype

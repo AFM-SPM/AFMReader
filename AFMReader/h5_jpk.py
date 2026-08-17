@@ -665,7 +665,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
     >>> from AFMReader.jpk import load_h5jpk
     >>> afm_load = load_h5jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
     >>> image = afm_load.image
-    >>> pixel_to_nm_scaling = afm_load.px2nm
+    >>> pixel_to_nm_scaling = afm_load.pixel_to_nanometre_scaling
     """
     logger.info(f"Loading H5-JPK file from : {file_path}")
     file_path = Path(file_path)
@@ -713,7 +713,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
         timestamps = generate_timestamps(num_frames, line_rate, shape_y)
 
         logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
-        px2nm = _jpk_pixel_to_nm_scaling_h5(measurement_group)
+        pixel_to_nanometre_scaling = _jpk_pixel_to_nm_scaling_h5(measurement_group)
 
         # Check if the file contains curve data, if not curve data should not be loaded even if it was requested
         if "Curve_Data" not in h5_file:
@@ -791,14 +791,20 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
 
         return AFMLoad(
             image=image_stack,
-            px2nm=px2nm,
+            pixel_to_nanometre_scaling=pixel_to_nanometre_scaling,
             z_units=z_units,
             timestamps=timestamps,
             metadata=metadata,
             curves_dataset=curves_data,
         )
 
-    return AFMLoad(image=image_stack, px2nm=px2nm, z_units=z_units, timestamps=timestamps, metadata=metadata)
+    return AFMLoad(
+        image=image_stack,
+        pixel_to_nanometre_scaling=pixel_to_nanometre_scaling,
+        z_units=z_units,
+        timestamps=timestamps,
+        metadata=metadata,
+    )
 
 
 def get_h5jpk_channels(file_path: Path | str) -> list[str]:

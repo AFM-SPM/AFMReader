@@ -141,7 +141,7 @@ def test_load_h5jpk(
     """Test the normal operation of loading a .h5-jpk file."""
     afm_load = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)
 
-    assert afm_load.px2nm == pytest.approx(pixel_to_nm_scaling)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
     assert isinstance(afm_load.image, np.ndarray)
     assert afm_load.image.shape == image_shape
     assert afm_load.image.dtype == np.dtype(image_dtype)

@@ -25,8 +25,9 @@ def get_gwy_channels(file_path: Path | str) -> list[str]:
     list
         List of available channels.
     """
+    file_path = Path(file_path)
     image_data_dict: dict[Any, Any] = {}
-    with Path.open(file_path, "rb") as open_file:  # pylint: disable=unspecified-encoding
+    with file_path.open("rb") as open_file:
         # Read header
         header = open_file.read(4)
         logger.debug(f"Gwy file header: {header.decode()}")
@@ -68,7 +69,7 @@ def load_gwy(file_path: Path | str, channel: str) -> AFMLoad:
     >>> from AFMReader.gwy import load_gwy
     >>> afm_load = load_gwy(file_path="path/to/file.gwy", channel="Height")
     >>> image = afm_load.image
-    >>> px2nm = afm_load.px2nm
+    >>> pixel_to_nanometre_scaling = afm_load.pixel_to_nanometre_scaling
     >>> z_units = afm_load.z_units
     ```
     """
@@ -77,7 +78,7 @@ def load_gwy(file_path: Path | str, channel: str) -> AFMLoad:
     filename = file_path.stem
     try:
         image_data_dict: dict[Any, Any] = {}
-        with Path.open(file_path, "rb") as open_file:  # pylint: disable=unspecified-encoding
+        with file_path.open("rb") as open_file:
             # Read header
             gwy_read_object(open_file, data_dict=image_data_dict)
 
@@ -118,7 +119,7 @@ def load_gwy(file_path: Path | str, channel: str) -> AFMLoad:
         raise ValueError(f"'{channel}' not found in {file_path.suffix} channel list: {channel_ids}") from e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return AFMLoad(image=image, px2nm=px_to_nm, z_units=z_units)
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=px_to_nm, z_units=z_units)
 
 
 def gwy_read_object(open_file: BinaryIO, data_dict: dict) -> None:

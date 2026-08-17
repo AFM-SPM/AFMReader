@@ -201,7 +201,7 @@ def load_asd(file_path: str | Path, channel: str) -> AFMLoad:
         An AFMLoad object containing:
         - image : npt.NDArray
             Shape (Number of frames x Width of each frame x height of each frame).
-        - px2nm : float
+        - pixel_to_nanometre_scaling : float
             The number of nanometres per pixel for the .asd file.
         - z_units : str
             The unit of the data in the frames. Either 'nm' or 'deg' depending on the channel.
@@ -288,7 +288,12 @@ def load_asd(file_path: str | Path, channel: str) -> AFMLoad:
             unit = "deg"
         else:
             unit = "nm"
-        return AFMLoad(image=frames, px2nm=pixel_to_nanometre_scaling_factor, z_units=unit, metadata=header_dict)
+        return AFMLoad(
+            image=frames,
+            pixel_to_nanometre_scaling=pixel_to_nanometre_scaling_factor,
+            z_units=unit,
+            metadata=header_dict,
+        )
 
 
 def get_asd_channels(file_path: Path) -> list[str]:

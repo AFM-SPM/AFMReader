@@ -86,7 +86,7 @@ def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
     >>> from AFMReader.spm import load_spm
     >>> afm_load = load_spm(file_path="path/to/file.spm", channel="Height")
     >>> image = afm_load.image
-    >>> pixel_to_nm = afm_load.px2nm
+    >>> pixel_to_nm = afm_load.pixel_to_nanometre_scaling
     >>> z_units = afm_load.z_units
     ```
     """
@@ -114,7 +114,11 @@ def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
             raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {labels}") from e
         raise e
 
-    return AFMLoad(image=image, px2nm=spm_pixel_to_nm_scaling(filename, channel_data), z_units=unit)
+    return AFMLoad(
+        image=image,
+        pixel_to_nanometre_scaling=spm_pixel_to_nm_scaling(filename, channel_data),
+        z_units=unit,
+    )
 
 
 def get_spm_channels(file_path: Path | str) -> list:
