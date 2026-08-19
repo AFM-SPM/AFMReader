@@ -361,15 +361,25 @@ class CurvesH5Metadata(CurvesVolumeMetadata):
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
         if self.flip_image:
             y = self.shape[0] - 1 - y
-        idx = (y * self.shape[1]) + x
+
+        # Metadata for all the curves is stored in a contiguous array, so we calculate the index for the pixel (x, y)
+        metadata_index = (y * self.shape[1]) + x
         if segment_name is not None:
-            idx = (idx * len(self.segment_names)) + self.segment_names.index(segment_name)
+            # If a specific segment is requested, we need to extract from a block of all the segments for all the
+            # curves so we need to adjust to account for the number of segments and the index of the segment requested
+            metadata_index = (metadata_index * len(self.segment_names)) + self.segment_names.index(segment_name)
+
         meta_dict = {}
         for key in self.curve_meta_group:
             if key.startswith(f"{'segment' if segment_name is not None else 'curve'}."):
+                # The metadata keys are stored in the HDF5 file with a prefix of 'curve.' or 'segment.'
+                # We strip this prefix off to make the metadata keys more readable
                 new_key = key.split(".", 1)[1]
+
+                # Metadata values stored as datasets if they change between curves/ segments
                 if isinstance(self.curve_meta_group[key], h5py.Dataset):
-                    meta_dict[new_key] = coerce_metadata_value(self.curve_meta_group[key][idx])
+                    meta_dict[new_key] = coerce_metadata_value(self.curve_meta_group[key][metadata_index])
+                # Metadata values stored as attributes if they are constant for all curves/ segments
                 else:
                     meta_dict[new_key] = self.curve_meta_group[key]
         return meta_dict
@@ -488,6 +498,9 @@ class CurvesH5Volume(CurvesVolume):
                     curve_data[channel] = {}
                     for segment, segment_data in channel_data.items():
                         indices = indices_map[channel][segment]
+
+                        # As the channel data we have read is only for this row, the indices should be adjusted
+                        # to be relative to the start of the row
                         start_idx = int(indices[self.shape[1] * y + x]) - int(indices[self.shape[1] * y])
                         end_idx = int(indices[self.shape[1] * y + x + 1]) - int(indices[self.shape[1] * y])
                         curve_data[channel][segment] = segment_data[start_idx:end_idx]
@@ -574,7 +587,10 @@ class CurvesH5Volume(CurvesVolume):
         curve_dict: dict[str, dict[str, Any]] = {}
         for segment, segment_group in self.volume_data_group.items():
             for channel in segment_group["Indices"]:
+                # The indicies list is of the start index of each curve (first item is 0)
                 start_idx = int(segment_group["Indices"][channel][curve_num])
+                # Hence, the next curve's start index can be used as a bound for this curve
+                # (the indices list is num_curves + 1 long)
                 end_idx = int(segment_group["Indices"][channel][curve_num + 1])
                 if channel not in curve_dict:
                     curve_dict[channel] = {}
@@ -825,34 +841,41 @@ def get_h5jpk_channels(file_path: Path | str) -> list[str]:
         return list(_available_channels(f))
 
 
-def copy_h5_file(src_path: Path | str | h5py.File, dest_path: Path | str | h5py.File, without: list[str] | None = None):
+def copy_h5_file(
+    src_path: Path | str | h5py.File, dest_path: Path | str | h5py.File, without_paths: list[str] | None = None
+):
     """
     Copy an HDF5 file from source to destination.
 
     Parameters
     ----------
     src_path : Path | str | h5py.File
-        Path to the source HDF5 file.
+        Path to the source HDF5 file. We allow an already opened h5py.File object to be passed in, in which case
+        it will not be closed after the copy. This allows us to copy from an already opened file without closing it.
     dest_path : Path | str | h5py.File
         Path to the destination HDF5 file.
-    without : list[str], optional
+    without_paths : list[str], optional
         List of HDF5 paths to exclude from copying. If None or empty, the entire file is copied.
+        For example, to exclude just Trace volume of curve data use: ['Curve_Data/Trace_VOLM'].
     """
     logger.info(
         f"Copying HDF5 file from "
         f"{src_path if isinstance(src_path, (str, Path)) else src_path.filename} "
         f"to {dest_path if isinstance(dest_path, (str, Path)) else dest_path.filename}"
     )
-    if not without:
+    if not without_paths:
         if isinstance(src_path, h5py.File):
             src_path = src_path.filename
         if isinstance(dest_path, h5py.File):
             dest_path = dest_path.filename
+
+        # If no paths are specified to exclude, we can use shutil.copy2 to copy the entire file efficiently.
         shutil.copy2(src_path, dest_path)
         return
 
+    # If there are paths to exclude, we need to copy the file group by group, excluding the specified paths.
     with _h5_context(src_path, "r") as src_file, _h5_context(dest_path, "w") as dest_file:
-        _copy_h5_group(src_file, dest_file, _filter_without(without))
+        _copy_h5_group(src_file, dest_file, _filter_without(without_paths))
 
 
 def _h5_context(file: Path | str | h5py.File, mode: str) -> AbstractContextManager[h5py.File]:
@@ -876,7 +899,7 @@ def _h5_context(file: Path | str | h5py.File, mode: str) -> AbstractContextManag
     return h5py.File(file, mode)
 
 
-def _copy_h5_group(src_group: h5py.File | h5py.Group, dest_group: h5py.File | h5py.Group, without: list[str]):
+def _copy_h5_group(src_group: h5py.File | h5py.Group, dest_group: h5py.File | h5py.Group, without_paths: list[str]):
     """
     Recursively copy an HDF5 group while excluding selected child paths.
 
@@ -886,17 +909,23 @@ def _copy_h5_group(src_group: h5py.File | h5py.Group, dest_group: h5py.File | h5
         Source HDF5 file or group to copy from.
     dest_group : h5py.File | h5py.Group
         Destination HDF5 file or group to copy into.
-    without : list[str]
+    without_paths : list[str]
         Normalised child paths to exclude from the copied group.
     """
     for key, item in src_group.items():
-        if key in without:
+
+        # If the key is in the list of paths to exclude, we skip it (don't copy) and continue to the next item.
+        if key in without_paths:
             continue
 
+        # If the item is a group, we need to check all its children
         if isinstance(item, h5py.Group):
-            child_without = [w.removeprefix(key + "/") for w in without if w.startswith(key + "/")]
+            # Filter the without_paths so it is relative to the current group and only includes children of this group
+            child_without = [w.removeprefix(key + "/") for w in without_paths if w.startswith(key + "/")]
+            # If there are any children to exclude, we recursively call _copy_h5_group on the child group.
             if child_without:
                 _copy_h5_group(item, dest_group.require_group(key), child_without)
+            # Otherwise, we can copy the entire group as is.
             else:
                 src_group.copy(key, dest_group, name=key)
 
@@ -907,6 +936,9 @@ def _copy_h5_group(src_group: h5py.File | h5py.Group, dest_group: h5py.File | h5
 def _filter_without(without: list[str]) -> list[str]:
     """
     Normalise excluded HDF5 paths and remove redundant nested entries.
+
+    For example, if both 'Curve_Data/Trace_VOLM' and 'Curve_Data/Trace_VOLM/Indices' are specified, only the top-level
+    path 'Curve_Data/Trace_VOLM' will be retained, as it already encompasses all nested paths.
 
     Parameters
     ----------

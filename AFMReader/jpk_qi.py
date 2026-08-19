@@ -37,7 +37,7 @@ def _get_standard_segment_mapping(
     seg_names : list[str]
         Source segment names present in the curve data.
     segment_names_map : dict[str, list[str]] | None
-        Dictionary mapping canonical segment names to their accepted aliases.
+        Dictionary mapping canonical segment names to their accepted aliases. This is read from the config file.
 
     Returns
     -------
@@ -50,7 +50,9 @@ def _get_standard_segment_mapping(
     for key, names in segment_names_map.items():
         for name in names:
             if name in seg_names:
+                # We have found an alias option that matches a source segment name, so we map it to the canonical name
                 new_segment_mapping[name] = key
+                # We only want to map the first option so we break once we found the matching alias
                 break
     return new_segment_mapping
 
@@ -66,7 +68,9 @@ def _get_standard_channel_mapping(
     channel_names : list[str]
         Source channel names present in the curve data.
     channel_names_map : dict[str, list[str]] | None
-        Dictionary mapping canonical channel names to their accepted aliases.
+        Dictionary mapping canonical channel names to their accepted aliases. This is read from the config file.
+        The lists are ordered by preference, so the first matching alias found in the source channel names will
+        be used as the canonical name.
 
     Returns
     -------
@@ -79,7 +83,9 @@ def _get_standard_channel_mapping(
     for key, names in channel_names_map.items():
         for name in names:
             if name in channel_names:
+                # We have found an alias option that matches a source channel name, so we map it to the canonical name
                 channel_mapping[name] = key
+                # We only want to map the first option so we break once we found the matching alias
                 break
     return channel_mapping
 
@@ -195,17 +201,21 @@ class CurvesJPKMetadata(CurvesVolumeMetadata):
             raise IndexError(f"Curve index out of bounds: ({x}, {y})")
         if self.flip_image:
             y = self.shape[0] - 1 - y
-        idx = (y * self.shape[1]) + x
+        # JPK Data is stored in a linear fashion, so we calculate the curve number based on the pixel coordinates
+        curve_num = (y * self.shape[1]) + x
+        # Determine path based on whether we want the per-curve or per-segment metadata
         if segment_name is None:
-            path = f"index/{idx}/header.properties"
+            path = f"index/{curve_num}/header.properties"
         else:
             segment_number = self.segment_names.index(segment_name)
-            path = f"index/{idx}/segments/{segment_number}/segment-header.properties"
+            path = f"index/{curve_num}/segments/{segment_number}/segment-header.properties"
 
         try:
             with self.archive.open(path) as f:
+                # Load properties and coerce them into a standardised metadata dictionary removing the unnecessary
+                # prefix from the keys which is consistent for most properties in the file
                 meta_dict = coerce_metadata_dict(
-                    {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                    {k.split(".", 1)[1] if "." in k else k: v for k, v in javaproperties.load(f).items()}
                 )
         except KeyError:
             meta_dict = {}
@@ -318,6 +328,7 @@ class CurvesJPKVolume(CurvesVolume):
                     with self.archive.open(dat_path) as f:
                         raw_array = np.frombuffer(f.read(), dtype=">i4")
                         standard_segment_name = self.segment_mapping.get(segment_name, segment_name)
+                        # Convert from raw values to calibrated values with units using the scaling factors
                         curve_data[standard_channel_name][standard_segment_name] = (
                             raw_array * scale["multiplier"]
                         ) + scale["offset"]
@@ -378,6 +389,8 @@ class CurvesJPKVolume(CurvesVolume):
             for segment_name, channel_list in new_channel_segment_sets.items():
                 segment_index = segment_index_mapping[segment_name]
                 indices = [0]
+                # We only want to read the indices once for the first channel in the list as size of the segments
+                # should be the same for all channels
                 read_indices = False
                 data = []
                 for channel_name in channel_list:
@@ -393,6 +406,7 @@ class CurvesJPKVolume(CurvesVolume):
                             with self.archive.open(dat_path) as f:
                                 raw_array = np.frombuffer(f.read(), dtype=">i4")
                                 channel_data.append((raw_array * scale["multiplier"]) + scale["offset"])
+                                # Only read the indices once for the first channe
                                 if not read_indices:
                                     current_index += len(raw_array)
                                     indices.append(current_index)
