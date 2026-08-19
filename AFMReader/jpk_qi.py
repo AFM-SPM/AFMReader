@@ -340,7 +340,7 @@ class CurvesJPKVolume(CurvesVolume):
 
         return curve_data
 
-    def iter_segments(
+    def iter_segments(  # noqa: C901
         self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1
     ) -> Iterator[list[tuple[np.ndarray, list[np.ndarray]]]]:
         """
@@ -386,38 +386,44 @@ class CurvesJPKVolume(CurvesVolume):
         for batch_starting_curve_index in range(0, num_of_curves, batch_size):
 
             data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
+            curves_in_batch = min(
+                batch_size,
+                num_of_curves - batch_starting_curve_index,
+            )
             for segment_name, channel_list in new_channel_segment_sets.items():
                 segment_index = segment_index_mapping[segment_name]
-                indices = [0]
-                # We only want to read the indices once for the first channel in the list as size of the segments
-                # should be the same for all channels
-                read_indices = False
+                segment_lengths = np.full(curves_in_batch, -1, dtype=np.int64)
                 data = []
                 for channel_name in channel_list:
                     scale = self.channel_scaling[channel_name]
                     channel_data = []
-                    current_index = 0
-                    for offset in range(batch_size):
+                    for offset in range(curves_in_batch):
                         curve_num = batch_starting_curve_index + offset
-                        if curve_num >= num_of_curves:
-                            break
                         dat_path = f"index/{curve_num}/segments/{segment_index}/channels/{channel_name}.dat"
                         try:
                             with self.archive.open(dat_path) as f:
                                 raw_array = np.frombuffer(f.read(), dtype=">i4")
                                 channel_data.append((raw_array * scale["multiplier"]) + scale["offset"])
-                                # Only read the indices once for the first channe
-                                if not read_indices:
-                                    current_index += len(raw_array)
-                                    indices.append(current_index)
+                                segment_length = len(raw_array)
+                                if segment_lengths[offset] == -1:
+                                    segment_lengths[offset] = segment_length
+                                elif segment_length != segment_lengths[offset]:
+                                    raise ValueError(
+                                        f"Inconsistent segment length for pixel ({curve_num}), "
+                                        f"segment {segment_name}, channel {channel_name}"
+                                    )
                         except KeyError as e:
-                            raise KeyError(
-                                f"Internal data file missing for pixel ({curve_num}), "
-                                f"segment {segment_name}, channel {channel_name}"
-                            ) from e
-                    read_indices = True
-                    data.append(np.concatenate(channel_data))
-                data_batch.append((np.array(indices), data))
+                            if segment_lengths[offset] == -1:
+                                segment_lengths[offset] = 0
+                            elif segment_lengths[offset] != 0:
+                                raise ValueError(
+                                    f"Channel {channel_name} missing for pixel ({curve_num}), segment {segment_name}"
+                                ) from e
+                    data.append(np.concatenate(channel_data) if channel_data else np.empty(0, dtype=np.float64))
+                indices = np.empty(curves_in_batch + 1, dtype=np.int64)
+                indices[0] = 0
+                np.cumsum(segment_lengths, out=indices[1:])
+                data_batch.append((indices, data))
             yield data_batch
 
 
