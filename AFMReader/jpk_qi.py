@@ -90,6 +90,86 @@ def _get_standard_channel_mapping(
     return channel_mapping
 
 
+def _get_channel_scaling(loaded_jpk_properties: dict, channel_index: str) -> tuple[float, float, str]:
+    """
+    Parse the JPK properties dictionary to find cumulative multiplier and offset for a specific channel index.
+
+    The idea is that we should keep multiplying the multipliers and adding the offsets (with successive scaling
+    applied to the offsets) as we go through the conversion chain, storing the current step or slot in
+    conversion_slot, and keeping going until there is no longer a pointer to the next conversion step, meaning
+    we have calculated the combined effective scaling for the channel.
+    Note that we are working backwards from the targeted unit to the raw encoded values in our calculation of
+    the scaling as the offset from the first step (applied to the raw values) gets multiplied by all subsequent
+    multipliers (the same is true for the later offsets, in that they get multiplied by the multipliers of the
+    steps that come after them in the chain) and hence to know what that multiplier is we need to work backwards.
+
+    For example, if we have M1, O1, M2, O2, M3, O3 as the multipliers and offsets for three conversion steps, where,
+    as an example, M1 and O1 get you from raw integer values to volts, M2 and O2 get you from volts to nanometres,
+    and M3 and O3 get you from nanometres to newtons (the target) the final value is calculated as:
+        final_value = M3 * (M2 * (M1 * raw_value + O1) + O2) + O3
+    Which can be rearranged to:
+        final_value = (M3 * M2 * M1) * raw_value + (M3 * M2 * O1 + M3 * O2 + O3)
+
+    Parameters
+    ----------
+    loaded_jpk_properties : dict
+        The properties dictionary loaded from the JPK file.
+    channel_index : str
+        The index of the channel to find the scaling for (e.g., '1' for vDeflection).
+
+    Returns
+    -------
+    final_multiplier : float
+        The cumulative multiplier for the specified channel.
+    final_offset : float
+        The cumulative offset for the specified channel.
+    unit : str
+        The unit of the channel.
+    """
+    prefix = f"lcd-info.{channel_index}."
+
+    # Track each conversion step from the raw encoded values to the final calibrated units.
+    conversion_slot = loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.default")
+
+    # Some channels use encoder scaling directly and have no conversion chain
+    if not conversion_slot:
+        encoder_multiplier = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
+        encoder_offset = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.offset", "0.0"))
+        unit = loaded_jpk_properties.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
+        return encoder_multiplier, encoder_offset, unit
+
+    cumulative_multiplier = 1.0
+    cumulative_offset = 0.0
+    unit = loaded_jpk_properties.get(f"{prefix}conversion-set.conversion.{conversion_slot}.scaling.unit.unit")
+
+    while conversion_slot:
+        conversion_prefix = f"{prefix}conversion-set.conversion.{conversion_slot}."
+
+        if f"{conversion_prefix}scaling.multiplier" in loaded_jpk_properties:
+            scaling_multiplier = float(loaded_jpk_properties[f"{conversion_prefix}scaling.multiplier"])
+            scaling_offset = float(loaded_jpk_properties[f"{conversion_prefix}scaling.offset"])
+
+            cumulative_offset = (cumulative_multiplier * scaling_offset) + cumulative_offset
+            cumulative_multiplier *= scaling_multiplier
+
+            conversion_slot = loaded_jpk_properties.get(f"{conversion_prefix}base-calibration-slot")
+
+            if conversion_slot == loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.base"):
+                break
+        else:
+            break
+
+    encoder_multiplier = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
+    encoder_offset = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.offset", "0.0"))
+
+    final_multiplier = cumulative_multiplier * encoder_multiplier
+    final_offset = (cumulative_multiplier * encoder_offset) + cumulative_offset
+    if not unit:
+        unit = loaded_jpk_properties.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
+
+    return final_multiplier, final_offset, unit
+
+
 class CurvesJPKDataset(CurvesDataset):
     """
     A dataset class for JPK QI data that holds the raw data as well as metadata.
@@ -386,16 +466,19 @@ class CurvesJPKVolume(CurvesVolume):
         for batch_starting_curve_index in range(0, num_of_curves, batch_size):
 
             data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
+            # Determine how many curves to read in this batch, which may be less than the batch size for the last batch
             curves_in_batch = min(
                 batch_size,
                 num_of_curves - batch_starting_curve_index,
             )
             for segment_name, channel_list in new_channel_segment_sets.items():
                 segment_index = segment_index_mapping[segment_name]
+                # Preallocate an array to hold the lengths of each segment for the curves in this batch (-1 is unread)
                 segment_lengths = np.full(curves_in_batch, -1, dtype=np.int64)
                 data = []
                 for channel_name in channel_list:
                     scale = self.channel_scaling[channel_name]
+                    # channel_data will be a list of numpy arrays for each curve in the batch
                     channel_data = []
                     for offset in range(curves_in_batch):
                         curve_num = batch_starting_curve_index + offset
@@ -406,92 +489,33 @@ class CurvesJPKVolume(CurvesVolume):
                                 channel_data.append((raw_array * scale["multiplier"]) + scale["offset"])
                                 segment_length = len(raw_array)
                                 if segment_lengths[offset] == -1:
+                                    # Record the segment length for this pixel if it hasn't been recorded yet
+                                    # Only do this for the first channel as all channels should be same length
                                     segment_lengths[offset] = segment_length
                                 elif segment_length != segment_lengths[offset]:
+                                    # Data lengths between channels for same segment should be consistent, this likely
+                                    # indicates a missing channel for a segment
                                     raise ValueError(
                                         f"Inconsistent segment length for pixel ({curve_num}), "
                                         f"segment {segment_name}, channel {channel_name}"
                                     )
                         except KeyError as e:
+                            # Missing channel data is treated as an empty array and is fine as long as the other
+                            # channels for this segment are also empty.
                             if segment_lengths[offset] == -1:
                                 segment_lengths[offset] = 0
                             elif segment_lengths[offset] != 0:
                                 raise ValueError(
                                     f"Channel {channel_name} missing for pixel ({curve_num}), segment {segment_name}"
                                 ) from e
+                    # Concatenate the channel data for this segment and channel into a contiguous array for the batch
                     data.append(np.concatenate(channel_data) if channel_data else np.empty(0, dtype=np.float64))
                 indices = np.empty(curves_in_batch + 1, dtype=np.int64)
                 indices[0] = 0
+                # Use cumulative sum to calculate the starting index for each curve in the concatenated data array
                 np.cumsum(segment_lengths, out=indices[1:])
                 data_batch.append((indices, data))
             yield data_batch
-
-
-def _get_channel_scaling(props: dict, channel_index: str) -> tuple[float, float, str]:
-    """
-    Parse the JPK properties dictionary to find cumulative multiplier and offset for a specific channel index.
-
-    The idea is that we should keep multiplying the multipliers and adding the offsets as we go through the
-    conversion chain, storing the current step or slot in conversion_slot, and keeping going until there is
-    no longer a pointer to the next conversion step, meaning we have reached the final scaling for the channel.
-
-    Parameters
-    ----------
-    props : dict
-        The properties dictionary loaded from the JPK file.
-    channel_index : str
-        The index of the channel to find the scaling for (e.g., '1' for vDeflection).
-
-    Returns
-    -------
-    final_multiplier : float
-        The cumulative multiplier for the specified channel.
-    final_offset : float
-        The cumulative offset for the specified channel.
-    unit : str
-        The unit of the channel.
-    """
-    prefix = f"lcd-info.{channel_index}."
-
-    # Track each conversion step from the raw encoded values to the final calibrated units.
-    conversion_slot = props.get(f"{prefix}conversion-set.conversions.default")
-
-    if not conversion_slot:
-        encoder_multiplier = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
-        encoder_offset = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
-        unit = props.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
-        return encoder_multiplier, encoder_offset, unit
-
-    cumulative_multiplier = 1.0
-    cumulative_offset = 0.0
-    unit = props.get(f"{prefix}conversion-set.conversion.{conversion_slot}.scaling.unit.unit")
-
-    while conversion_slot:
-        conversion_prefix = f"{prefix}conversion-set.conversion.{conversion_slot}."
-
-        if f"{conversion_prefix}scaling.multiplier" in props:
-            scaling_multiplier = float(props[f"{conversion_prefix}scaling.multiplier"])
-            scaling_offset = float(props[f"{conversion_prefix}scaling.offset"])
-
-            cumulative_offset = (cumulative_multiplier * scaling_offset) + cumulative_offset
-            cumulative_multiplier *= scaling_multiplier
-
-            conversion_slot = props.get(f"{conversion_prefix}base-calibration-slot")
-
-            if conversion_slot == props.get(f"{prefix}conversion-set.conversions.base"):
-                break
-        else:
-            break
-
-    encoder_multiplier = float(props.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
-    encoder_offset = float(props.get(f"{prefix}encoder.scaling.offset", "0.0"))
-
-    final_multiplier = cumulative_multiplier * encoder_multiplier
-    final_offset = (cumulative_multiplier * encoder_offset) + cumulative_offset
-    if not unit:
-        unit = props.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
-
-    return final_multiplier, final_offset, unit
 
 
 class JPKQILoader:
@@ -661,8 +685,6 @@ class JPKQILoader:
         self.config_path = config_path if config_path else self.config_path
         self.flip_image = flip_image if flip_image is not None else self.flip_image
         self.save_as_h5 = save_as_h5 if save_as_h5 is not None else self.save_as_h5
-
-        # TODO add a save to h5 option here?
 
         logger.info(f"Loading JPK QI data from {self.filepath} with channel {self.channel}")
 
@@ -876,8 +898,9 @@ class JPKQILoader:
                     meta_path = f"index/{curve_num}/segments/{segment_idx}/segment-header.properties"
                     try:
                         with self.qi_archive.open(meta_path) as f:
+                            # Load the
                             meta_dict = coerce_metadata_dict(
-                                {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                                {k.split(".", 1)[1] if "." in k else k: v for k, v in javaproperties.load(f).items()}
                             )
                             for k, v in meta_dict.items():
                                 if k not in segment_meta_dict:
@@ -887,7 +910,10 @@ class JPKQILoader:
 
                     except KeyError:
                         if curve_num + 1 >= self.num_of_curves:
-                            break  # If we've gone past the number of curves, stop checking
+                            # If we've gone past the number of curves, stop checking
+                            break
+
+                        # Otherwise, increment the curve number and try again to find a valid segment metadata file
                         curve_num += 1
                         continue
             meta_path = f"index/{curve_num}/header.properties"
@@ -904,7 +930,9 @@ class JPKQILoader:
                         break
                 except KeyError:
                     if curve_num + 1 >= self.num_of_curves:
-                        break  # If we've gone past the number of curves, stop checking
+                        # If we've gone past the number of curves, stop checking
+                        break
+                    # Otherwise, increment the curve number and try again to find a valid curve metadata file
                     curve_num += 1
                     continue
 
