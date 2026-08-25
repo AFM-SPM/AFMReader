@@ -147,6 +147,8 @@ class H5Saver:
                 indices_dataset = self.volume_datasets[volume.name][segment_name][channel_name]["Indices"]
                 indices_dataset[-1] = self.volume_points_saved[volume.name][segment_name][channel_name]
 
+                # Resize the data datasets to the actual number of points saved for each channel and segment
+                # Necessary because we initially allocated space based on (likely overestimated) predicted points
                 self.volume_datasets[volume.name][segment_name][channel_name]["Data"].resize(
                     (self.volume_points_saved[volume.name][segment_name][channel_name],)
                 )
@@ -266,7 +268,9 @@ class H5Saver:
         if changing_segment_keys is None:
             changing_segment_keys = set()
         assert self.h5file is not None, "existing h5 file must be passed or create_file called before setup_volume"
+        # Ensure we have a group for the curve data
         self.curve_data_group = self.h5file.require_group("Curve_Data")
+        # Then create a group for this specific volume, named after the volume's name with a "_VOLM" suffix
         volume_group = self.curve_data_group.require_group(f"{curves_volume.name}_VOLM")
 
         volume_meta_group = volume_group.require_group("Metadata")
@@ -274,7 +278,9 @@ class H5Saver:
         self.curves_meta_datasets[curves_volume.name] = {}
         self.curves_meta_buffer[curves_volume.name] = {}
 
+        # Create a dataset for each changing curve metadata key
         for key in changing_curve_keys:
+            # Curves metadata is stored as a 1D dataset where each item corresponds to a curve
             self.curves_meta_datasets[curves_volume.name][f"curve.{key}"] = volume_meta_group.create_dataset(
                 name=f"curve.{key}",
                 shape=(len(curves_volume),),
@@ -283,6 +289,8 @@ class H5Saver:
                 dtype=h5py.string_dtype(encoding="utf-8"),
             )
             self.curves_meta_buffer[curves_volume.name][f"curve.{key}"] = []
+        # Curve work is a list of tuples containing the metadata key, the corresponding dataset and the
+        # buffer for that key, which reduces the number of lookups needed when saving metadata for each curve
         self.curve_work[curves_volume.name] = [
             (
                 f"{k}=".encode(),
@@ -292,7 +300,10 @@ class H5Saver:
             for k in changing_curve_keys
         ]
         self.curve_search_terms[curves_volume.name] = [f"{k}=".encode() for k in changing_curve_keys]
+
+        # Create a dataset for each changing segment metadata key
         for key in changing_segment_keys:
+            # Segment metadata is stored as a 1D dataset where each item corresponds to a segment of a curve
             self.curves_meta_datasets[curves_volume.name][f"segment.{key}"] = volume_meta_group.create_dataset(
                 name=f"segment.{key}",
                 shape=(len(curves_volume) * len(curves_volume.metadata.segment_names),),
@@ -301,6 +312,8 @@ class H5Saver:
                 dtype=h5py.string_dtype(encoding="utf-8"),
             )
             self.curves_meta_buffer[curves_volume.name][f"segment.{key}"] = []
+        # Segment work is a list of tuples containing the metadata key, the corresponding dataset and the
+        # buffer for that key, which reduces the number of lookups needed when saving metadata for each segment
         self.seg_work[curves_volume.name] = [
             (
                 f"{k}=".encode(),
@@ -312,12 +325,15 @@ class H5Saver:
         self.segment_search_terms[curves_volume.name] = [f"{k}=".encode() for k in changing_segment_keys]
 
         self.volumes_dims[curves_volume.name] = curves_volume.shape
+
+        # Initialise the empty nested dictionaries used to track data needed during saving
         curve_groups: dict[str, dict[str, h5py.Group]] = {"Data": {}, "Indices": {}}
         self.volume_datasets[curves_volume.name] = {}
         self.volumes_data_buffer[curves_volume.name] = {}
         self.volume_points_saved[curves_volume.name] = {}
         self.volume_points_read[curves_volume.name] = {}
 
+        # Get an exaggerated estimate for the number points in each segment to preallocate space in the datasets
         predicted_points_per_channel_segment = self.predict_total_points(curves_volume)
         shape_y, shape_x = curves_volume.shape
 
@@ -333,7 +349,7 @@ class H5Saver:
             curve_groups["Indices"][segment_name] = dir_group.require_group("Indices")
             for chan in curves_volume.metadata.channel_units:
                 self.volume_datasets[curves_volume.name][segment_name][chan] = {}
-                # For each channel, create an empty dataset
+                # For each channel, create an empty dataset to hold the curve data
                 self.volume_datasets[curves_volume.name][segment_name][chan]["Data"] = curve_groups["Data"][
                     segment_name
                 ].create_dataset(
@@ -343,6 +359,7 @@ class H5Saver:
                     chunks=(self.DATA_CHUNKSIZE,),
                     dtype=np.float32,
                 )
+                # Create an empty dataset to hold the indices of the start of each curve segment in the data dataset
                 self.volume_datasets[curves_volume.name][segment_name][chan]["Indices"] = curve_groups["Indices"][
                     segment_name
                 ].create_dataset(
@@ -438,6 +455,8 @@ class H5Saver:
         """
         Save a curve's data and metadata to the h5 file.
 
+        This allows a curve to be passed to the saver in its standard format of a nested dictionary
+
         Parameters
         ----------
         curve_data : dict
@@ -514,8 +533,12 @@ class H5Saver:
         attr_name, meta_set, meta_buffer = self.curve_work[volume_name][attr_idx]
         if meta_buffer is not None:
             meta_buffer.append(str(value))
+            # If the buffer is full or if this is the last curve, empty buffer into the dataset
             if len(meta_buffer) >= self.BUFFER_SIZE or curve_num == num_of_curves - 1:
+                # Write up to our current position in the dataset (the curve number), backfilling all the data we have
+                # read since the last save
                 meta_set[curve_num - len(meta_buffer) + 1 : curve_num + 1] = meta_buffer
+                # Reset the buffer
                 meta_buffer.clear()
         else:
             logger.error(
@@ -557,9 +580,14 @@ class H5Saver:
         attr_name, meta_set, meta_buffer = self.seg_work[volume_name][attr_idx]
         if meta_buffer is not None:
             meta_buffer.append(str(value))
+            # If the buffer is full or if this is the last curve, empty buffer into the dataset
             if len(meta_buffer) >= self.BUFFER_SIZE or curve_num == num_of_curves - 1:
-                idx = curve_num * num_of_segments + segment_idx
-                meta_set[idx - len(meta_buffer) + 1 : idx + 1] = meta_buffer
+                # Calculate the overall index for this segment in the dataset so we know where we have read up to
+                segment_idx = curve_num * num_of_segments + segment_idx
+                # Write up to our current position in the dataset (the segment number), backfilling all the data we
+                # have read since the last save
+                meta_set[segment_idx - len(meta_buffer) + 1 : segment_idx + 1] = meta_buffer
+                # Reset the buffer
                 meta_buffer.clear()
         else:
             logger.error(
@@ -586,6 +614,7 @@ class H5Saver:
         """
         assert self.global_meta_group is not None, "setup_curve_data_structure must be called first"
         assert self.h5file is not None, "existing h5 file must be passed or create_file called before setup"
+        # Save the global metadata attributes to the HDF5 file, coercing values to appropriate types
         for key, value in global_meta.items():
             value = coerce_metadata_value(value)
             try:

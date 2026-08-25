@@ -602,7 +602,9 @@ class JPKQILoader:
         self.curve_meta: dict[str, Any] = {}
         self.segment_meta: dict[str, Any] = {}
         self.segment_names: list[str] = []
+        # Dictionary mapping source segment names to canonical segment names
         self.segment_mapping: dict[str, str] = {}
+        # Dictionary mapping source channel names to canonical channel names
         self.channel_mapping: dict[str, str] = {}
 
         # Define the image shape and size attributes
@@ -619,7 +621,7 @@ class JPKQILoader:
         self.extract_global_metadata()
 
         self.parse_dimension_data()
-        self.essential_metadata = self.filter_essential_metadata(self.top_level_meta)
+        self.essential_metadata = self.extract_essential_metadata(self.top_level_meta)
 
     def get_available_channels(self) -> dict[str, int]:
         """
@@ -767,8 +769,10 @@ class JPKQILoader:
             f"Loading all curve data from JPK QI archive with {len(self.list_of_all_paths)} files "
             f"{'' if include_metadata else 'not '}including metadata"
         )
-        curve_search_terms = h5_saver.get_curve_search_terms("Original")
-        segment_search_terms = h5_saver.get_segment_search_terms("Original")
+        # Get the changing keys for curve and segment metadata which we actually need to read from each file
+        curve_meta_search_terms = h5_saver.get_curve_search_terms("Original")
+        segment_meta_search_terms = h5_saver.get_segment_search_terms("Original")
+
         num_of_segments = len(self.segment_names)
         for curve_num in tqdm(range(self.num_of_curves)):
             for segment_idx, segment_name in enumerate(self.segment_names):
@@ -789,7 +793,7 @@ class JPKQILoader:
                         h5_saver=h5_saver,
                         curve_num=curve_num,
                         segment_idx=segment_idx,
-                        search_terms=segment_search_terms,
+                        search_terms=segment_meta_search_terms,
                         volume_name="Original",
                         num_of_segments=num_of_segments,
                     )
@@ -797,7 +801,7 @@ class JPKQILoader:
             if include_metadata:
                 # Extract and store the curve metadata for later saving
                 self.extract_curve_metadata(
-                    h5_saver=h5_saver, curve_num=curve_num, search_terms=curve_search_terms, volume_name="Original"
+                    h5_saver=h5_saver, curve_num=curve_num, search_terms=curve_meta_search_terms, volume_name="Original"
                 )
 
     def save_to_h5(
@@ -891,6 +895,7 @@ class JPKQILoader:
         """
         curve_meta_dict: dict[str, list[Any]] = {}
         segment_meta_dict: dict[str, list[Any]] = {}
+        # Get a sample of a specific size but ensure they are not in the same row or column to make it representative
         curves_to_check = h5_saver.get_curves_sample(self.shape_x, self.shape_y, self.MAX_CURVE_CHECKS)
         for curve_num in curves_to_check:
             for segment_idx in range(len(self.segment_names)):
@@ -898,10 +903,11 @@ class JPKQILoader:
                     meta_path = f"index/{curve_num}/segments/{segment_idx}/segment-header.properties"
                     try:
                         with self.qi_archive.open(meta_path) as f:
-                            # Load the
+                            # Load the metadata for the sampled segments
                             meta_dict = coerce_metadata_dict(
                                 {k.split(".", 1)[1] if "." in k else k: v for k, v in javaproperties.load(f).items()}
                             )
+                            # Add the value of each key to the list of values for that key
                             for k, v in meta_dict.items():
                                 if k not in segment_meta_dict:
                                     segment_meta_dict[k] = []
@@ -920,9 +926,11 @@ class JPKQILoader:
             while True:
                 try:
                     with self.qi_archive.open(meta_path) as f:
+                        # Load metadata for the sampled curves
                         meta_dict = coerce_metadata_dict(
                             {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
                         )
+                        # Add the value of each key to the list of values for that key
                         for k, v in meta_dict.items():
                             if k not in curve_meta_dict:
                                 curve_meta_dict[k] = []
@@ -953,7 +961,10 @@ class JPKQILoader:
 
     def get_collated_metadata(self) -> dict[str, Any]:
         """
-        Collate metadata from being split by curve to being split by attribute.
+        Collate metadata from the general top level meta, the channel units and the essential metadata.
+
+        This prepares the metadata for saving to HDF5, where the distinction between these types will be recorded
+        with different prefixes.
 
         Returns
         -------
@@ -962,7 +973,8 @@ class JPKQILoader:
         """
         collated_meta = {}
         for seg_chan in self.segment_channels:
-            collated_meta[f"channel.unit.{seg_chan['name']}"] = seg_chan["unit"]
+            channel_name = self.channel_mapping.get(seg_chan["name"], seg_chan["name"])
+            collated_meta[f"channel.unit.{channel_name}"] = seg_chan["unit"]
         for key, value in self.top_level_meta.items():
             collated_meta[key] = value
         for key, value in self.essential_metadata.items():
@@ -1347,9 +1359,14 @@ class JPKQILoader:
             for channel_name, unit in self.channels_units.items()
         }
 
-    def filter_essential_metadata(self, raw_metadata: dict[str, Any]) -> dict[str, Any]:
+    def extract_essential_metadata(self, raw_metadata: dict[str, Any]) -> dict[str, Any]:
         """
         Extract canonical essential metadata from raw global metadata.
+
+        This ensures that certain metadata items which exists under different names in different curve file formats
+        but may be needed for analysis functions such as the sample rate or spring constant, exists under a consistent
+        canonical name (read from the config file). These attributes are also more likely to be the functions that the
+        user wants to view.
 
         Parameters
         ----------
@@ -1361,19 +1378,24 @@ class JPKQILoader:
         dict[str, Any]
             A dictionary containing only the essential metadata keys.
         """
+        # Get the options for the what 'essential' metadata may be found under in jpk data file
         essential_key_options = self.config.get("jpk_qi", {}).get("essential_metadata_keys", {})
-        filtered_metadata = {}
+        essential_metadata = {}
         for target_name, source_keys in essential_key_options.items():
             for source_key in source_keys:
                 if source_key in raw_metadata:
-                    filtered_metadata[target_name] = raw_metadata[source_key]
+                    # If one of the source options exists in the file, we save the value at that key
+                    essential_metadata[target_name] = raw_metadata[source_key]
+                    # Once we have found a source key option, we stop (so the first source key is prioritised)
                     break
-        if "read_sample_rate" not in filtered_metadata:
-            if "extend_num_points" in filtered_metadata and "extend_duration" in filtered_metadata:
-                filtered_metadata["read_sample_rate"] = (
-                    filtered_metadata["extend_num_points"] / filtered_metadata["extend_duration"]
+
+        # Read sample rate is not usually present in jpk data files, but can be calculated from other metadata
+        if "read_sample_rate" not in essential_metadata:
+            if "extend_num_points" in essential_metadata and "extend_duration" in essential_metadata:
+                essential_metadata["read_sample_rate"] = (
+                    essential_metadata["extend_num_points"] / essential_metadata["extend_duration"]
                 )
-        return filtered_metadata
+        return essential_metadata
 
     def close(self):
         """Close the ZIP archive when done to free up system resources."""
@@ -1458,6 +1480,8 @@ def save_jpk_data_to_h5(filepath: str | Path, cached_data: dict | None = None) -
     if "jpk_qi_loader" not in cached_data:
         cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath)
     h5_path = cached_data["jpk_qi_loader"].save_to_h5()
+
+    # Close the loader to free up resources after saving to h5 as the h5 file should now be used instead
     cached_data["jpk_qi_loader"].close()
     cached_data.pop("jpk_qi_loader")
     return h5_path
