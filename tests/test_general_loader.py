@@ -78,15 +78,39 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             RESOURCES / "sample_0.spm",
             "Height",
             False,
-            "Extracted channel Height",
-            id="'.spm' success.",
+            "Extracted channel Height (trace)",
+            id="Height no direction, '.spm' success.",
+        ),
+        pytest.param(
+            RESOURCES / "sample_0.spm",
+            "Height trace",
+            False,
+            "Extracted channel Height (trace)",
+            id="'.spm' explicit trace success.",
+        ),
+        pytest.param(
+            RESOURCES / "sample_0.spm",
+            "Height retrace",
+            True,
+            "'Height retrace' not in .spm channel list: ['Height Sensor retrace', 'Peak Force Error retrace', "
+            + "'DMTModulus retrace', 'LogDMTModulus retrace', "
+            + "'Adhesion retrace', 'Deformation retrace', 'Dissipation retrace', 'Height trace']",
+            id="'.spm' explicit wrong direction errors.",
+        ),
+        pytest.param(
+            RESOURCES / "sample_0.spm",
+            "Height Sensor retrace",
+            False,
+            "Extracted channel Height Sensor (retrace)",
+            id="'.spm' retrace via general loader.",
         ),
         pytest.param(
             RESOURCES / "sample_0.spm",
             "Force",
             True,
-            "'Force' not in .spm channel list: ['Height Sensor', 'Peak Force Error', 'DMTModulus', 'LogDMTModulus', "
-            "'Adhesion', 'Deformation', 'Dissipation', 'Height']",
+            "'Force' not in .spm channel list: ['Height Sensor retrace', 'Peak Force Error retrace', "
+            + "'DMTModulus retrace', 'LogDMTModulus retrace', "
+            + "'Adhesion retrace', 'Deformation retrace', 'Dissipation retrace', 'Height trace']",
             id="'.spm' channel not found.",
         ),
         pytest.param(

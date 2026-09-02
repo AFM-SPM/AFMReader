@@ -20,7 +20,40 @@ RESOURCES = BASE_DIR / "tests" / "resources"
     ("file_name", "channel", "pixel_to_nm_scaling", "image_shape", "image_dtype", "image_sum"),
     [
         pytest.param(
-            "sample_0.spm", "Height", 0.4940029296875, (1024, 1024), np.float64, 30695369.188316286, id="file type 0"
+            "sample_0.spm",
+            "Height",
+            0.4940029296875,
+            (1024, 1024),
+            np.float64,
+            30695369.188316286,
+            id="bare name -> trace",
+        ),
+        pytest.param(
+            "sample_0.spm",
+            "Height trace",
+            0.4940029296875,
+            (1024, 1024),
+            np.float64,
+            30695369.188316286,
+            id="explicit trace",
+        ),
+        pytest.param(
+            "sample_0.spm",
+            "Height Sensor retrace",
+            0.4940029296875,
+            (1024, 1024),
+            np.float64,
+            149782939.79099995,
+            id="explicit retrace",
+        ),
+        pytest.param(
+            "sample_0.spm",
+            "Adhesion retrace ",
+            0.4940029296875,
+            (1024, 1024),
+            np.float64,
+            1767.6219379177087,
+            id="trailing whitespace stripped",
         ),
     ],
 )
@@ -44,6 +77,68 @@ def test_load_spm(
     assert result_image.shape == image_shape
     assert result_image.dtype == image_dtype
     assert result_image.sum() == pytest.approx(image_sum)
+
+
+# A layer-dict factory keeps the parametrize table readable.
+def _layer(name: bytes, direction: bytes) -> dict:
+    """Build a minimal pySPM Bruker layer dict for a channel name and direction."""
+    return {b"@2:Image Data": [b'ZS [ZS] "' + name + b'"'], b"Line Direction": [direction]}
+
+
+@patch("pySPM.Bruker")
+@pytest.mark.parametrize(
+    ("layers", "requested", "expected_backward"),
+    [
+        pytest.param(
+            [_layer(b"Height Sensor", b"Retrace")],
+            "Height Sensor retrace",
+            True,
+            id="explicit retrace -> backward True",
+        ),
+        pytest.param(
+            [_layer(b"Height Sensor", b"Trace")],
+            "Height Sensor trace",
+            False,
+            id="explicit trace -> backward False",
+        ),
+        pytest.param(
+            [_layer(b"Height Sensor", b"Retrace")],
+            "HEIGHT SENSOR RETRACE",
+            True,
+            id="case-insensitive retrace -> backward True",
+        ),
+        pytest.param(
+            [_layer(b"Height Sensor", b"Trace"), _layer(b"Height Sensor", b"Retrace")],
+            "Height Sensor",
+            False,
+            id="bare name with both directions defaults to trace",
+        ),
+    ],
+)
+def test_direction_routes_to_get_channel(
+    mock_bruker_cls: "MagicMock",
+    layers: list[dict],
+    requested: str,
+    expected_backward: bool,
+) -> None:
+    """The requested direction must reach get_channel() as the correct backward flag."""
+    scan = mock_bruker_cls.return_value
+    scan.layers = layers
+    # get_channel returns something array-like enough for the rest of load_spm.
+    fake = MagicMock()
+    fake.pixels = np.zeros((4, 4))
+    fake.pxs.return_value = [(1, "nm"), (1, "nm")]
+    scan.get_channel.return_value = fake
+
+    spm.load_spm("whatever.spm", channel=requested)
+    scan.get_channel.assert_called_once_with("Height Sensor", backward=expected_backward)
+
+
+def test_bare_name_retrace_fallback_logs(caplog: pytest.LogCaptureFixture) -> None:
+    """Bare 'Adhesion' (retrace-only in sample_0.spm) loads retrace and logs the fallback."""
+    spm.load_spm(RESOURCES / "sample_0.spm", channel="Adhesion")
+    assert "loading retrace" in caplog.text
+    assert "Extracted channel Adhesion" in caplog.text
 
 
 @patch("pySPM.SPM.SPM_image")
@@ -111,23 +206,40 @@ def test_load_spm_file_not_found() -> None:
         spm.load_spm("nonexistant_file.spm", channel="TP")
 
 
+def test_spm_channel_list() -> None:
+    """spm_channel_list enumerates every channel with its direction and backward flag."""
+    scan = pySPM.Bruker(RESOURCES / "sample_0.spm")
+    channels = spm.spm_channel_list(scan)
+
+    expected = {
+        "Height Sensor retrace": ("Height Sensor", True),
+        "Peak Force Error retrace": ("Peak Force Error", True),
+        "DMTModulus retrace": ("DMTModulus", True),
+        "LogDMTModulus retrace": ("LogDMTModulus", True),
+        "Adhesion retrace": ("Adhesion", True),
+        "Deformation retrace": ("Deformation", True),
+        "Dissipation retrace": ("Dissipation", True),
+        "Height trace": ("Height", False),
+    }
+    assert channels == expected
+
+
 @pytest.mark.parametrize(
     ("channel", "message", "error"),
     [
-        pytest.param("Height", "Extracted channel Height", False, id="Height found"),
-        pytest.param("Height Sensor", "Extracted channel Height Sensor", False, id="Height Sensor found"),
-        pytest.param("Peak Force Error", "Extracted channel Peak Force Error", False, id="Peak Force Error found"),
-        pytest.param("DMTModulus", "Extracted channel DMTModulus", False, id="DMTModulus found"),
-        pytest.param("LogDMTModulus", "Extracted channel LogDMTModulus", False, id="LogDMTModulus found"),
-        pytest.param("Adhesion", "Extracted channel Adhesion", False, id="Adhesion found"),
-        pytest.param("Deformation", "Extracted channel Deformation", False, id="Deformation found"),
-        pytest.param("Dissipation", "Extracted channel Dissipation", False, id="Dissipation found"),
+        pytest.param(
+            "Height",
+            "Extracted channel Height",
+            False,
+            id="trace channel loads",
+        ),
         pytest.param(
             "Might",
-            "'Might' not in .spm channel list: ['Height Sensor', 'Peak Force Error', 'DMTModulus', 'LogDMTModulus', "
-            + "'Adhesion', 'Deformation', 'Dissipation', 'Height']",
+            "'Might' not in .spm channel list: ['Height Sensor retrace', 'Peak Force Error retrace', "
+            + "'DMTModulus retrace', 'LogDMTModulus retrace', "
+            + "'Adhesion retrace', 'Deformation retrace', 'Dissipation retrace', 'Height trace']",
             True,
-            id="Might not found",
+            id="unknown channel raises with channel list",
         ),
     ],
 )
