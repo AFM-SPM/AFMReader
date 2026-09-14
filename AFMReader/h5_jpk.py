@@ -373,7 +373,8 @@ class CurvesH5Metadata(CurvesVolumeMetadata):
         for key in self.curve_meta_group:
             if key.startswith(f"{'segment' if segment_name is not None else 'curve'}."):
                 # The metadata keys are stored in the HDF5 file with a prefix of 'curve.' or 'segment.'
-                # We strip this prefix off to make the metadata keys more readable
+                # We strip this prefix off as that prefix is used to distinguish between curve and segment
+                # metadata in the HDF5 file but is not needed in the returned dictionary
                 new_key = key.split(".", 1)[1]
 
                 # Metadata values stored as datasets if they change between curves/ segments
