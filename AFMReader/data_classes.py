@@ -160,6 +160,9 @@ class CurvesVolume:
         # Store analysis results in a dict, with the values being numpy arrays of the results for each pixel.
         self.analysis_results: dict[str, np.ndarray] = {}
 
+        # Store calculated contact points, None if not yet calculated
+        self.contact_points: np.ndarray | None = None
+
     def __len__(self) -> int:
         """
         Return the total number of pixels in the image.
