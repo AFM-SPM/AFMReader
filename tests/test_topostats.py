@@ -89,21 +89,23 @@ def test_load_topostats(
 ) -> None:
     """Test the normal operation of loading a .topostats (HDF5 format) file."""
     file_path = RESOURCES / file_name
-    topostats_data = topostats.load_topostats(file_path)
+    afm_load = topostats.load_topostats(file_path, channel="image")
 
-    assert set(topostats_data.keys()) == data_keys  # type: ignore
+    expected_metadata_keys = data_keys - {"image", "pixel_to_nm_scaling"}
+    assert afm_load.metadata is not None
+    assert set(afm_load.metadata.keys()) == expected_metadata_keys
     if version_key == "topostats_file_version":
-        assert topostats_data[version_key] == float(version)
+        assert afm_load.metadata[version_key] == float(version)
     else:
-        assert topostats_data[version_key] == version
-    assert topostats_data["pixel_to_nm_scaling"] == pytest.approx(pixel_to_nm_scaling)
-    assert topostats_data["image"].shape == image_shape
-    assert topostats_data["image"].sum() == pytest.approx(image_sum)
+        assert afm_load.metadata[version_key] == version
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
+    assert afm_load.image.shape == image_shape
+    assert afm_load.image.sum() == pytest.approx(image_sum)
     if version > "0.2":
-        assert isinstance(topostats_data["img_path"], Path)
+        assert isinstance(afm_load.metadata["img_path"], Path)
 
 
 def test_load_topostats_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
-        topostats.load_topostats("nonexistant_file.topostats")
+        topostats.load_topostats("nonexistant_file.topostats", channel="image")

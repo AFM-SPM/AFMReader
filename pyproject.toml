@@ -41,6 +41,7 @@ dependencies = [
   "pySPM",
   "tifffile",
   "ruamel.yaml",
+  "javaproperties"
 ]
 
 [project.optional-dependencies]

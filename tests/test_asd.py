@@ -19,19 +19,30 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 )
 def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_nm_scaling: float) -> None:
     """Test the normal operation of loading a .asd file."""
-    result_frames = list
-    result_pixel_to_nm_scaling = float
-    result_metadata = dict
-
     file_path = RESOURCES / file_name
-    result_frames, result_pixel_to_nm_scaling, result_metadata = asd.load_asd(file_path, channel)
+    afm_load = asd.load_asd(file_path, channel)
 
-    assert len(result_frames) == number_of_frames  # type: ignore
-    assert result_pixel_to_nm_scaling == pixel_to_nm_scaling
-    assert isinstance(result_metadata, dict)
+    assert len(afm_load.image) == number_of_frames  # type: ignore
+    assert afm_load.pixel_to_nanometre_scaling == pixel_to_nm_scaling
+    assert isinstance(afm_load.metadata, dict)
 
 
 def test_load_asd_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
         asd.load_asd("nonexistant_file.asd", channel="TP")
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected_channels"),
+    [
+        pytest.param("sample_0.asd", ["TP", "PH"], id="sample_0.asd"),
+        pytest.param("sample_1.asd", ["TP", "PH"], id="sample_1.asd"),
+        pytest.param("extra_sample.asd", ["TP", "PH"], id="extra_sample.asd"),
+    ],
+)
+def test_get_asd_channels(file_name: str, expected_channels: list[str]) -> None:
+    """Test get_asd_channels."""
+    file_path = RESOURCES / file_name
+    channels = asd.get_asd_channels(file_path)
+    assert sorted(channels) == sorted(expected_channels)

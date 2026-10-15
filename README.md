@@ -35,10 +35,12 @@ Supported file formats
 | `.ibw`          | [WaveMetrics](https://www.wavemetrics.com/)       |
 | `.jpk-qi-image` | [Bruker](https://www.bruker.com/)                 |
 | `.jpk`          | [Bruker](https://www.bruker.com/)                 |
+| `.jpk-qi-data`  | [Bruker](https://www.bruker.com/)                 |
 | `.spm`          | [Bruker's Format](https://www.bruker.com/)        |
 | `.stp`          | [WSXM AFM software files](http://www.wsxm.eu)     |
 | `.top`          | `.stp` variant                                    |
 | `.topostats`    | [TopoStats](https://github.com/AFM-SPM/TopoStats) |
+| `.bin`          | Unspecificied binary file format                  |
 
 Support for the following additional formats is planned. Some of these are already supported in TopoStats and are
 awaiting refactoring to move their functionality into AFMReader these are denoted in bold below.
@@ -116,15 +118,28 @@ from AFMReader.ibw import load_ibw
 image, pixel_to_nanometre_scaling_factor = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
 ```
 
-### .jpk
+### .jpk and .jpk-qi-image
 
-You can open `.jpk` files using the `load_jpk` function. Just pass in the path
+You can open `.jpk` and `.jpk-qi-image` files using the `load_jpk` function. Just pass in the path
 to the file and the channel name you want to use. (If in doubt, use `height_trace` or `measuredHeight_trace`).
 
 ```python
 from AFMReader.jpk import load_jpk
 
 image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
+```
+
+### .jpk-qi-data
+
+You can open `.jpk-qi-data` files using the `jpk_qi_loader` class. Just pass in the path to the file
+and the channel name you want to use. Then call the `my_jpk_qi_loader.load()` method. If in doubt,
+use `height_trace` or `measuredHeight_trace`.
+
+```python
+from AFMReader.jpk_qi import jpk_qi_loader
+
+my_jpk_qi_loader = jpk_qi_loader(file_path="./my_jpk_qi_data_file.jpk-qi-data", channel="height_trace")
+image, pixel_to_nanometre_scaling_factor, force_curves = my_jpk_qi_loader.load()
 ```
 
 ### .h5-jpk
@@ -138,7 +153,16 @@ Note: Since `.h5-jpk` stores timeseries AFM data a dictionary of timestamps for 
 ```python
 from AFMReader.h5_jpk import load_h5jpk
 
-frames, pixel_to_nanometre_scaling_factor, timestamp_dict = load_h5jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
+frames, pixel_to_nanometre_scaling_factor, timestamp_dict = load_h5jpk(file_path="./my_jpk_file.h5-jpk", channel="height_trace")
+```
+
+If your `.h5-jpk` file was created from a `.jpk-qi-data` file, then the curve data can be read like so. Note that reading
+force curves like this will keep the file open as the force curves are lazy loaded from your hard drive.
+
+```python
+from AFMReader.h5_jpk import load_h5jpk
+
+frames, pixel_to_nanometre_scaling_factor, timestamp_dict, force_curves = load_h5jpk(file_path="./my_jpk_file.h5-jpk", channel="height_trace")
 ```
 
 ### .stp
@@ -161,6 +185,28 @@ to the file you want to use.
 from AFMReader.top import load_top
 
 image, pixel_to_nanometre_scaling_factor = load_top(file_path="./my_top_file.top")
+```
+
+### .bin
+
+You can open unspecified binary files using the `load_bin` function. You must supply the path
+to the file, the data type, the byte offset where the image data begins, and the physical dimensions
+of the scan. Supported `data_type` values include `"IEEE double"`, `"IEEE single"`, `"float64"`,
+`"float32"`, `"I32"`, `"U32"`, `"I16"`, `"U16"`, `"I8"`, and `"U8"`.
+
+```python
+from AFMReader.bin import load_bin
+
+image, pixel_to_nanometre_scaling_factor = load_bin(
+    filepath="./my_binary_file.bin",
+    data_type="IEEE double",
+    offset_bytes=0,
+    size_x=1000.0,   # physical width in nm
+    size_y=1000.0,   # physical height in nm
+    shape_x=512,     # pixels along x
+    shape_y=512,     # pixels along y
+    z_scaling=1.0,   # optional z-axis scaling factor
+)
 ```
 
 ## Contributing

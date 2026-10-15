@@ -16,12 +16,12 @@ def test_load_gwy() -> None:
     """Test the normal operation of loading a .gwy file."""
     channel = "ZSensor"
     file_path = RESOURCES / "sample_0.gwy"
-    result_image, result_pixel_to_nm_scaling = gwy.load_gwy(file_path, channel=channel)
-    assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == (512, 512)
-    assert result_image.sum() == pytest.approx(33836850.232917726)
-    assert isinstance(result_pixel_to_nm_scaling, float)
-    assert result_pixel_to_nm_scaling == pytest.approx(0.8468632812499975)
+    afm_load = gwy.load_gwy(file_path, channel=channel)
+    assert isinstance(afm_load.image, np.ndarray)
+    assert afm_load.image.shape == (512, 512)
+    assert afm_load.image.sum() == pytest.approx(33836850.232917726)
+    assert isinstance(afm_load.pixel_to_nanometre_scaling, float)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(0.8468632812499975)
 
 
 def test_gwy_read_object() -> None:
@@ -117,3 +117,30 @@ def test_load_gwy_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
         gwy.load_gwy("nonexistant_file.gwy", channel="TP")
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected_channels"),
+    [
+        pytest.param(
+            "sample_0.gwy",
+            [
+                "ZSensor",
+                "Peak Force Error",
+                "Stiffness",
+                "LogStiffness",
+                "Adhesion",
+                "Deformation",
+                "Dissipation",
+                "Height",
+            ],
+            id="sample_0.gwy",
+        ),
+    ],
+)
+def test_get_gwy_channels(file_name: str, expected_channels: list[str]) -> None:
+    """Test get_gwy_channels."""
+    file_path = RESOURCES / file_name
+    channels = gwy.get_gwy_channels(file_path)
+    # The order might not be guaranteed, so sort before comparing
+    assert sorted(channels) == sorted(expected_channels)

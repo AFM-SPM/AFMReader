@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
+from AFMReader.data_classes import AFMLoad
 from AFMReader.io import read_int16
 from AFMReader.logging import logger
 
@@ -14,9 +15,7 @@ logger.enable(__package__)
 # pylint: disable=too-many-locals
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-branches
-def load_top(  # noqa: C901 (ignore too complex)
-    file_path: Path | str, header_encoding: str = "latin-1"
-) -> tuple[np.ndarray, float]:
+def load_top(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad:  # noqa: C901 (ignore too complex)
     """
     Load image from TOP files.
 
@@ -29,8 +28,8 @@ def load_top(  # noqa: C901 (ignore too complex)
 
     Returns
     -------
-    tuple[np.ndarray, float]
-        A tuple containing the image and its pixel to nanometre scaling value.
+    AFMLoad
+        An AFMLoad object containing the image and its pixel to nanometre scaling value.
 
     Raises
     ------
@@ -117,4 +116,4 @@ def load_top(  # noqa: C901 (ignore too complex)
         raise e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return (image, pixel_to_nm_scaling)
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=pixel_to_nm_scaling)
