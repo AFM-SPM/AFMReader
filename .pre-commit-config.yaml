@@ -63,6 +63,11 @@ repos:
       - id: mypy
         args: [--ignore-missing-imports] # default but useful to be explicit
 
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.12.11
+    hooks:
+      - id: uv-lock
+
   - repo: local
     hooks:
       - id: pylint
