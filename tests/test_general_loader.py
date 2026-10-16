@@ -158,6 +158,6 @@ def test_load_filenotfounderror(filepath: Path) -> None:
     """Test that a file not found error is raise when filepath is wrong."""
     loader = general_loader.LoadFile(filepath, "channel")
 
-    with pytest.raises(FileNotFoundError) as execinfo:  # noqa: PT012
+    with pytest.raises(FileNotFoundError) as execinfo:
         _, _ = loader.load()
         assert "[not_a_real_file] FileNotFoundError" in execinfo.value

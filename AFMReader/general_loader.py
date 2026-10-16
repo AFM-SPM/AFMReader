@@ -38,7 +38,7 @@ class LoadFile:
         self.channel = channel
         self.suffix = self.filepath.suffix
 
-    def load(self) -> tuple[npt.NDArray | str, float | None]:  # noqa: C901
+    def load(self) -> tuple[npt.NDArray | str, float | None]:
         """
         Generally loads a file type that can be handled by AFMReader.
 

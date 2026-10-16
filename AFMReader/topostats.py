@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import h5py
-
 from packaging.version import parse as parse_version
+
 from AFMReader.io import unpack_hdf5
 from AFMReader.logging import logger
 
@@ -45,7 +45,7 @@ def load_topostats(file_path: Path | str) -> dict[str, Any]:
             # Handle different names for variables holding the file version (<=0.3) or the newer topostats version
             version = (
                 data["topostats_file_version"]
-                if "topostats_file_version" in data.keys()  # pylint: disable=consider-iterating-dictionary
+                if "topostats_file_version" in data  # pylint: disable=consider-iterating-dictionary
                 else data["topostats_version"]
             )
             if parse_version(str(version)) > parse_version("0.2"):

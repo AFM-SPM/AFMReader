@@ -160,7 +160,7 @@ def _decode_attr(attr: bytes | str) -> str:
     return str(attr)
 
 
-def _attr_to_bool(attr: bytes | str | bool | int | float) -> bool:
+def _attr_to_bool(attr: bytes | str | bool | float) -> bool:
     """
     Convert an attribute to a boolean value.
 
@@ -197,7 +197,7 @@ def _available_channels(f: h5py.File) -> dict[str, str]:
     for m_key, m_group in f.items():
         if not m_key.startswith("Measurement_"):
             continue
-        for c_key in m_group.keys():
+        for c_key in m_group:
             if not c_key.startswith("Channel_"):
                 continue
 
@@ -268,7 +268,7 @@ def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> d
     return {f"frame {i}": timestamp for i, timestamp in enumerate(timestamps)}
 
 
-def load_h5jpk(
+def load_h5jpk(  # pylint: disable=too-many-locals
     file_path: Path | str, channel: str, flip_image: bool = True
 ) -> tuple[np.ndarray, float, dict[str, float]]:
     """
