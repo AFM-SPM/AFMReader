@@ -138,7 +138,9 @@ Note: Since `.h5-jpk` stores timeseries AFM data a dictionary of timestamps for 
 ```python
 from AFMReader.h5_jpk import load_h5jpk
 
-frames, pixel_to_nanometre_scaling_factor, timestamp_dict = load_h5jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
+frames, pixel_to_nanometre_scaling_factor, timestamp_dict = load_h5jpk(
+    file_path="./my_jpk_file.jpk", channel="height_trace"
+)
 ```
 
 ### .stp

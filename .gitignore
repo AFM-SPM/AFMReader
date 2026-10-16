@@ -49,6 +49,7 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+.testmondata
 
 # Translations
 *.mo
@@ -131,10 +132,6 @@ _version.py
 
 # VSCode
 .vscode/
-
-# Emacs
-*~
-\#*
 
 # Ignore topostats/_version.py as per setuptools_scm
 AFMReader/_version.py

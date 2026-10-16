@@ -43,16 +43,7 @@ dependencies = [
   "ruamel.yaml",
 ]
 
-[project.optional-dependencies]
-dev = [
-  "black",
-  "pre-commit",
-  "pylint",
-  "pytest-testmon",
-  "ruff",
-  "setuptools_scm[toml]",
-  "wheel",
-]
+[dependency-groups]
 docs = [
   "mike",
   "mkdocs",
@@ -70,6 +61,18 @@ tests = [
   "pytest",
   "pytest-cov",
   "pytest-loguru",
+  "pytest-testmon",
+  "pytest-xdist",
+]
+dev = [
+  { include-group = "docs" },
+  { include-group = "pypi" },
+  { include-group = "tests" },
+  "black",
+  "pre-commit",
+  "pylint",
+  "ruff",
+  "setuptools_scm[toml]",
 ]
 
 [project.urls]
@@ -133,32 +136,22 @@ exclude = [
   "buck-out",
   "build",
   "dist",
-  "docs/conf.py",
-  "node_modules",
-  "pygwytracing.py",
-  "tests/tracing/test_dnacurvature.py",
-  "tests/tracing/test_dnatracing.py",
-  "tests/tracing/test_tracing_dna.py",
-  "topostats/plotting.py",
-  "topostats/tracing/dnatracing.py",
-  "topostats/tracing/tracing_dna.py",
-  "topostats/tracing/tracingfuncs.py",
-  "venv",
+  ".venv",
+  "gwy.py",  # Black and ruff were fighting over this, going with black
 ]
 # per-file-ignores = []
 line-length = 120
-target-version = "py310"
-[tool.ruff.lint]
-select = ["A", "B", "C", "D", "E", "F", "PT", "PTH", "R", "S", "W", "U"]
-ignore = [
+target-version = "py311"
+lint.ignore = [
   "A005",
   "B905",
   "E501",
+  "N999",
+  "PLC0206",
   "S101",
-  "T201"]
-# Allow autofix for all enabled rules (when `--fix`) is provided.
-fixable = ["A", "B", "C", "D", "E", "F", "PT", "PTH", "R", "S", "W", "U"]
-unfixable = []
+  "TRY201",
+]
+lint.unfixable = []
 
 [tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
