@@ -43,16 +43,7 @@ dependencies = [
   "ruamel.yaml",
 ]
 
-[project.optional-dependencies]
-dev = [
-  "black",
-  "pre-commit",
-  "pylint",
-  "pytest-testmon",
-  "ruff",
-  "setuptools_scm[toml]",
-  "wheel",
-]
+[dependency-groups]
 docs = [
   "mike",
   "mkdocs",
@@ -70,6 +61,18 @@ tests = [
   "pytest",
   "pytest-cov",
   "pytest-loguru",
+  "pytest-testmon",
+  "pytest-xdist",
+]
+dev = [
+  { include-group = "docs" },
+  { include-group = "pypi" },
+  { include-group = "tests" },
+  "black",
+  "pre-commit",
+  "pylint",
+  "ruff",
+  "setuptools_scm[toml]",
 ]
 
 [project.urls]
