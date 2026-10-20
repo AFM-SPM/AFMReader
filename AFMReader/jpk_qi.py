@@ -324,7 +324,7 @@ def _get_channel_scaling(props: dict, channel_index: str) -> tuple[float, float,
     return final_multiplier, final_offset, unit
 
 
-def _make_num_min_characters(num: int, min_chars: int = 3):
+def _make_num_min_characters(num: int, min_chars: int = 3) -> str:
     """
     Zero-pad an integer to a minimum number of characters.
 
