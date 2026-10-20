@@ -16,7 +16,7 @@ class CurvesMetadata:
     A class representing the metadata for a dataset of curves, providing lazy loaded access to pixel metadata.
 
     This is a parent class that should be subclassed for specific file formats to implement
-    the get_pixel_metadata method, which defines how the metadata is retrieved from the
+    the get_point_metadata method, which defines how the metadata is retrieved from the
     underlying data source.
 
     Parameters
