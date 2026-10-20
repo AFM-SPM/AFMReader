@@ -932,7 +932,7 @@ class JPKQILoader:
                 else:
                     base_name = h5_channel
                     is_retrace = "false"
-
+assert base_name is not None
                 # Add the necessary attributes to the channel group
                 channel_grp.attrs["channel.name"] = base_name.encode("utf-8")
                 channel_grp.attrs["retrace"] = is_retrace.encode("utf-8")
