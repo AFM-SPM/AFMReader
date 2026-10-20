@@ -938,7 +938,7 @@ assert base_name is not None
                 channel_grp.attrs["retrace"] = is_retrace.encode("utf-8")
                 channel_grp.attrs["net-encoder.scaling.multiplier"] = 1.0
                 channel_grp.attrs["net-encoder.scaling.offset"] = 0.0
-
+assert h5_channel is not None
                 # Format name and reshape image (flattened frame stack)
                 dataset_name = h5_channel.split("_")[0].capitalize()
                 # Include all the channels including the calculated channel
