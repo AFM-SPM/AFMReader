@@ -1246,7 +1246,10 @@ class JPKQILoader:
         # Log an error if any of these do not exist
         if None in [self.size_x, self.size_y, self.shape_x, self.shape_y]:
             logger.error(f"Incomplete dimension data in {self.filepath}")
-
+        assert self.shape_x is not None
+        assert self.shape_y is not None
+        assert self.size_x is not None
+        assert self.size_y is not None
         # Calculate the pixel to nano metre scaling as an average of the scale for each direction
         pixel_to_nm_scaling_factor_x = self.size_x / self.shape_x * 1e9 if self.shape_x > 0 else 1.0
         pixel_to_nm_scaling_factor_y = self.size_y / self.shape_y * 1e9 if self.shape_y > 0 else 1.0
