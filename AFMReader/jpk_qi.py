@@ -457,6 +457,7 @@ class JPKQILoader:
                     self.path_to_image = file_name
 
         # Add the channels which exist in the jpk-qi-image file
+        assert self.path_to_image is not None
         with self.qi_archive.open(self.path_to_image, "r") as image_file:
             channels = jpk._get_jpk_channels(
                 file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(self.path_to_image)
