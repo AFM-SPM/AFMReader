@@ -468,42 +468,50 @@ class CurvesH5Volume(CurvesVolume):
 
         # We read all the indices into memory first for all the segments and channels (as these are small)
         indices_map: dict[str, dict[str, np.ndarray]] = {}
-        for segment, segment_group in self.volume_data_group.items():
+
+        # A segment is one phase of the tip's movement (e.g. Extend, Retract)
+        # `segment_name` is a string naming the phase, `segment_group` holds its data
+        for segment_name, segment_group in self.qi_data_group["Curves"].items():
+            # `Indices` holds one dataset per channel for this "segment", covering all pixels
             for channel in segment_group["Indices"]:
+                # Init an empty dict for the current channel if it doesn't already exist
                 if channel not in indices_map:
                     indices_map[channel] = {}
-                indices_map[channel][segment] = segment_group["Indices"][channel][:]
+                # Populate the channel & segment's index values which is used to fetch the correct data below
+                indices_map[channel][segment_name] = segment_group["Indices"][channel][:]
 
-        # Iterate row by row
-        for y_idx in range(self.shape[0]):
-            data: dict[str, dict[str, np.ndarray]] = {}
-            y = self.shape[0] - 1 - y_idx if flip_image else y_idx
+        # Read one row at a time to keep memory use bound to a single row of pixels
+        for y_idx in range(self.shape_y):
+            data = {}
+            y = self.shape_y - 1 - y_idx if self.flip_image else y_idx
 
-            # The whole row is read in one go for each segment and channel
-            for segment, segment_group in self.volume_data_group.items():
+            # For each segment & channel get the start and end index of the current row
+            # Considerations need to be taken for the row's position in the overall array,
+            # and self.shape_x * y can be used for this
+            for segment, segment_group in self.qi_data_group["Curves"].items():
                 for channel in segment_group["Indices"]:
                     if channel not in data:
                         data[channel] = {}
                     indices = indices_map[channel][segment]
-                    start_idx = int(indices[self.shape[1] * y])
-                    end_idx = int(indices[self.shape[1] * (y + 1)])
+                    start_idx = int(indices[self.shape_x * y])
+                    end_idx = int(indices[self.shape_x * (y + 1)])
 
+                    # Get the data for the whole row for the current channel and segment
+                    # using the start and end indices
                     data[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
 
-            # Then we yield each pixel's data in the row
-            for x in range(self.shape[1]):
-
-                # Constructing it from the data we have already read for the row
-                curve_data: dict[str, dict[str, np.ndarray]] = {}
+            # For each pixel in the current row
+            for x in range(self.shape_x):
+                curve_data = {}
+                # Again, loop through each channel and segment that data exists for
                 for channel, channel_data in data.items():
                     curve_data[channel] = {}
                     for segment, segment_data in channel_data.items():
+                        # Find the start and end indices of the current pixel's data
                         indices = indices_map[channel][segment]
-
-                        # As the channel data we have read is only for this row, the indices should be adjusted
-                        # to be relative to the start of the row
-                        start_idx = int(indices[self.shape[1] * y + x]) - int(indices[self.shape[1] * y])
-                        end_idx = int(indices[self.shape[1] * y + x + 1]) - int(indices[self.shape[1] * y])
+                        start_idx = int(indices[self.shape_x * y + x]) - int(indices[self.shape_x * y])
+                        end_idx = int(indices[self.shape_x * y + x + 1]) - int(indices[self.shape_x * y])
+                        # Read the data between the specified indices into the curve_data dictionary
                         curve_data[channel][segment] = segment_data[start_idx:end_idx]
                 yield curve_data
 
@@ -595,6 +603,7 @@ class CurvesH5Volume(CurvesVolume):
                 end_idx = int(segment_group["Indices"][channel][curve_num + 1])
                 if channel not in curve_dict:
                     curve_dict[channel] = {}
+                # Use the calculated indices to read the requested curve's data into a dictionary
                 curve_dict[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
         return curve_dict
 
