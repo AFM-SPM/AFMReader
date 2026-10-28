@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from AFMReader import ardf, asd, gwy, h5_jpk, ibw, jpk, raw_bin, spm, stp, top, topostats, jpk_qi
-from AFMReader.data_classes import AFMLoad
+from AFMReader.data_classes import AFMScan
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -46,7 +46,7 @@ class LoadFile:
         # Store heavy loaded data in a dict to avoid having to reload it
         self.cached_data: dict[str, Any] = {}
 
-    def load(self, channel: str | None = None, kwargs: dict | None = None) -> AFMLoad:  # noqa: C901
+    def load(self, channel: str | None = None, kwargs: dict | None = None) -> AFMScan:  # noqa: C901
         """
         Generally loads a file type that can be handled by AFMReader.
 
@@ -59,8 +59,8 @@ class LoadFile:
 
         Returns
         -------
-        AFMLoad
-            An AFMLoad object containing the loaded AFM image data and metadata.
+        AFMScan
+            An AFMScan object containing the loaded AFM image data and metadata.
 
         Raises
         ------

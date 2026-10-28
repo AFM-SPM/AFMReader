@@ -9,7 +9,7 @@ import tifffile
 
 from AFMReader.io import read_yaml
 from AFMReader.logging import logger
-from AFMReader.data_classes import AFMLoad
+from AFMReader.data_classes import AFMScan
 
 logger.enable(__package__)
 
@@ -250,7 +250,7 @@ def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = Non
 
 def load_jpk(
     file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True
-) -> AFMLoad:
+) -> AFMScan:
     """
     Load image from JPK Instruments .jpk files.
 
@@ -268,8 +268,8 @@ def load_jpk(
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image, its pixel to nanometre scaling value, and z-axis units.
+    AFMScan
+        An AFMScan object containing the image, its pixel to nanometre scaling value, and z-axis units.
 
     Raises
     ------
@@ -299,7 +299,7 @@ def load_jpk(
         config_path=config_path,
         flip_image=flip_image,
     )
-    return AFMLoad(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=units)
+    return AFMScan(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=units)
 
 
 def _load_jpk(

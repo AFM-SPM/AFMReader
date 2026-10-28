@@ -7,6 +7,7 @@ formats. This is necessary for handling large datasets with massive memory consu
 """
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -385,9 +386,10 @@ class CurvesDataset:
         )
 
 
-class AFMLoad:
+@dataclass(eq=False)
+class AFMScan:
     """
-    A class representing the loaded AFM data, including the image and scaling factors.
+    Loaded data from an AFM scan, including the image and scaling factors.
 
     Parameters
     ----------
@@ -423,7 +425,7 @@ class AFMLoad:
         curves_dataset: CurvesDataset | None = None,
     ):
         """
-        Initialise AFMLoad.
+        Initialise AFMScan.
 
         Parameters
         ----------

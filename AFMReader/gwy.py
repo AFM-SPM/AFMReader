@@ -7,7 +7,7 @@ from typing import Any, BinaryIO
 import numpy as np
 from loguru import logger
 
-from AFMReader.data_classes import AFMLoad
+from AFMReader.data_classes import AFMScan
 from AFMReader.io import read_char, read_double, read_null_terminated_string, read_uint32
 
 
@@ -38,7 +38,7 @@ def get_gwy_channels(file_path: Path | str) -> list[str]:
     return list(channel_ids)
 
 
-def load_gwy(file_path: Path | str, channel: str) -> AFMLoad:
+def load_gwy(file_path: Path | str, channel: str) -> AFMScan:
     """
     Extract image and pixel to nm scaling from the .gwy file.
 
@@ -51,8 +51,8 @@ def load_gwy(file_path: Path | str, channel: str) -> AFMLoad:
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image, its pixel to nanometre scaling value, and z-axis units.
+    AFMScan
+        An AFMScan object containing the image, its pixel to nanometre scaling value, and z-axis units.
 
     Raises
     ------
@@ -119,7 +119,7 @@ def load_gwy(file_path: Path | str, channel: str) -> AFMLoad:
         raise ValueError(f"'{channel}' not found in {file_path.suffix} channel list: {channel_ids}") from e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return AFMLoad(image=image, pixel_to_nanometre_scaling=px_to_nm, z_units=z_units)
+    return AFMScan(image=image, pixel_to_nanometre_scaling=px_to_nm, z_units=z_units)
 
 
 def gwy_read_object(open_file: BinaryIO, data_dict: dict) -> None:

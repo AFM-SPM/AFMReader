@@ -19,7 +19,7 @@ import numpy as np
 import javaproperties
 from tqdm import tqdm
 
-from AFMReader.data_classes import AFMLoad, CurvesVolume, CurvesDataset, CurvesVolumeMetadata
+from AFMReader.data_classes import AFMScan, CurvesVolume, CurvesDataset, CurvesVolumeMetadata
 from AFMReader.h5_saver import H5Saver, find_unused_filename
 from AFMReader.io import coerce_metadata_dict, coerce_metadata_value, load_config
 from AFMReader.logging import logger
@@ -94,10 +94,14 @@ def _get_channel_scaling(loaded_jpk_properties: dict, channel_index: int) -> tup
     """
     Parse the JPK properties dictionary to find cumulative multiplier and offset for a specific channel index.
 
+    Each conversion step can have different multipliers and offsets but by combining these in the right way we
+    can end up with as single value for each that can be applied to the raw data.
+
     The idea is that we should keep multiplying the multipliers and adding the offsets (with successive scaling
-    applied to the offsets) as we go through the conversion chain, storing the current step or slot in
-    conversion_slot, and keeping going until there is no longer a pointer to the next conversion step, meaning
+    applied to the offsets) as we go through the conversion chain, storing the current step in
+    conversion_step, and keeping going until there is no longer a pointer to the next conversion step, meaning
     we have calculated the combined effective scaling for the channel.
+
     Note that we are working backwards from the targeted unit to the raw encoded values in our calculation of
     the scaling as the offset from the first step (applied to the raw values) gets multiplied by all subsequent
     multipliers (the same is true for the later offsets, in that they get multiplied by the multipliers of the
@@ -128,52 +132,55 @@ def _get_channel_scaling(loaded_jpk_properties: dict, channel_index: int) -> tup
     """
     prefix = f"lcd-info.{channel_index}."
 
-    # Track each conversion step from the raw encoded values to the final calibrated units.
-    # conversion_step shows which step the process is currently on.
-    conversion_step = loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.default")
-
-    # Some channels use encoder scaling directly and have no conversion chain
-    if not conversion_step:
-        encoder_multiplier = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
-        encoder_offset = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.offset", "0.0"))
-        unit = loaded_jpk_properties.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
-        return encoder_multiplier, encoder_offset, unit
-
-    cumulative_multiplier = 1.0
-    cumulative_offset = 0.0
-    unit = loaded_jpk_properties.get(f"{prefix}conversion-set.conversion.{conversion_step}.scaling.unit.unit")
-
-    while conversion_step:
-        conversion_prefix = f"{prefix}conversion-set.conversion.{conversion_step}."
-
-        if f"{conversion_prefix}scaling.multiplier" in loaded_jpk_properties:
-            scaling_multiplier = float(loaded_jpk_properties[f"{conversion_prefix}scaling.multiplier"])
-            scaling_offset = float(loaded_jpk_properties[f"{conversion_prefix}scaling.offset"])
-
-            cumulative_offset = (cumulative_multiplier * scaling_offset) + cumulative_offset
-            cumulative_multiplier *= scaling_multiplier
-
-            conversion_step = loaded_jpk_properties.get(f"{conversion_prefix}base-calibration-slot")
-
-            if conversion_step == loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.base"):
-                break
-        else:
-            break
-
+    # Encoder scaling converts raw stored values into the base calibration slot (e.g. volts)
     encoder_multiplier = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
     encoder_offset = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.offset", "0.0"))
+    encoder_unit = loaded_jpk_properties.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
+
+    step = loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.default")
+    base = loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.base")
+
+    # Some channels have no conversion chain, so encoder scaling alone gives the final values
+    if not step:
+        return encoder_multiplier, encoder_offset, encoder_unit
+
+    unit = loaded_jpk_properties.get(f"{prefix}conversion-set.conversion.{step}.scaling.unit.unit") or encoder_unit
+
+    # Walk backwards from the default slot to the base slot, composing each step's scaling
+    cumulative_multiplier, cumulative_offset = 1.0, 0.0
+    # Keep a record of the calibration steps in case of circular references (which would cause an infinite while loop)
+    visited = set()
+    # While another step exists and is not the initial conversion we still have more to do
+    while step and step != base:
+        if step in visited:
+            raise ValueError(f"Circular calibration chain in channel {channel_index} at slot '{step}'.")
+        visited.add(step)
+
+        conversion_prefix = f"{prefix}conversion-set.conversion.{step}."
+        multiplier_key = f"{conversion_prefix}scaling.multiplier"
+        if multiplier_key not in loaded_jpk_properties:
+            logger.warning(
+                f"Channel {channel_index}: conversion slot '{step}' has no scaling; calibration may be incomplete."
+            )
+            break
+
+        multiplier = float(loaded_jpk_properties[multiplier_key])
+        offset = float(loaded_jpk_properties.get(f"{conversion_prefix}scaling.offset", "0.0"))
+        # value = cum_m * (multiplier * x + offset) + cum_o, so the offset uses the multiplier before updating
+        cumulative_offset += cumulative_multiplier * offset
+        cumulative_multiplier *= multiplier
+
+        step = loaded_jpk_properties.get(f"{conversion_prefix}base-calibration-slot")
 
     final_multiplier = cumulative_multiplier * encoder_multiplier
-    final_offset = (cumulative_multiplier * encoder_offset) + cumulative_offset
-    if not unit:
-        unit = loaded_jpk_properties.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
+    final_offset = cumulative_multiplier * encoder_offset + cumulative_offset
 
     return final_multiplier, final_offset, unit
 
 
 class CurvesJPKDataset(CurvesDataset):
     """
-    A dataset class for JPK QI data that holds the raw data as well as metadata.
+    A top-level dataset class for JPK QI data that holds the raw data as well as metadata.
 
     Parameters
     ----------
@@ -189,7 +196,11 @@ class CurvesJPKDataset(CurvesDataset):
     """
 
     def __init__(
-        self, volumes: dict[str, CurvesVolume], metadata: dict, essential_metadata: dict, archive: zipfile.ZipFile
+        self,
+        volumes: dict[str, CurvesVolume],
+        metadata: dict,
+        essential_metadata: dict,
+        archive: zipfile.ZipFile
     ):
         """
         Initialise CurvesJPKDataset.
@@ -402,6 +413,8 @@ class CurvesJPKVolume(CurvesVolume):
         for channel_name, scale in self.channel_scaling.items():
             standard_channel_name = self.channel_mapping.get(channel_name, channel_name)
             curve_data[standard_channel_name] = {}
+            # A segment is one phase of the tip's movement (e.g. Extend, Retract)
+            # `segment_name` is a string naming the phase, `segment_group` holds its data
             for segment_idx, segment_name in enumerate(self.metadata.segment_names):
                 dat_path = f"index/{curve_num}/segments/{segment_idx}/channels/{channel_name}.dat"
                 try:
@@ -472,6 +485,7 @@ class CurvesJPKVolume(CurvesVolume):
                 batch_size,
                 num_of_curves - batch_starting_curve_index,
             )
+            # A segment is one phase of the tip's movement (e.g. Extend, Retract)
             for segment_name, channel_list in new_channel_segment_sets.items():
                 segment_index = segment_index_mapping[segment_name]
                 # Preallocate an array to hold the lengths of each segment for the curves in this batch (-1 is unread)
@@ -479,7 +493,7 @@ class CurvesJPKVolume(CurvesVolume):
                 data = []
                 for channel_name in channel_list:
                     scale = self.channel_scaling[channel_name]
-                    # channel_data will be a list of numpy arrays for each curve in the batch
+                    # channel_data will be a list of numpy arrays, one for each curve in the batch
                     channel_data = []
                     for offset in range(curves_in_batch):
                         curve_num = batch_starting_curve_index + offset
@@ -662,7 +676,7 @@ class JPKQILoader:
         config_path: Path | str | None = None,
         flip_image: bool | None = True,
         save_as_h5: bool | None = None,
-    ) -> AFMLoad:
+    ) -> AFMScan:
         """
         Load the .jpk-qi-data file.
 
@@ -679,8 +693,8 @@ class JPKQILoader:
 
         Returns
         -------
-        AFMLoad
-            An AFMLoad object containing the image, its pixel to nanometre
+        AFMScan
+            An AFMScan object containing the image, its pixel to nanometre
             scaling value, z-axis unit, and curves dataset.
         """
         # Update instance attributes based on provided parameters
@@ -724,7 +738,7 @@ class JPKQILoader:
         # Load the image
         self.image, _, self.z_unit = self.get_image()
 
-        return AFMLoad(
+        return AFMScan(
             image=self.image,
             pixel_to_nanometre_scaling=self.pixel_to_nanometre_scaling,
             z_units=self.z_unit,
@@ -1404,7 +1418,7 @@ class JPKQILoader:
         self.list_of_all_paths = []
 
 
-def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict) -> AFMLoad:
+def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict) -> AFMScan:
     """
     Load the JPK QI data using the JPKQILoader.
 
@@ -1419,7 +1433,7 @@ def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict) -> AFML
 
     Returns
     -------
-    AFMLoad
+    AFMScan
         The loaded JPK QI data.
     """
     if "jpk_qi_loader" not in cached_data:

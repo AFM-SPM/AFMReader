@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from AFMReader.data_classes import AFMLoad
+from AFMReader.data_classes import AFMScan
 from AFMReader.io import read_double
 from AFMReader.logging import logger
 
@@ -14,7 +14,7 @@ logger.enable(__package__)
 
 # pylint: disable=too-many-locals
 # pylint: disable=too-many-statements
-def load_stp(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad:  # noqa: C901 (ignore too complex)
+def load_stp(file_path: Path | str, header_encoding: str = "latin-1") -> AFMScan:  # noqa: C901 (ignore too complex)
     """
     Load image from STP files.
 
@@ -27,8 +27,8 @@ def load_stp(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image, its pixel to nanometre scaling value, and z-axis units.
+    AFMScan
+        An AFMScan object containing the image, its pixel to nanometre scaling value, and z-axis units.
 
     Raises
     ------
@@ -115,4 +115,4 @@ def load_stp(file_path: Path | str, header_encoding: str = "latin-1") -> AFMLoad
         raise e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return AFMLoad(image=image, pixel_to_nanometre_scaling=pixel_to_nm_scaling, z_units=z_units)
+    return AFMScan(image=image, pixel_to_nanometre_scaling=pixel_to_nm_scaling, z_units=z_units)

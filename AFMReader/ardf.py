@@ -26,7 +26,7 @@ from collections.abc import Collection, Iterable, Iterator
 from typing import TypeAlias, Any
 
 from tqdm import tqdm
-from AFMReader.data_classes import AFMLoad, CurvesVolume, CurvesDataset, CurvesVolumeMetadata
+from AFMReader.data_classes import AFMScan, CurvesVolume, CurvesDataset, CurvesVolumeMetadata
 from AFMReader.h5_saver import H5Saver, find_unused_filename
 from AFMReader.io import coerce_metadata_dict, load_config
 from AFMReader.logging import logger
@@ -1693,7 +1693,7 @@ class ARDFReader:
         file_header.validate()
         return file_header
 
-    def load(self, channel: str | None = None, flip_image: bool = True) -> AFMLoad:
+    def load(self, channel: str | None = None, flip_image: bool = True) -> AFMScan:
         """
         Load the ARDF file data.
 
@@ -1706,7 +1706,7 @@ class ARDFReader:
 
         Returns
         -------
-        AFMLoad
+        AFMScan
             The loaded AFM data.
         """
         if channel is not None:
@@ -1736,7 +1736,7 @@ class ARDFReader:
         if self.flip_image:
             image = np.flipud(image)
 
-        return AFMLoad(
+        return AFMScan(
             image=image,
             pixel_to_nanometre_scaling=self.pixel_to_nanometre_scaling,
             z_units=z_units,
@@ -1761,7 +1761,7 @@ class ARDFReader:
             self.mmap_file = None
 
 
-def load_ardf(filepath: str | Path, channel: str, cached_data: dict) -> AFMLoad:
+def load_ardf(filepath: str | Path, channel: str, cached_data: dict) -> AFMScan:
     """
     Load the ARDF file data.
 
@@ -1776,7 +1776,7 @@ def load_ardf(filepath: str | Path, channel: str, cached_data: dict) -> AFMLoad:
 
     Returns
     -------
-    AFMLoad
+    AFMScan
         The loaded AFM data.
     """
     if "ardf_loader" not in cached_data:

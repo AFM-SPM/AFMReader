@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pySPM
 
-from AFMReader.data_classes import AFMLoad
+from AFMReader.data_classes import AFMScan
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -55,7 +55,7 @@ def spm_pixel_to_nm_scaling(filename: str, channel_data: pySPM.SPM.SPM_image) ->
     return pixel_to_nm_scaling
 
 
-def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
+def load_spm(file_path: Path | str, channel: str) -> AFMScan:
     """
     Extract image and pixel to nm scaling from the Bruker .spm file.
 
@@ -68,8 +68,8 @@ def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image, its pixel to nanometre scaling value, and z-axis units.
+    AFMScan
+        An AFMScan object containing the image, its pixel to nanometre scaling value, and z-axis units.
 
     Raises
     ------
@@ -114,7 +114,7 @@ def load_spm(file_path: Path | str, channel: str) -> AFMLoad:
             raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {labels}") from e
         raise e
 
-    return AFMLoad(
+    return AFMScan(
         image=image,
         pixel_to_nanometre_scaling=spm_pixel_to_nm_scaling(filename, channel_data),
         z_units=unit,

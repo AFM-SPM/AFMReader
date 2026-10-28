@@ -17,7 +17,7 @@ import numpy as np
 from AFMReader.logging import logger
 from AFMReader.io import coerce_metadata_value
 from AFMReader.data_classes import (
-    AFMLoad,
+    AFMScan,
     CurvesDataset,
     CurvesVolume,
     CurvesVolumeMetadata,
@@ -655,7 +655,7 @@ class CurvesH5Dataset(CurvesDataset):
             self.h5file = None
 
 
-def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True) -> AFMLoad:
+def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True) -> AFMScan:
     """
     Load image from JPK Instruments .h5-jpk files.
 
@@ -672,8 +672,8 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image, its pixel to nanometre scaling value, timestamps, and
+    AFMScan
+        An AFMScan object containing the image, its pixel to nanometre scaling value, timestamps, and
         optionally the curves dataset. Curves dataset only if load_curves is True and curve data is
         present in the file.
 
@@ -807,7 +807,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
                 )
                 volumes[volume_name] = curves_volume
 
-        # Create a CurvesH5Dataset object to hold the volumes and metadata to return in the AFMLoad object
+        # Create a CurvesH5Dataset object to hold the volumes and metadata to return in the AFMScan object
         curves_data = CurvesH5Dataset(
             volumes=volumes,
             metadata=top_level_meta,
@@ -815,7 +815,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
             h5file=h5file,
         )
 
-        return AFMLoad(
+        return AFMScan(
             image=image_stack,
             pixel_to_nanometre_scaling=pixel_to_nanometre_scaling,
             z_units=z_units,
@@ -824,7 +824,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
             curves_dataset=curves_data,
         )
 
-    return AFMLoad(
+    return AFMScan(
         image=image_stack,
         pixel_to_nanometre_scaling=pixel_to_nanometre_scaling,
         z_units=z_units,

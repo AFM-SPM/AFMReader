@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from AFMReader.data_classes import AFMLoad
+from AFMReader.data_classes import AFMScan
 
 from .logging import logger
 
@@ -39,7 +39,7 @@ def load_bin(
     shape_y: int | None = None,
     z_scaling: float = 1.0,
     z_unit: str = "nm",
-) -> AFMLoad:
+) -> AFMScan:
     """
     Load image from binary file. Parameters to interpret the binary file must be provided.
 
@@ -66,8 +66,8 @@ def load_bin(
 
     Returns
     -------
-    AFMLoad
-        An AFMLoad object containing the image, its pixel to nanometre scaling value, and z-axis units.
+    AFMScan
+        An AFMScan object containing the image, its pixel to nanometre scaling value, and z-axis units.
     """
     filepath = Path(filepath)
     dt_key = str(data_type).strip()
@@ -97,7 +97,7 @@ def load_bin(
     pixel_to_nm_scaling_factor_x = size_x / shape_x if shape_x > 0 else 1.0
     pixel_to_nm_scaling_factor_y = size_y / shape_y if shape_y > 0 else 1.0
     pixel_to_nanometre_scaling = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
-    return AFMLoad(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=z_unit)
+    return AFMScan(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=z_unit)
 
 
 def get_bin_params() -> dict[str, Any]:
