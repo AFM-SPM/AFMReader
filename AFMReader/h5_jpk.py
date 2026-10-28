@@ -484,7 +484,7 @@ class CurvesH5Volume(CurvesVolume):
 
         # Read one row at a time to keep memory use bound to a single row of pixels
         for y_idx in range(self.shape_y):
-            data = {}
+            data: dict[str, dict[str, np.ndarray]] = {}
             y = self.shape_y - 1 - y_idx if self.flip_image else y_idx
 
             # For each segment & channel get the start and end index of the current row
@@ -504,7 +504,7 @@ class CurvesH5Volume(CurvesVolume):
 
             # For each pixel in the current row
             for x in range(self.shape_x):
-                curve_data = {}
+                curve_data: dict[str, dict[str, np.ndarray]] = {}
                 # Again, loop through each channel and segment that data exists for
                 for channel, channel_data in data.items():
                     curve_data[channel] = {}
