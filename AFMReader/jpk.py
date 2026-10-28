@@ -33,13 +33,9 @@ def _jpk_pixel_to_nm_scaling(tiff_page: tifffile.tifffile.TiffPage, jpk_tags: di
         A value corresponding to the real length of a single pixel.
     """
     length = tiff_page.tags[jpk_tags["grid_ulength"]].value  # Grid-uLength (fast)
-    width = tiff_page.tags[jpk_tags["grid_vlength"]].value  # Grid-vLength (slow)
     length_px = tiff_page.tags[jpk_tags["grid_ilength"]].value  # Grid-iLength (fast)
-    width_px = tiff_page.tags[jpk_tags["grid_jlength"]].value  # Grid-jLength (slow)
 
-    px_to_nm = (length / length_px, width / width_px)[0]
-
-    return px_to_nm * 1e9
+    return (length / length_px) * 1e9
 
 
 def _get_tag_value(page: tifffile.TiffPage, tag_name: str) -> str | int | float:

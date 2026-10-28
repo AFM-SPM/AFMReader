@@ -2,8 +2,8 @@
 
 import errno
 import os
-import sys
 from pathlib import Path
+from typing import Any, BinaryIO
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,14 +25,6 @@ from AFMReader.io import (
     skip_bytes,
 )
 from AFMReader.logging import logger
-
-if sys.version_info.minor < 11:
-    from typing import Any, BinaryIO
-
-    from typing_extensions import Self
-else:
-    from typing import Any, BinaryIO, Self
-
 
 logger.enable(__package__)
 
@@ -59,7 +51,7 @@ class VoltageLevelConverter:
         values. Typically 12, hence 2^12 = 4096 sensitivity levels.
     """
 
-    def __init__(self: Self, analogue_digital_range: float, scaling_factor: float, resolution: int) -> None:
+    def __init__(self, analogue_digital_range: float, scaling_factor: float, resolution: int) -> None:
         """
         Convert arbitrary height levels from the AFM into real world nanometre heights.
 
@@ -87,7 +79,7 @@ class VoltageLevelConverter:
 class UnipolarConverter(VoltageLevelConverter):
     """A VoltageLevelConverter for unipolar encodings. (0 to +X Volts)."""
 
-    def level_to_voltage(self: Self, level: float) -> float:
+    def level_to_voltage(self, level: float) -> float:
         """
         Calculate the real world height scale in nanometres for an arbitrary level value.
 
@@ -110,7 +102,7 @@ class UnipolarConverter(VoltageLevelConverter):
 class BipolarConverter(VoltageLevelConverter):
     """A VoltageLevelConverter for bipolar encodings. (-X to +X Volts)."""
 
-    def level_to_voltage(self: Self, level: float) -> float:
+    def level_to_voltage(self, level: float) -> float:
         """
         Calculate the real world height scale in nanometres for an arbitrary level value.
 

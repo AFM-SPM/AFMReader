@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import h5py
-
 from packaging.version import parse as parse_version
 from AFMReader.data_classes import AFMScan
 from AFMReader.io import unpack_hdf5
@@ -49,7 +48,7 @@ def load_topostats(file_path: Path | str, channel: str) -> AFMScan:
             # Handle different names for variables holding the file version (<=0.3) or the newer topostats version
             version = (
                 data["topostats_file_version"]
-                if "topostats_file_version" in data.keys()  # pylint: disable=consider-iterating-dictionary
+                if "topostats_file_version" in data  # pylint: disable=consider-iterating-dictionary
                 else data["topostats_version"]
             )
             if parse_version(str(version)) > parse_version("0.2"):
