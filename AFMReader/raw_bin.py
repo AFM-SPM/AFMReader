@@ -89,11 +89,13 @@ def load_bin(
         dimension = int(math.sqrt(len(flat_data)))
         shape_x, shape_y = dimension, dimension
     # Ensure both the pixel count and real world size exists for each axis - first assert not necessary but satisfies mypy
-    assert shape_x is not None and shape_y is not None  # noqa: PT018
-    assert size_x is not None and size_y is not None  # noqa: PT018
+    assert shape_x is not None and shape_y is not None
+    assert size_x is not None and size_y is not None
     if shape_x * shape_y != len(flat_data):
         logger.error(f"Loading binary file {filepath.stem} did not receive a shape and is not square")
-        raise ValueError(f"{filepath.stem}: {len(flat_data)} values cannot be reshaped to {shape_y} x {shape_x} (rows x cols).")
+        raise ValueError(
+            f"{filepath.stem}: {len(flat_data)} values cannot be reshaped to {shape_y} x {shape_x} (rows x cols)."
+        )
     # Float conversion to avoid int * float errors
     image = flat_data.reshape((shape_y, shape_x)).astype(np.float64) * z_scaling
     pixel_to_nm_scaling_factor_x = size_x / shape_x if shape_x > 0 else 1.0

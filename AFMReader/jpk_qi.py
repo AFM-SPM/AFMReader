@@ -1401,9 +1401,9 @@ class JPKQILoader:
 
         # Read sample rate is not usually present in jpk data files, but can be calculated from other metadata
         if (
-            "read_sample_rate" not in essential_metadata and
-            "extend_num_points" in essential_metadata and
-            "extend_duration" in essential_metadata
+            "read_sample_rate" not in essential_metadata
+            and "extend_num_points" in essential_metadata
+            and "extend_duration" in essential_metadata
         ):
             essential_metadata["read_sample_rate"] = (
                 essential_metadata["extend_num_points"] / essential_metadata["extend_duration"]
