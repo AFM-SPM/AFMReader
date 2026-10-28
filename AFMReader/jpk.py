@@ -186,6 +186,11 @@ def _get_jpk_channels(
     """
     Retrieve the list of available channels from a JPK TIFF file.
 
+    Channels are named '[channel type]_[trace / retrace]' e.g:
+        'height_trace'
+
+    Separate to get_jpk_channels() as other scripts use this function directly
+
     Parameters
     ----------
     file : Path | IO[bytes]
@@ -210,15 +215,15 @@ def _get_jpk_channels(
         logger.error(f"[{filename}] File not found : {file_path}")
         raise
     # Obtain channel list for all channels in file
-    channel_list = {}
+    channel_dict = {}
     for i, page in enumerate(tif.pages[1:]):  # [0] is thumbnail
         available_channel = page.tags[jpk_tags["channel_name"]].value  # keys are hexadecimal values
         if page.tags[jpk_tags["trace_retrace"]].value == 0:  # whether img is trace or retrace
             tr_rt = "trace"
         else:
             tr_rt = "retrace"
-        channel_list[f"{available_channel}_{tr_rt}"] = i + 1
-    return channel_list
+        channel_dict[f"{available_channel}_{tr_rt}"] = i + 1
+    return channel_dict
 
 
 def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = None) -> dict[str, int]:
@@ -235,8 +240,8 @@ def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = Non
 
     Returns
     -------
-    list[str]
-        List of available channels.
+    dict[str]
+        Dictionary of available channels.
     """
     file_path = Path(file_path)
     filename = file_path.stem

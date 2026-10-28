@@ -52,9 +52,9 @@ def load_bin(
     offset_bytes : int
         Number of bytes to skip at the beginning of the file.
     size_x : float, optional
-        Size of the image in the x direction (default is None).
+        Real world size of the image in the x direction (default is None).
     size_y : float, optional
-        Size of the image in the y direction (default is None).
+        Real world size of the image in the y direction (default is None).
     shape_x : int, optional
         Number of pixels in the x direction (default is None).
     shape_y : int, optional
@@ -74,23 +74,26 @@ def load_bin(
     shape_x = None if shape_x == 0 else shape_x
     shape_y = None if shape_y == 0 else shape_y
 
+    # Confirm dtype of input data
     if dt_key in DTYPE_MAP:
         np_dtype = DTYPE_MAP[dt_key]
     else:
         logger.warning(f"Unknown data type '{dt_key}'. Defaulting to float64.")
         np_dtype = np.float64
+    # Read data from correct position in file
     with filepath.open("rb") as f:
         f.seek(offset_bytes)
         flat_data = np.fromfile(f, dtype=np_dtype)
+    # If x or y size has not been specified calculate both from the length of the flattened data (sqrt)
     if None in [shape_x, shape_y]:
         dimension = int(math.sqrt(len(flat_data)))
         shape_x, shape_y = dimension, dimension
-    assert shape_x is not None and shape_y is not None  # noqa: PT018
+    # Ensure both the pixel count and real world size exists for each axis
     assert size_x is not None and size_y is not None  # noqa: PT018
     if shape_x * shape_y != len(flat_data):
         logger.error(f"Loading binary file {filepath.stem} did not receive a shape and is not square")
-    image = flat_data.reshape((shape_x, shape_y))
-    image *= z_scaling
+    # Float conversion to avoid int * float errors
+    image = flat_data.reshape((shape_y, shape_x)).astype(np.float64) * z_scaling
     pixel_to_nm_scaling_factor_x = size_x / shape_x if shape_x > 0 else 1.0
     pixel_to_nm_scaling_factor_y = size_y / shape_y if shape_y > 0 else 1.0
     pixel_to_nanometre_scaling = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2

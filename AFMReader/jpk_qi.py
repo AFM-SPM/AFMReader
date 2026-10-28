@@ -90,7 +90,7 @@ def _get_standard_channel_mapping(
     return channel_mapping
 
 
-def _get_channel_scaling(loaded_jpk_properties: dict, channel_index: str) -> tuple[float, float, str]:
+def _get_channel_scaling(loaded_jpk_properties: dict, channel_index: int) -> tuple[float, float, str]:
     """
     Parse the JPK properties dictionary to find cumulative multiplier and offset for a specific channel index.
 
@@ -114,7 +114,7 @@ def _get_channel_scaling(loaded_jpk_properties: dict, channel_index: str) -> tup
     ----------
     loaded_jpk_properties : dict
         The properties dictionary loaded from the JPK file.
-    channel_index : str
+    channel_index : int
         The index of the channel to find the scaling for (e.g., '1' for vDeflection).
 
     Returns
@@ -129,10 +129,11 @@ def _get_channel_scaling(loaded_jpk_properties: dict, channel_index: str) -> tup
     prefix = f"lcd-info.{channel_index}."
 
     # Track each conversion step from the raw encoded values to the final calibrated units.
-    conversion_slot = loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.default")
+    # conversion_step shows which step the process is currently on.
+    conversion_step = loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.default")
 
     # Some channels use encoder scaling directly and have no conversion chain
-    if not conversion_slot:
+    if not conversion_step:
         encoder_multiplier = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
         encoder_offset = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.offset", "0.0"))
         unit = loaded_jpk_properties.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
@@ -140,10 +141,10 @@ def _get_channel_scaling(loaded_jpk_properties: dict, channel_index: str) -> tup
 
     cumulative_multiplier = 1.0
     cumulative_offset = 0.0
-    unit = loaded_jpk_properties.get(f"{prefix}conversion-set.conversion.{conversion_slot}.scaling.unit.unit")
+    unit = loaded_jpk_properties.get(f"{prefix}conversion-set.conversion.{conversion_step}.scaling.unit.unit")
 
-    while conversion_slot:
-        conversion_prefix = f"{prefix}conversion-set.conversion.{conversion_slot}."
+    while conversion_step:
+        conversion_prefix = f"{prefix}conversion-set.conversion.{conversion_step}."
 
         if f"{conversion_prefix}scaling.multiplier" in loaded_jpk_properties:
             scaling_multiplier = float(loaded_jpk_properties[f"{conversion_prefix}scaling.multiplier"])
@@ -152,9 +153,9 @@ def _get_channel_scaling(loaded_jpk_properties: dict, channel_index: str) -> tup
             cumulative_offset = (cumulative_multiplier * scaling_offset) + cumulative_offset
             cumulative_multiplier *= scaling_multiplier
 
-            conversion_slot = loaded_jpk_properties.get(f"{conversion_prefix}base-calibration-slot")
+            conversion_step = loaded_jpk_properties.get(f"{conversion_prefix}base-calibration-slot")
 
-            if conversion_slot == loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.base"):
+            if conversion_step == loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.base"):
                 break
         else:
             break
