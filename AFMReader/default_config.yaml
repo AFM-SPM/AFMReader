@@ -43,41 +43,44 @@ jpk_qi:
     cantilever_spring_constant:
       - shared-data.lcd-info.1.conversion-set.conversion.force.scaling.multiplier
 
-ardf:
-  essential_metadata_keys:
-    z_velocity:
-      - ApproachVelocity
-      - Velocity
-      - RetractVelocity
-    cantilever_spring_constant:
-      - SpringConstant
-      - DisplaySpringConstant
-    deflection_inverse_ols:
-      - InvOLS
-      - DelfInvOLS
-    scan_rate:
-      - ScanRate
-      - ForceScanRate
-      - ApproachScanRate
-      - FastMapScanRate
-    trigger_force:
-      - TriggerForce
-      - FastMapSetpointNewtons
-      - DeflectionSetpointNewtons
-    trigger_deflection:
-      - TriggerDeflection
-      - TriggerDeflVolts
-    trigger_channel:
-      - TriggerChannel
-    x_scan_size:
-      - ScanSize
-      - FastScanSize
-    scan_points:
-      - FastMapScanPoints
-      - FMapScanPoints
-    scan_lines:
-      - FastMapScanLines
-      - FMapScanLines
+# TODO: reimplement .ardf capabilities
+# Script found in ahobbs7/adjusted_volumes
+
+# ardf:
+#   essential_metadata_keys:
+#     z_velocity:
+#       - ApproachVelocity
+#       - Velocity
+#       - RetractVelocity
+#     cantilever_spring_constant:
+#       - SpringConstant
+#       - DisplaySpringConstant
+#     deflection_inverse_ols:
+#       - InvOLS
+#       - DelfInvOLS
+#     scan_rate:
+#       - ScanRate
+#       - ForceScanRate
+#       - ApproachScanRate
+#       - FastMapScanRate
+#     trigger_force:
+#       - TriggerForce
+#       - FastMapSetpointNewtons
+#       - DeflectionSetpointNewtons
+#     trigger_deflection:
+#       - TriggerDeflection
+#       - TriggerDeflVolts
+#     trigger_channel:
+#       - TriggerChannel
+#     x_scan_size:
+#       - ScanSize
+#       - FastScanSize
+#     scan_points:
+#       - FastMapScanPoints
+#       - FMapScanPoints
+#     scan_lines:
+#       - FastMapScanLines
+#       - FMapScanLines
 
 standard_curve:
   segment_names:

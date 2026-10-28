@@ -3,7 +3,8 @@
 from pathlib import Path
 from typing import Any
 
-from AFMReader import ardf, asd, gwy, h5_jpk, ibw, jpk, jpk_qi, raw_bin, spm, stp, top, topostats
+# from AFMReader import ardf
+from AFMReader import asd, gwy, h5_jpk, ibw, jpk, jpk_qi, raw_bin, spm, stp, top, topostats
 from AFMReader.data_classes import AFMScan
 from AFMReader.logging import logger
 
@@ -72,9 +73,11 @@ class LoadFile:
         if kwargs:
             self.kwargs = kwargs
         try:
-            if self.suffix == ".ardf":
-                afm_load = ardf.load_ardf(self.filepath, self.channel, self.cached_data)
-            elif self.suffix == ".asd":
+            # TODO: reimplement .ardf capabilities
+            # Script found in ahobbs7/adjusted_volumes
+            # if self.suffix == ".ardf":
+            #     afm_load = ardf.load_ardf(self.filepath, self.channel, self.cached_data)
+            if self.suffix == ".asd":
                 afm_load = asd.load_asd(self.filepath, self.channel)
             elif self.suffix == ".gwy":
                 afm_load = gwy.load_gwy(self.filepath, self.channel)
@@ -123,9 +126,11 @@ class LoadFile:
         """
         self.kwargs = kwargs if kwargs else self.kwargs
         available_channels: list[str] | dict[str, int]
-        if self.suffix == ".ardf":
-            available_channels = ardf.get_ardf_channels(self.filepath, self.cached_data)
-        elif self.suffix == ".asd":
+        # TODO: reimplement .ardf capabilities
+        # Script found in ahobbs7/adjusted_volumes
+        # if self.suffix == ".ardf":
+        #     available_channels = ardf.get_ardf_channels(self.filepath, self.cached_data)
+        if self.suffix == ".asd":
             available_channels = asd.get_asd_channels(self.filepath)
         elif self.suffix == ".gwy":
             available_channels = gwy.get_gwy_channels(self.filepath)
@@ -160,16 +165,20 @@ class LoadFile:
             return raw_bin.get_bin_params()
         if self.suffix in [".jpk-qi-data", ".jpk-force-map"]:
             return jpk_qi.get_jpk_data_params()
-        if self.suffix == ".ardf":
-            return ardf.get_ardf_params()
+        # TODO: reimplement .ardf capabilities
+        # Script found in ahobbs7/adjusted_volumes
+        # if self.suffix == ".ardf":
+        #     return ardf.get_ardf_params()
         return {}
 
     def save_to_h5(self):
         """Save the loaded data to an h5 file."""
         if self.suffix in [".jpk-qi-data", ".jpk-force-map"]:
             h5_path = jpk_qi.save_jpk_data_to_h5(filepath=self.filepath, cached_data=self.cached_data)
-        elif self.suffix == ".ardf":
-            h5_path = ardf.save_ardf_to_h5(filepath=self.filepath, cached_data=self.cached_data)
+        # TODO: reimplement .ardf capabilities
+        # Script found in ahobbs7/adjusted_volumes
+        # elif self.suffix == ".ardf":
+        #     h5_path = ardf.save_ardf_to_h5(filepath=self.filepath, cached_data=self.cached_data)
         else:
             raise ValueError(f"Saving to h5 is not currently implemented for file type '{self.suffix}'.")
         # Once saved to h5, update the filepath and suffix to point to the new h5 file for future loading
