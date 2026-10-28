@@ -738,6 +738,7 @@ class JPKQILoader:
         # Load the image
         self.image, _, self.z_unit = self.get_image()
 
+        # Return dataclass object of loaded data
         return AFMScan(
             image=self.image,
             pixel_to_nanometre_scaling=self.pixel_to_nanometre_scaling,
@@ -1405,11 +1406,14 @@ class JPKQILoader:
                     break
 
         # Read sample rate is not usually present in jpk data files, but can be calculated from other metadata
-        if "read_sample_rate" not in essential_metadata:
-            if "extend_num_points" in essential_metadata and "extend_duration" in essential_metadata:
-                essential_metadata["read_sample_rate"] = (
-                    essential_metadata["extend_num_points"] / essential_metadata["extend_duration"]
-                )
+        if (
+            "read_sample_rate" not in essential_metadata and
+            "extend_num_points" in essential_metadata and
+            "extend_duration" in essential_metadata
+        ):
+            essential_metadata["read_sample_rate"] = (
+                essential_metadata["extend_num_points"] / essential_metadata["extend_duration"]
+            )
         return essential_metadata
 
     def close(self):
