@@ -4,6 +4,7 @@ from pathlib import Path
 
 import h5py
 from packaging.version import parse as parse_version
+
 from AFMReader.data_classes import AFMScan
 from AFMReader.io import unpack_hdf5
 from AFMReader.logging import logger
@@ -68,7 +69,7 @@ def load_topostats(file_path: Path | str, channel: str) -> AFMScan:
         image_keys = ["image", "image_original"]
         topostats_keys = list(data.keys())
         raise ValueError(
-            f"'{channel}' not in available image keys: " f"{[im for im in image_keys if im in topostats_keys]}"
+            f"'{channel}' not in available image keys: {[im for im in image_keys if im in topostats_keys]}"
         ) from exc
 
     # Analyses are stored to metadata - this might be a bit clunky and potentially should be stored to their own attr

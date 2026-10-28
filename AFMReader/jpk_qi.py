@@ -15,15 +15,15 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import javaproperties
+import numpy as np
 from tqdm import tqdm
 
-from AFMReader.data_classes import AFMScan, CurvesVolume, CurvesDataset, CurvesVolumeMetadata
+from AFMReader import jpk
+from AFMReader.data_classes import AFMScan, CurvesDataset, CurvesVolume, CurvesVolumeMetadata
 from AFMReader.h5_saver import H5Saver, find_unused_filename
 from AFMReader.io import coerce_metadata_dict, coerce_metadata_value, load_config
 from AFMReader.logging import logger
-from AFMReader import jpk
 
 
 def _get_standard_segment_mapping(
@@ -196,11 +196,7 @@ class CurvesJPKDataset(CurvesDataset):
     """
 
     def __init__(
-        self,
-        volumes: dict[str, CurvesVolume],
-        metadata: dict,
-        essential_metadata: dict,
-        archive: zipfile.ZipFile
+        self, volumes: dict[str, CurvesVolume], metadata: dict, essential_metadata: dict, archive: zipfile.ZipFile
     ):
         """
         Initialise CurvesJPKDataset.
@@ -434,7 +430,7 @@ class CurvesJPKVolume(CurvesVolume):
 
         return curve_data
 
-    def iter_segments(  # noqa: C901
+    def iter_segments(
         self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1
     ) -> Iterator[list[tuple[np.ndarray, list[np.ndarray]]]]:
         """
@@ -478,7 +474,6 @@ class CurvesJPKVolume(CurvesVolume):
         num_of_curves = self.shape[0] * self.shape[1]
 
         for batch_starting_curve_index in range(0, num_of_curves, batch_size):
-
             data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
             # Determine how many curves to read in this batch, which may be less than the batch size for the last batch
             curves_in_batch = min(
@@ -858,7 +853,6 @@ class JPKQILoader:
 
         h5_saver = H5Saver(self.h5_path)
         with h5_saver.create_file(source=self.filepath.suffix) as file:
-
             # Sample curves in dataset to make a best guess for the meta keys
             self.changing_curve_keys, self.changing_segment_keys = self.get_changing_keys(h5_saver)
             h5_saver.setup_curves_group()
@@ -891,7 +885,7 @@ class JPKQILoader:
             self.saved_to_h5 = True
             return self.h5_path
 
-    def get_changing_keys(self, h5_saver: H5Saver) -> tuple[set[str], set[str]]:  # noqa: C901
+    def get_changing_keys(self, h5_saver: H5Saver) -> tuple[set[str], set[str]]:
         """
         Check a sample of curves to see which metadata keys change across curves and segments.
 

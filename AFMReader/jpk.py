@@ -7,9 +7,9 @@ from typing import IO
 import numpy as np
 import tifffile
 
+from AFMReader.data_classes import AFMScan
 from AFMReader.io import read_yaml
 from AFMReader.logging import logger
-from AFMReader.data_classes import AFMScan
 
 logger.enable(__package__)
 

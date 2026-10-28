@@ -153,7 +153,9 @@ Note: Since `.h5-jpk` stores timeseries AFM data a dictionary of timestamps for 
 ```python
 from AFMReader.h5_jpk import load_h5jpk
 
-frames, pixel_to_nanometre_scaling_factor, timestamp_dict = load_h5jpk(file_path="./my_jpk_file.h5-jpk", channel="height_trace")
+frames, pixel_to_nanometre_scaling_factor, timestamp_dict = load_h5jpk(
+    file_path="./my_jpk_file.h5-jpk", channel="height_trace"
+)
 ```
 
 If your `.h5-jpk` file was created from a `.jpk-qi-data` file, then the curve data can be read like so. Note that reading
@@ -162,7 +164,9 @@ force curves like this will keep the file open as the force curves are lazy load
 ```python
 from AFMReader.h5_jpk import load_h5jpk
 
-frames, pixel_to_nanometre_scaling_factor, timestamp_dict, force_curves = load_h5jpk(file_path="./my_jpk_file.h5-jpk", channel="height_trace")
+frames, pixel_to_nanometre_scaling_factor, timestamp_dict, force_curves = load_h5jpk(
+    file_path="./my_jpk_file.h5-jpk", channel="height_trace"
+)
 ```
 
 ### .stp
@@ -201,11 +205,11 @@ image, pixel_to_nanometre_scaling_factor = load_bin(
     filepath="./my_binary_file.bin",
     data_type="IEEE double",
     offset_bytes=0,
-    size_x=1000.0,   # physical width in nm
-    size_y=1000.0,   # physical height in nm
-    shape_x=512,     # pixels along x
-    shape_y=512,     # pixels along y
-    z_scaling=1.0,   # optional z-axis scaling factor
+    size_x=1000.0,  # physical width in nm
+    size_y=1000.0,  # physical height in nm
+    shape_x=512,  # pixels along x
+    shape_y=512,  # pixels along y
+    z_scaling=1.0,  # optional z-axis scaling factor
 )
 ```
 

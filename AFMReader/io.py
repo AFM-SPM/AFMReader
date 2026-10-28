@@ -1,7 +1,7 @@
 """For reading and writing data from / to files."""
 
-import struct
 import re
+import struct
 from importlib import resources
 from pathlib import Path
 from typing import Any, BinaryIO

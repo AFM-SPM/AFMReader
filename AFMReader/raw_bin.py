@@ -89,7 +89,7 @@ def load_bin(
         dimension = int(math.sqrt(len(flat_data)))
         shape_x, shape_y = dimension, dimension
     # Ensure both the pixel count and real world size exists for each axis
-    assert size_x is not None and size_y is not None  # noqa: PT018
+    assert size_x is not None and size_y is not None
     if shape_x * shape_y != len(flat_data):
         logger.error(f"Loading binary file {filepath.stem} did not receive a shape and is not square")
     # Float conversion to avoid int * float errors

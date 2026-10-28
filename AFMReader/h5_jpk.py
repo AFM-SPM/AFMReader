@@ -14,18 +14,17 @@ from typing import Any
 import h5py
 import numpy as np
 
-from AFMReader.logging import logger
-from AFMReader.io import coerce_metadata_value
 from AFMReader.data_classes import (
     AFMScan,
     CurvesDataset,
     CurvesVolume,
     CurvesVolumeMetadata,
 )
+from AFMReader.io import coerce_metadata_value
+from AFMReader.logging import logger
 
 logger.enable(__package__)
 
-# ruff: noqa: C901
 # pylint: disable=too-few-public-methods,too-many-locals,fixme,too-many-positional-arguments,too-many-branches,too-many-statements
 
 
@@ -438,7 +437,7 @@ class CurvesH5Volume(CurvesVolume):
             flip_image=flip_image,
         )
 
-    def __iter__(self) -> Iterator[dict[str, dict[str, np.ndarray]]]:  # noqa: C901
+    def __iter__(self) -> Iterator[dict[str, dict[str, np.ndarray]]]:
         """
         Efficiently iterate over the QI curve data, loading one row at a time.
 
@@ -547,15 +546,12 @@ class CurvesH5Volume(CurvesVolume):
 
         # Then iterate over the curves in batches, yielding the data for each batch
         for idx in range(0, len(self), batch_size):
-
             data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
             for segment_name, channel_list in channel_segment_sets.items():
-
                 # Get the indicies for this batch of curves for the current segment
                 indicies = indices_map[segment_name][idx : idx + batch_size + 1]
                 data = []
                 for channel_name in channel_list:
-
                     # Extract data for the channel and add it to the list
                     channel_data = self.volume_data_group[segment_name]["Data"][channel_name][
                         indicies[0] : indicies[-1]
@@ -779,7 +775,6 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
         volumes: dict[str, CurvesVolume] = {}
 
         for name, group in curve_data_group.items():
-
             # If the current sub group is a volume, we create a lazy loaded volume and metadata object for it
             if name.endswith("_VOLM"):
                 volume_name = name.split("_VOLM")[0]
@@ -923,7 +918,6 @@ def _copy_h5_group(src_group: h5py.File | h5py.Group, dest_group: h5py.File | h5
         Normalised child paths to exclude from the copied group.
     """
     for key, item in src_group.items():
-
         # If the key is in the list of paths to exclude, we skip it (don't copy) and continue to the next item.
         if key in without_paths:
             continue
