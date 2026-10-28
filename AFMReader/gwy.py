@@ -226,7 +226,7 @@ def gwy_get_channels(gwy_file_structure: dict) -> dict:
     title_key_pattern = re.compile(r"\d+(?=/data/title)")
     channel_ids = {}
 
-    for key, _ in gwy_file_structure.items():
+    for key in gwy_file_structure:
         match = re.search(title_key_pattern, key)
         if match:
             channel = gwy_file_structure[key]

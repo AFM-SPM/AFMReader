@@ -20,13 +20,14 @@
 
 import mmap
 import struct
-from pathlib import Path
 from bisect import bisect_left
 from collections.abc import Collection, Iterable, Iterator
-from typing import TypeAlias, Any
+from pathlib import Path
+from typing import Any, TypeAlias
 
 from tqdm import tqdm
-from AFMReader.data_classes import AFMScan, CurvesVolume, CurvesDataset, CurvesVolumeMetadata
+
+from AFMReader.data_classes import AFMScan, CurvesDataset, CurvesVolume, CurvesVolumeMetadata
 from AFMReader.h5_saver import H5Saver, find_unused_filename
 from AFMReader.io import coerce_metadata_dict, load_config
 from AFMReader.logging import logger
@@ -37,7 +38,7 @@ except ImportError:
     Buffer: TypeAlias = mmap.mmap | memoryview | bytes | bytearray
 
 import numpy as np
-from attrs import frozen, field
+from attrs import field, frozen
 
 NANOMETER_UNIT_CONVERSION = 1e9  # maybe we can intelligently read this from the file someday
 NANCURVE = np.full(shape=(2, 2, 100), fill_value=np.nan, dtype=np.float32)

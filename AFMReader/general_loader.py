@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from AFMReader import ardf, asd, gwy, h5_jpk, ibw, jpk, raw_bin, spm, stp, top, topostats, jpk_qi
+from AFMReader import ardf, asd, gwy, h5_jpk, ibw, jpk, jpk_qi, raw_bin, spm, stp, top, topostats
 from AFMReader.data_classes import AFMScan
 from AFMReader.logging import logger
 
@@ -46,7 +46,7 @@ class LoadFile:
         # Store heavy loaded data in a dict to avoid having to reload it
         self.cached_data: dict[str, Any] = {}
 
-    def load(self, channel: str | None = None, kwargs: dict | None = None) -> AFMScan:  # noqa: C901
+    def load(self, channel: str | None = None, kwargs: dict | None = None) -> AFMScan:
         """
         Generally loads a file type that can be handled by AFMReader.
 
@@ -107,7 +107,7 @@ class LoadFile:
             logger.error(f"{e}")
             raise e
 
-    def get_available_channels(self, kwargs: dict | None = None) -> list[str] | dict[str, int]:  # noqa: C901
+    def get_available_channels(self, kwargs: dict | None = None) -> list[str] | dict[str, int]:
         """
         Get the available channels for the file type.
 

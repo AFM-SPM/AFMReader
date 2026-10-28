@@ -15,7 +15,7 @@ logger.enable(__package__)
 # pylint: disable=too-many-locals
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-branches
-def load_top(file_path: Path | str, header_encoding: str = "latin-1") -> AFMScan:  # noqa: C901 (ignore too complex)
+def load_top(file_path: Path | str, header_encoding: str = "latin-1") -> AFMScan:
     """
     Load image from TOP files.
 

@@ -1,4 +1,3 @@
-# ruff: noqa: C901
 # pylint: disable=too-many-instance-attributes,too-many-positional-arguments,too-many-locals
 """Module for saving AFM reader data to HDF5 files."""
 
@@ -10,9 +9,9 @@ import h5py
 import numpy as np
 
 from AFMReader import __version__
-from AFMReader.logging import logger
 from AFMReader.data_classes import CurvesVolume
 from AFMReader.io import coerce_metadata_value
+from AFMReader.logging import logger
 
 
 class H5Saver:
