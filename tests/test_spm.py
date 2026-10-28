@@ -17,10 +17,17 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 
 
 @pytest.mark.parametrize(
-    ("file_name", "channel", "pixel_to_nm_scaling", "image_shape", "image_dtype", "image_sum"),
+    ("file_name", "channel", "pixel_to_nm_scaling", "image_shape", "image_dtype", "image_sum", "unit"),
     [
         pytest.param(
-            "sample_0.spm", "Height", 0.4940029296875, (1024, 1024), np.float64, 30695369.188316286, id="file type 0"
+            "sample_0.spm",
+            "Height",
+            0.4940029296875,
+            (1024, 1024),
+            np.float64,
+            30695369.188316286,
+            "nm",
+            id="file type 0",
         ),
     ],
 )
@@ -31,24 +38,24 @@ def test_load_spm(
     image_shape: tuple[int, int],
     image_dtype: type,
     image_sum: float,
+    unit: str,
 ) -> None:
     """Test the normal operation of loading a .spm file."""
-    result_image = np.ndarray
-    result_pixel_to_nm_scaling = float
-
     file_path = RESOURCES / file_name
-    result_image, result_pixel_to_nm_scaling = spm.load_spm(file_path, channel=channel)
+    afm_load = spm.load_spm(file_path, channel=channel)
 
-    assert result_pixel_to_nm_scaling == pytest.approx(pixel_to_nm_scaling)
-    assert isinstance(result_image, np.ndarray)
-    assert result_image.shape == image_shape
-    assert result_image.dtype == image_dtype
-    assert result_image.sum() == pytest.approx(image_sum)
+    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
+    assert isinstance(afm_load.image, np.ndarray)
+    assert afm_load.image.shape == image_shape
+    assert afm_load.image.dtype == image_dtype
+    assert afm_load.image.sum() == pytest.approx(image_sum)
+    assert afm_load.z_units == unit
+    assert afm_load.image.sum() == pytest.approx(image_sum)
 
 
 @patch("pySPM.SPM.SPM_image")
 @pytest.mark.parametrize(
-    ("filename", "size", "expected_px2nm"),
+    ("filename", "size", "expected_pixel_to_nanometre_scaling"),
     [
         pytest.param(
             "square",
@@ -68,19 +75,19 @@ def test_spm_pixel_to_nm_scaling_(
     mock_spm: "MagicMock",
     filename: str,
     size: dict[str, dict[str, int | str]],
-    expected_px2nm: float,
+    expected_pixel_to_nanometre_scaling: float,
 ) -> None:
     """Test obtaining scaling directly when ``pixel_to_nm_scale`` attribute is zero."""
     # Mock the pxs attribute to be zero which triggers derivation of sacling from the size attributes
     mock_spm.pxs.return_value = [(0, "nm"), (0, "nm")]
     mock_spm.size = size
     result = spm.spm_pixel_to_nm_scaling(filename, mock_spm)
-    assert result == expected_px2nm
+    assert result == expected_pixel_to_nanometre_scaling
 
 
 @patch("pySPM.SPM.SPM_image.pxs")
 @pytest.mark.parametrize(
-    ("filename", "unit", "x", "y", "expected_px2nm"),
+    ("filename", "unit", "x", "y", "expected_pixel_to_nanometre_scaling"),
     [
         pytest.param("square_mm", "mm", 0.01, 0.01, 10000, id="mm units; square"),
         pytest.param("square_um", "um", 1.5, 1.5, 1500, id="um units; square"),
@@ -97,12 +104,12 @@ def test__spm_pixel_to_nm_scaling(
     unit: str,
     x: int,
     y: int,
-    expected_px2nm: float,
+    expected_pixel_to_nanometre_scaling: float,
 ) -> None:
     """Test extraction of pixels to nanometer scaling."""
     mock_pxs.return_value = [(x, unit), (y, unit)]  # issue is that pxs is a func that returns the data
     result = spm.spm_pixel_to_nm_scaling(filename, spm_channel_data)
-    assert result == expected_px2nm
+    assert result == expected_pixel_to_nanometre_scaling
 
 
 def test_load_spm_file_not_found() -> None:
@@ -132,7 +139,7 @@ def test_load_spm_file_not_found() -> None:
     ],
 )
 def test_load_spm_channel_not_found(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture,
     channel: str,
     message: str,
     error: bool,
@@ -143,4 +150,31 @@ def test_load_spm_channel_not_found(
             spm.load_spm(RESOURCES / "sample_0.spm", channel)
     else:
         spm.load_spm(RESOURCES / "sample_0.spm", channel)
-    assert message in caplog.text
+    captured = capsys.readouterr()
+    assert message in captured.err
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected_channels"),
+    [
+        pytest.param(
+            "sample_0.spm",
+            [
+                "Height Sensor",
+                "Peak Force Error",
+                "DMTModulus",
+                "LogDMTModulus",
+                "Adhesion",
+                "Deformation",
+                "Dissipation",
+                "Height",
+            ],
+            id="sample_0.spm",
+        ),
+    ],
+)
+def test_get_spm_channels(file_name: str, expected_channels: list[str]) -> None:
+    """Test get_spm_channels."""
+    file_path = RESOURCES / file_name
+    channels = spm.get_spm_channels(file_path)
+    assert channels == expected_channels
