@@ -404,6 +404,9 @@ class CurvesH5Volume(CurvesVolume):
     flip_image : bool, optional
         Whether to flip the image vertically. Default is True.
     """
+    qi_data_group: h5py.Group
+    shape_x: int
+    shape_y: int
 
     def __init__(
         self,
