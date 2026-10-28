@@ -1,7 +1,11 @@
 # pylint: disable=too-many-instance-attributes,too-many-positional-arguments,too-many-locals
 """Module for saving AFM reader data to HDF5 files."""
 
-from datetime import datetime, timezone
+try:
+    from datetime import UTC, datetime
+except ImportError:
+    UTC = None
+    from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -104,7 +108,11 @@ class H5Saver:
         self.h5file = h5py.File(self.filepath, "a")
         self.h5file.attrs["AFMReader_version"] = __version__
         self.h5file.attrs["created_by"] = "AFMReader"
-        self.h5file.attrs["created_on"] = datetime.now(timezone.utc).isoformat()
+        # Discrepancy between py 3.10 and later versions
+        if UTC is not None:
+            self.h5file.attrs["created_on"] = datetime.now(UTC).isoformat()
+        else:
+            self.h5file.attrs["created_on"] = datetime.now(timezone.utc).isoformat()
         self.h5file.attrs["source_type"] = source if source is not None else "new"
         return self.h5file
 
