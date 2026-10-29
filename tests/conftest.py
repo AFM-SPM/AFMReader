@@ -7,8 +7,20 @@ import numpy as np
 import pySPM
 import pytest
 
+from AFMReader import h5_jpk
+
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
+
+
+@pytest.fixture()
+def volume_args():
+    """Constants to be used in this script and across other volume related tests."""
+    return {
+        "shape": (2, 2),
+        "segments": ["extend", "retract"],
+        "channels": ["height", "vDeflection"]
+    }
 
 
 @pytest.fixture()
@@ -39,6 +51,23 @@ def channel_group():
     with h5py.File("in_memory.h5", "w", driver="core", backing_store=False) as f:
         yield f.create_group("Measurement_000/Channel_001")
 
+@pytest.fixture
+def volume_data_group(h5_file, volume_args):
+    """Volume group where curve k has k + 1 points, with values equal to their position in the flat data."""
+    shape = volume_args["shape"]
+    segments = volume_args["segments"]
+    channels = volume_args["channels"]
+
+    group = h5_file.create_group("Measurement_000/Volume")
+    n_curves = shape[0] * shape[1]
+    lengths = np.arange(1, n_curves + 1)  # different lengths per curve
+    offsets = np.concatenate([[0], np.cumsum(lengths)])
+    for segment in segments:
+        for channel in channels:
+            group[f"Curves/{segment}/Indices/{channel}"] = offsets
+            group[f"Curves/{segment}/Data/{channel}"] = np.arange(offsets[-1], dtype=np.float64)
+    return group
+
 
 @pytest.fixture
 def jpk_h5_file():
@@ -62,17 +91,42 @@ def jpk_h5_file():
         yield f
 
 
-SHAPE = (2, 3)
-SEGMENTS = ["extend", "retract"]
+@pytest.fixture
+def curve_meta_group(volume_args):
+    """Curve metadata group whose per-curve and per-segment values equal their flat index."""
+    shape = volume_args["shape"]
+    segments = volume_args["segments"]
+
+    with h5py.File("in_memory.h5", "w", driver="core", backing_store=False) as f:
+        group = f.create_group("curve_metadata")
+        n_curves = shape[0] * shape[1]
+        group.create_dataset("curve.index", data=np.arange(n_curves))
+        group.create_dataset("segment.index", data=np.arange(n_curves * len(segments)))
+        group.attrs["curve.instrument"] = "JPK"  # constant value, stored as an attribute
+        yield group
 
 
 @pytest.fixture
-def curve_meta_group():
-    """Curve metadata group whose per-curve and per-segment values equal their flat index."""
-    with h5py.File("in_memory.h5", "w", driver="core", backing_store=False) as f:
-        group = f.create_group("curve_metadata")
-        n_curves = SHAPE[0] * SHAPE[1]
-        group.create_dataset("curve.index", data=np.arange(n_curves))
-        group.create_dataset("segment.index", data=np.arange(n_curves * len(SEGMENTS)))
-        group.attrs["curve.instrument"] = "JPK"  # constant value, stored as an attribute
-        yield group
+def curve_metadata(h5_file, volume_args):
+    """Metadata for the dummy volume, with an empty metadata group."""
+    shape = volume_args["shape"]
+    segments = volume_args["segments"]
+    
+    group = h5_file.create_group("Measurement_000/CurveMetadata")
+    return h5_jpk.CurvesH5Metadata(
+        group, shape=shape, channel_units={"height": "m", "vDeflection": "V"}, segment_names=segments, flip_image=True
+    )
+
+
+@pytest.fixture
+def dummy_curves_h5_volumes(volume_args):
+    """Dummy instance of the CurvesH5Volumes class."""
+    shape = volume_args["shape"]
+
+    return h5_jpk.CurvesH5Volume(
+        name="dummy_curves_h5_volumes",
+        shape=shape,
+        volume_data_group=volume_data_group,
+        metadata=curve_metadata,
+        flip_image=True
+    )

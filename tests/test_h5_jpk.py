@@ -184,6 +184,41 @@ def test_generate_timestamps(num_frames, line_rate, image_size, expected) -> Non
     assert h5_jpk.generate_timestamps(num_frames, line_rate, image_size) == pytest.approx(expected)
 
 
+# --- CurvesH5Volume ---
+@pytest.mark.parametrize(
+    ("flip_image", "expected_order"),
+    [
+        pytest.param(True, [2, 3, 0, 1], id="flipped: bottom stored row first"),
+        pytest.param(False, [0, 1, 2, 3], id="not flipped: stored order"),
+    ],
+)
+def test_iter_curves(volume_args, volume_data_group, curve_metadata, flip_image, expected_order) -> None:
+    shape = volume_args["shape"]
+    segments = volume_args["segments"]
+    channels = volume_args["channels"]
+    
+
+    volume = h5_jpk.CurvesH5Volume(
+        name="dummy_curves_h5_volume",
+        shape=shape,
+        volume_data_group=volume_data_group,
+        metadata=curve_metadata,
+        flip_image=flip_image,
+    )
+    n_curves = shape[0] * shape[1]
+    offsets = np.concatenate([[0], np.cumsum(np.arange(1, n_curves + 1))])  # curve k has k + 1 points
+
+    curves = list(volume.iter_curves())
+
+    # Correct amount of curves
+    assert len(curves) == n_curves
+    # Each curve has the correct data
+    for curve, k in zip(curves, expected_order, strict=True):
+        for channel in channels:
+            for segment in segments:
+                np.testing.assert_array_equal(curve[channel][segment], np.arange(offsets[k], offsets[k + 1]))
+
+
 @pytest.mark.parametrize(
     (
         "file_name",

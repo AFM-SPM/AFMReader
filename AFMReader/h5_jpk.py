@@ -405,10 +405,6 @@ class CurvesH5Volume(CurvesVolume):
         Whether to flip the image vertically. Default is True.
     """
 
-    qi_data_group: h5py.Group
-    shape_x: int
-    shape_y: int
-
     def __init__(
         self,
         name: str,
@@ -452,71 +448,53 @@ class CurvesH5Volume(CurvesVolume):
         """
         return self.iter_curves()
 
-    def iter_curves(self, flip_image: bool | None = None) -> Iterator[dict[str, dict[str, np.ndarray]]]:
+    def iter_curves(self) -> Iterator[dict[str, dict[str, np.ndarray]]]:
         """
         Iterate over the QI curve data, yielding one pixel's data at a time.
-
-        Parameters
-        ----------
-        flip_image : bool, optional
-            Whether to flip the image vertically during iteration. If None, uses the instance's flip_image attribute.
 
         Yields
         ------
         dict
             A dictionary containing the QI curve data for each channel and segment for a pixel.
         """
-        if flip_image is None:
-            flip_image = self.flip_image
+        rows, cols = self.shape
+        curves_group = self.volume_data_group["Curves"]
 
-        # We read all the indices into memory first for all the segments and channels (as these are small)
+        # Read all the indices into memory first for all segments and channels (as these are small).
+        # A segment is one phase of the tip's movement (e.g. Extend, Retract), and `Indices` holds one
+        # dataset per channel, and holds the indices of where each pixel's curve starts in that segment's
+        # flattened data
         indices_map: dict[str, dict[str, np.ndarray]] = {}
-
-        # A segment is one phase of the tip's movement (e.g. Extend, Retract)
-        # `segment_name` is a string naming the phase, `segment_group` holds its data
-        for segment_name, segment_group in self.qi_data_group["Curves"].items():
-            # `Indices` holds one dataset per channel for this "segment", covering all pixels
+        for segment_name, segment_group in curves_group.items():
             for channel in segment_group["Indices"]:
-                # Init an empty dict for the current channel if it doesn't already exist
-                if channel not in indices_map:
-                    indices_map[channel] = {}
-                # Populate the channel & segment's index values which is used to fetch the correct data below
-                indices_map[channel][segment_name] = segment_group["Indices"][channel][:]
+                indices_map.setdefault(channel, {})[segment_name] = segment_group["Indices"][channel][:]
 
         # Read one row at a time to keep memory use bound to a single row of pixels
-        for y_idx in range(self.shape_y):
+        for y_idx in range(rows):
+            y = rows - 1 - y_idx if self.flip_image else y_idx
+            row_start = cols * y  # flat index of the first pixel in this row
+
+            # Read the whole row's data for each channel and segment
             data: dict[str, dict[str, np.ndarray]] = {}
-            y = self.shape_y - 1 - y_idx if self.flip_image else y_idx
-
-            # For each segment & channel get the start and end index of the current row
-            # Considerations need to be taken for the row's position in the overall array,
-            # and self.shape_x * y can be used for this
-            for segment, segment_group in self.qi_data_group["Curves"].items():
+            for segment_name, segment_group in curves_group.items():
                 for channel in segment_group["Indices"]:
-                    if channel not in data:
-                        data[channel] = {}
-                    indices = indices_map[channel][segment]
-                    start_idx = int(indices[self.shape_x * y])
-                    end_idx = int(indices[self.shape_x * (y + 1)])
+                    indices = indices_map[channel][segment_name]
+                    start_idx, end_idx = int(indices[row_start]), int(indices[row_start + cols])
+                    data.setdefault(channel, {})[segment_name] = segment_group["Data"][channel][start_idx:end_idx]
 
-                    # Get the data for the whole row for the current channel and segment
-                    # using the start and end indices
-                    data[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
-
-            # For each pixel in the current row
-            for x in range(self.shape_x):
+            # Split the row into each pixel's curve, using indices relative to the start of the row
+            for x in range(cols):
                 curve_data: dict[str, dict[str, np.ndarray]] = {}
-                # Again, loop through each channel and segment that data exists for
                 for channel, channel_data in data.items():
                     curve_data[channel] = {}
-                    for segment, segment_data in channel_data.items():
-                        # Find the start and end indices of the current pixel's data
-                        indices = indices_map[channel][segment]
-                        start_idx = int(indices[self.shape_x * y + x]) - int(indices[self.shape_x * y])
-                        end_idx = int(indices[self.shape_x * y + x + 1]) - int(indices[self.shape_x * y])
-                        # Read the data between the specified indices into the curve_data dictionary
-                        curve_data[channel][segment] = segment_data[start_idx:end_idx]
+                    for segment_name, segment_data in channel_data.items():
+                        indices = indices_map[channel][segment_name]
+                        row_offset = int(indices[row_start])
+                        start_idx = int(indices[row_start + x]) - row_offset
+                        end_idx = int(indices[row_start + x + 1]) - row_offset
+                        curve_data[channel][segment_name] = segment_data[start_idx:end_idx]
                 yield curve_data
+
 
     def iter_segments(
         self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1
