@@ -5,14 +5,27 @@ It extracts scan channels, reshapes image frames, applies scaling, and generates
 timestamps based on scan metadata.
 """
 
+import shutil
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
+from typing import Any
 
 import h5py
 import numpy as np
 
+from AFMReader.data_classes import (
+    AFMScan,
+    CurvesDataset,
+    CurvesVolume,
+    CurvesVolumeMetadata,
+)
+from AFMReader.io import coerce_metadata_value
 from AFMReader.logging import logger
 
 logger.enable(__package__)
+
+# pylint: disable=too-few-public-methods,too-many-locals,fixme,too-many-positional-arguments,too-many-branches,too-many-statements
 
 
 def _parse_channel_name(channel: str) -> tuple[str, str]:
@@ -46,7 +59,7 @@ def _parse_channel_name(channel: str) -> tuple[str, str]:
     return channel_type, trace_type
 
 
-def _get_channel_info(h5py_file: h5py.File, channel: str):
+def _get_channel_info(h5py_file: h5py.File, channel: str) -> tuple[h5py.Group, h5py.Group, str]:
     """
     Retrieve channel-related HDF5 groups and dataset name.
 
@@ -104,22 +117,22 @@ def _jpk_pixel_to_nm_scaling_h5(measurement_group: h5py.Group) -> float:
         If required attributes are missing in the measurement group.
     """
     try:
-        ulength = measurement_group.attrs["position-pattern.grid.ulength"]  # physical length in meters
-        ilength = measurement_group.attrs["position-pattern.grid.ilength"]  # number of pixels
+        real_length = measurement_group.attrs["position-pattern.grid.ulength"]  # physical length in meters
+        px_length = measurement_group.attrs["position-pattern.grid.ilength"]  # number of pixels
 
-        if ilength == 0:
+        if px_length == 0:
             raise ValueError("Pixel count (ilength) is zero; cannot compute scaling.")
 
-        return (ulength / ilength) * 1e9
+        return (real_length / px_length) * 1e9
 
     except KeyError as e:
         missing = e.args[0]
         raise KeyError(f"Missing required attribute '{missing}' in HDF5 measurement group.") from e
 
 
-def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
+def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float, str]:
     """
-    Extract the Z scaling multiplier and offset from an HDF5 channel group.
+    Extract the Z scaling multiplier, offset, and unit from an HDF5 channel group.
 
     Parameters
     ----------
@@ -128,17 +141,26 @@ def _get_z_scaling_h5(channel_group: h5py.Group) -> tuple[float, float]:
 
     Returns
     -------
-    tuple[float, float]
-        A tuple containing the scaling multiplier and offset.
+    tuple[float, float, str]
+        A tuple containing the scaling multiplier, offset, and unit.
 
     Notes
     -----
-    Defaults to (1.0, 0.0) if attributes are not present.
+    Defaults to (1.0, 0.0, 'm') if attributes are not present.
     """
     multiplier = float(channel_group.attrs.get("net-encoder.scaling.multiplier", 1.0))
     offset = float(channel_group.attrs.get("net-encoder.scaling.offset", 0.0))
 
-    return multiplier, offset
+    unit = (
+        _decode_attr(channel_group.attrs.get("net-encoder.scaling.unit.unit"))
+        if "net-encoder.scaling.unit.unit" in channel_group.attrs
+        else None
+    )
+    if unit is None:
+        logger.warning("Z scaling unit not found; defaulting to 'm'.")
+        unit = "m"
+
+    return multiplier, offset, unit
 
 
 def _decode_attr(attr: bytes | str) -> str:
@@ -245,7 +267,7 @@ def _get_line_rate(measurement_group: h5py.Group) -> float:
         raise KeyError(f"Missing required attribute '{missing}' in HDF5 measurement group.") from e
 
 
-def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> dict:
+def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> dict[str, float]:
     """
     Generate timestamps for a sequence of frames based on scan line rate and image size.
 
@@ -268,9 +290,358 @@ def generate_timestamps(num_frames: int, line_rate: float, image_size: int) -> d
     return {f"frame {i}": timestamp for i, timestamp in enumerate(timestamps)}
 
 
-def load_h5jpk(  # pylint: disable=too-many-locals
-    file_path: Path | str, channel: str, flip_image: bool = True
-) -> tuple[np.ndarray, float, dict[str, float]]:
+class CurvesH5Metadata(CurvesVolumeMetadata):
+    """
+    Metadata class for H5 JPK data that provides access to metadata on demand.
+
+    Parameters
+    ----------
+    curve_meta_group : h5py.Group
+        The HDF5 group containing the curve metadata.
+    shape : tuple[int, int]
+        The shape of the image as (rows, columns).
+    channel_units : dict[str, str]
+        A dictionary mapping channel names to their units.
+    segment_names : list[str]
+        The names of the curve segments available in this volume.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is ``True``.
+    """
+
+    # pylint: disable=too-many-positional-arguments
+    def __init__(
+        self,
+        curve_meta_group: h5py.Group,
+        shape: tuple[int, int],
+        channel_units: dict[str, str],
+        segment_names: list[str],
+        flip_image: bool = True,
+    ):
+        """
+        Initialise the CurvesH5Metadata instance.
+
+        Parameters
+        ----------
+        curve_meta_group : h5py.Group
+            The HDF5 group containing the curve metadata.
+        shape : tuple[int, int]
+            The shape of the image as (rows, columns).
+        channel_units : dict[str, str]
+            A dictionary mapping channel names to their units.
+        segment_names : list[str]
+            The names of the curve segments available in this volume.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is ``True``.
+        """
+        super().__init__(shape=shape, channel_units=channel_units, segment_names=segment_names, flip_image=flip_image)
+        self.curve_meta_group = curve_meta_group
+
+    def get_point_metadata(self, y: int, x: int, segment_name: str | None = None) -> dict[str, Any]:
+        """
+        Fetch metadata for a specific pixel (x, y) on demand.
+
+        Parameters
+        ----------
+        y : int
+            The row index.
+        x : int
+            The column index.
+        segment_name : str, optional
+            The name of the segment for segment metadata, required if segment metadata is needed.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the fetched metadata.
+        """
+        if self.curve_meta_group is None:
+            return {}
+        if y < 0 or y >= self.shape[0] or x < 0 or x >= self.shape[1]:
+            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
+        if self.flip_image:
+            y = self.shape[0] - 1 - y
+
+        # Metadata for all the curves is stored in a contiguous array, so we calculate the index for the pixel (x, y)
+        metadata_index = (y * self.shape[1]) + x
+        if segment_name is not None:
+            # If a specific segment is requested, we need to extract from a block of all the segments for all the
+            # curves so we need to adjust to account for the number of segments and the index of the segment requested
+            metadata_index = (metadata_index * len(self.segment_names)) + self.segment_names.index(segment_name)
+
+        meta_dict = {}
+        for key in self.curve_meta_group:
+            if key.startswith(f"{'segment' if segment_name is not None else 'curve'}."):
+                # The metadata keys are stored in the HDF5 file with a prefix of 'curve.' or 'segment.'
+                # We strip this prefix off as that prefix is used to distinguish between curve and segment
+                # metadata in the HDF5 file but is not needed in the returned dictionary
+                new_key = key.split(".", 1)[1]
+
+                # Metadata values stored as datasets if they change between curves/ segments
+                if isinstance(self.curve_meta_group[key], h5py.Dataset):
+                    meta_dict[new_key] = coerce_metadata_value(self.curve_meta_group[key][metadata_index])
+                # Metadata values stored as attributes if they are constant for all curves/ segments
+                else:
+                    meta_dict[new_key] = self.curve_meta_group[key]
+        return meta_dict
+
+
+class CurvesH5Volume(CurvesVolume):
+    """
+    A CurvesVolume implementation for HDF5 curve data that provides lazy loading of curve data for each pixel.
+
+    Note that the curve data in the HDF5 file is usually copied from another format for fast access.
+
+    Parameters
+    ----------
+    name : str
+        The name of the curve volume.
+    shape : tuple[int, int]
+        The shape of the image as (rows, columns).
+    volume_data_group : h5py.Group
+        The HDF5 group containing the volume data.
+    metadata : CurvesH5Metadata
+        Metadata associated with this HDF5 curve volume.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        shape: tuple[int, int],
+        volume_data_group: h5py.Group,
+        metadata: CurvesH5Metadata,
+        flip_image: bool = True,
+    ):
+        """
+        Initialise the CurvesH5Volume instance.
+
+        Parameters
+        ----------
+        name : str
+            The name of the curve volume.
+        shape : tuple[int, int]
+            The shape of the image as (rows, columns).
+        volume_data_group : h5py.Group
+            The HDF5 group containing the volume data.
+        metadata : CurvesH5Metadata
+            Metadata associated with this HDF5 curve volume.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is True.
+        """
+        self.volume_data_group = volume_data_group
+        super().__init__(
+            name=name,
+            shape=shape,
+            metadata=metadata,
+            flip_image=flip_image,
+        )
+
+    def __iter__(self) -> Iterator[dict[str, dict[str, np.ndarray]]]:
+        """
+        Efficiently iterate over the QI curve data, loading one row at a time.
+
+        Returns
+        -------
+        Iterator
+            An iterator over the QI curve data.
+        """
+        return self.iter_curves()
+
+    def iter_curves(self) -> Iterator[dict[str, dict[str, np.ndarray]]]:
+        """
+        Iterate over the QI curve data, yielding one pixel's data at a time.
+
+        Yields
+        ------
+        dict
+            A dictionary containing the QI curve data for each channel and segment for a pixel.
+        """
+        rows, cols = self.shape
+        # Segment groups (e.g. Extend, Retract) sit directly in the volume's data group; skip any non-group members
+        segment_groups = {
+            name: item for name, item in self.volume_data_group.items() if isinstance(item, h5py.Group)
+        }
+
+        # Read all the indices into memory first for all segments and channels (as these are small).
+        # `Indices` holds one dataset per channel, giving where each pixel's curve starts in that segment's
+        # flattened data
+        indices_map: dict[str, dict[str, np.ndarray]] = {}
+        for segment_name, segment_group in segment_groups.items():
+            for channel in segment_group["Indices"]:
+                indices_map.setdefault(channel, {})[segment_name] = segment_group["Indices"][channel][:]
+
+        # Read one row at a time to keep memory use bound to a single row of pixels
+        for y_idx in range(rows):
+            y = rows - 1 - y_idx if self.flip_image else y_idx
+            row_start = cols * y  # flat index of the first pixel in this row
+
+            # Read the whole row's data for each channel and segment
+            data: dict[str, dict[str, np.ndarray]] = {}
+            for segment_name, segment_group in segment_groups.items():
+                for channel in segment_group["Indices"]:
+                    indices = indices_map[channel][segment_name]
+                    start_idx, end_idx = int(indices[row_start]), int(indices[row_start + cols])
+                    data.setdefault(channel, {})[segment_name] = segment_group["Data"][channel][start_idx:end_idx]
+
+            # Split the row into each pixel's curve, using indices relative to the start of the row
+            for x in range(cols):
+                curve_data: dict[str, dict[str, np.ndarray]] = {}
+                for channel, channel_data in data.items():
+                    curve_data[channel] = {}
+                    for segment_name, segment_data in channel_data.items():
+                        indices = indices_map[channel][segment_name]
+                        row_offset = int(indices[row_start])
+                        start_idx = int(indices[row_start + x]) - row_offset
+                        end_idx = int(indices[row_start + x + 1]) - row_offset
+                        curve_data[channel][segment_name] = segment_data[start_idx:end_idx]
+                yield curve_data
+
+
+    def iter_segments(
+        self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1
+    ) -> Iterator[list[tuple[np.ndarray, list[np.ndarray]]]]:
+        """
+        Iterate over selected segment channels in batches.
+
+        Parameters
+        ----------
+        channel_segment_sets : dict[str, list[str]]
+            Mapping of segment names to the channel names to include.
+        batch_size : int, optional
+            Maximum number of curves to include in each batch.
+
+        Yields
+        ------
+        list[tuple[np.ndarray, list[np.ndarray]]]
+            A list of the segments as tuples. This first item in the tuple in a numpy array of the indices then we
+            have a list of numpy arrays (all the curves concatenated together) for each channel in the order they
+            were requested.
+
+        Raises
+        ------
+        ValueError
+            If a requested segment is not in the volume, or no channels are requested for a segment.
+        """
+        # First read all the indices for the selected segments into memory (these are small)
+        indices_map: dict[str, np.ndarray] = {}
+        for segment_name, channel_list in channel_segment_sets.items():
+            if segment_name not in self.volume_data_group:
+                available = [name for name, item in self.volume_data_group.items() if isinstance(item, h5py.Group)]
+                raise ValueError(f"Segment '{segment_name}' not found. Available segments: {available}")
+            if not channel_list:
+                raise ValueError(f"No channels requested for segment '{segment_name}'.")
+
+            # TODO: Currently we use the first channel to get the indices. We should remove the duplicated
+            # storing of indices and just store it once per segment during saving to h5.
+            indices_map[segment_name] = self.volume_data_group[segment_name]["Indices"][channel_list[0]][:]
+
+        # Then iterate over the curves in batches, yielding the data for each batch
+        for idx in range(0, len(self), batch_size):
+            data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
+            for segment_name, channel_list in channel_segment_sets.items():
+                # Get the indices for this batch of curves for the current segment
+                indices = indices_map[segment_name][idx : idx + batch_size + 1]
+                data_group = self.volume_data_group[segment_name]["Data"]
+                # Extract the batch's data for each requested channel, in the order requested
+                data = [data_group[channel_name][indices[0] : indices[-1]] for channel_name in channel_list]
+                data_batch.append((indices - indices[0], data))
+            yield data_batch
+
+    def get_curve(self, y: int, x: int, flip_image: bool | None = None) -> dict[str, dict[str, np.ndarray]]:
+        """
+        Fetch the curve data for a specific pixel (x, y) on demand.
+
+        Parameters
+        ----------
+        y : int
+            The row index.
+        x : int
+            The column index.
+        flip_image : bool, optional
+            Whether to flip the image vertically. If None, uses the instance's flip_image attribute.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the curve data for the specified pixel.
+
+        Raises
+        ------
+        IndexError
+            If the pixel is outside the image.
+        """
+        if not (0 <= y < self.shape[0] and 0 <= x < self.shape[1]):
+            raise IndexError(f"Curve index out of bounds: y={y}, x={x} for shape {self.shape}")
+        if flip_image is None:
+            flip_image = self.flip_image
+        if flip_image:
+            y = self.shape[0] - 1 - y
+        curve_num = self.shape[1] * y + x
+
+        # Hold the curve data for each channel and segment for this pixel
+        curve_dict: dict[str, dict[str, np.ndarray]] = {}
+        for segment_name, segment_group in self.volume_data_group.items():
+            # Skip any members of the data group that aren't segment groups
+            if not isinstance(segment_group, h5py.Group):
+                continue
+            for channel in segment_group["Indices"]:
+                # The indices list holds the start index of each curve (first item is 0) and is num_curves + 1 long,
+                # so the next curve's start index is this curve's end
+                indices = segment_group["Indices"][channel]
+                start_idx, end_idx = int(indices[curve_num]), int(indices[curve_num + 1])
+                curve_dict.setdefault(channel, {})[segment_name] = segment_group["Data"][channel][start_idx:end_idx]
+        return curve_dict
+
+
+class CurvesH5Dataset(CurvesDataset):
+    """
+    A CurvesDataset implementation for HDF5 curve data that provides access to both the volume and metadata.
+
+    Parameters
+    ----------
+    volumes : dict[str, CurvesVolume]
+        A dictionary mapping volume names to their corresponding CurvesVolume instances.
+    metadata : dict
+        Global metadata for the curves dataset.
+    essential_metadata : dict
+        Essential global metadata for the curves dataset.
+    h5file : h5py.File
+        The underlying HDF5 file object.
+    """
+
+    def __init__(
+        self,
+        volumes: dict[str, CurvesVolume],
+        metadata: dict,
+        essential_metadata: dict,
+        h5file: h5py.File,
+    ):
+        """
+        Initialise the CurvesH5Dataset instance.
+
+        Parameters
+        ----------
+        volumes : dict[str, CurvesVolume]
+            A dictionary mapping volume names to their corresponding CurvesVolume instances.
+        metadata : dict
+            Global metadata for the curves dataset.
+        essential_metadata : dict
+            Essential global metadata for the curves dataset.
+        h5file : h5py.File
+            The underlying HDF5 file object.
+        """
+        super().__init__(volumes, metadata, essential_metadata)
+        self.h5file = h5file
+
+    def close(self):
+        """Close the underlying HDF5 file to free resources."""
+        if self.h5file:
+            self.h5file.close()
+            self.h5file = None
+
+
+def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True) -> AFMScan:
     """
     Load image from JPK Instruments .h5-jpk files.
 
@@ -282,15 +653,15 @@ def load_h5jpk(  # pylint: disable=too-many-locals
         The channel to extract from the .h5-jpk file.
     flip_image : bool, optional
         Whether to flip the images vertically. Default is ``True``.
+    load_curves : bool, optional
+        Whether to load QI curve data if present. Default is ``True``.
 
     Returns
     -------
-    image : np.ndarray
-        3D array of shape (frames, height, width) with image data.
-    pixel_to_nm_scaling : float
-        Scaling factor converting pixels to nanometers.
-    timestamps : dict[str, float]
-        Dictionary mapping frame labels (e.g., "frame 0") to timestamp values in seconds.
+    AFMScan
+        An AFMScan object containing the image, its pixel to nanometre scaling value, timestamps, and
+        optionally the curves dataset. Curves dataset only if load_curves is True and curve data is
+        present in the file.
 
     Raises
     ------
@@ -304,45 +675,281 @@ def load_h5jpk(  # pylint: disable=too-many-locals
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_h5jpk
-    >>> frames, pixel_to_nanometre_scaling_factor, timestamps = load_h5jpk(file_path="./my_jpk_file.jpk",
-    >>>                                                         channel="height_trace",
-    >>>                                                         flip_image=True)
+    >>> afm_load = load_h5jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
+    >>> image = afm_load.image
+    >>> pixel_to_nm_scaling = afm_load.pixel_to_nanometre_scaling
     """
     logger.info(f"Loading H5-JPK file from : {file_path}")
     file_path = Path(file_path)
 
     # Load HDF5 file
-    with h5py.File(file_path, "r") as f:
-        logger.info(f"Opened HDF5 file structure: {list(f.keys())}")
+    with h5py.File(file_path, "r") as h5_file:
+        logger.info(f"Opened HDF5 file structure: {list(h5_file.keys())}")
+        metadata = {key: coerce_metadata_value(h5_file.attrs[key]) for key in h5_file.attrs}
 
-        channel_group, measurement_group, dataset_name = _get_channel_info(f, channel)
+        channel_group, measurement_group, dataset_name = _get_channel_info(h5_file, channel)
 
         # Load images and scaling factors from channel dataset
         images = channel_group[dataset_name][:]
-        scaling, offset = _get_z_scaling_h5(channel_group)
+        scaling, offset, z_units = _get_z_scaling_h5(channel_group)
         images = (images * scaling) + offset
 
         # Select and reshape a flattened frame
-        image_size = measurement_group.attrs["position-pattern.grid.ilength"]  # number of pixels
+        shape_x = measurement_group.attrs["position-pattern.grid.ilength"]
+        shape_y = measurement_group.attrs.get("position-pattern.grid.jlength", shape_x)  # number of pixels
 
         # Reshape each column vector (height, width) to get (num_frames, height, width)
         num_frames = images.shape[1]
-        image_stack = np.empty((num_frames, image_size, image_size), dtype=images.dtype)
+        if num_frames == 1:
+            image_stack = np.empty((shape_y, shape_x), dtype=images.dtype)
+        else:
+            image_stack = np.empty((num_frames, shape_y, shape_x), dtype=images.dtype)
         for i in range(num_frames):
-            frame = images[:, i].reshape((image_size, image_size))
+            frame = images[:, i].reshape((shape_y, shape_x))
 
             # Flip images
             if flip_image:
                 frame = np.flipud(frame)
-            image_stack[i] = frame
+            if num_frames == 1:
+                image_stack = frame
+            else:
+                image_stack[i] = frame
 
         # Convert to nm
-        if dataset_name.lower() in ("height", "error", "measuredheight", "amplitude"):
+        if z_units == "m":
             image_stack = image_stack * 1e9
+            z_units = "nm"
 
         # Generate a dictionary of timestamps
         line_rate = _get_line_rate(measurement_group)
-        timestamps = generate_timestamps(num_frames, line_rate, image_size)
+        timestamps = generate_timestamps(num_frames, line_rate, shape_y)
 
         logger.info(f"[{file_path.stem}] : Extracted {num_frames} frames from channel '{channel}'")
-        return (image_stack, _jpk_pixel_to_nm_scaling_h5(measurement_group), timestamps)
+        pixel_to_nanometre_scaling = _jpk_pixel_to_nm_scaling_h5(measurement_group)
+
+        # Check if the file contains curve data, if not curve data should not be loaded even if it was requested
+        if "Curve_Data" not in h5_file:
+            load_curves = False
+
+    # If we need to load curves, we need to reopen the file so that we can keep it open for lazy loading of the curves.
+    if load_curves:
+        try:
+            # Open the file in read/write mode to allow for potential modifications (such as adding a volume)
+            h5file = h5py.File(file_path, "r+")
+        except (PermissionError, OSError):
+            # If we cannot open in read/write mode, fall back to read-only mode
+            h5file = h5py.File(file_path, "r")
+
+        logger.info(f"[{file_path.stem}] : Found Force Curves data in file.")
+        curve_data_group = h5file["Curve_Data"]
+
+        # Initialise dictionaries for various items of metadata
+        channels_units = {}
+        top_level_meta = {}
+        essential_global_metadata = {}
+
+        # Extract global metadata and channel units
+        for key, value in curve_data_group["Global_Metadata"].attrs.items():
+            value = coerce_metadata_value(value)
+
+            # We decide what to do based on the prefix of the key, the real key is the part after the first dot
+            # which we extract using `split(".", 1)[-1]`
+            if key.startswith("essential."):
+                essential_global_metadata[key.split(".", 1)[-1]] = value
+            else:
+                if key.startswith("channel.unit."):
+                    channels_units[key.split(".")[-1]] = value
+                top_level_meta[key] = value
+
+        # Extract curve volumes into a dictionary of CurvesVolume objects for lazy loading
+        volumes: dict[str, CurvesVolume] = {}
+
+        for name, group in curve_data_group.items():
+            # If the current sub group is a volume, we create a lazy loaded volume and metadata object for it
+            if name.endswith("_VOLM"):
+                volume_name = name.split("_VOLM")[0]
+                data_group = group["Data"]
+                segment_names = [seg_name for seg_name, item in data_group.items() if isinstance(item, h5py.Group)]
+                if "Metadata" not in group:
+                    curve_meta_group = None
+                else:
+                    curve_meta_group = group["Metadata"]
+
+                # Initialise the CurvesH5Metadata and CurvesH5Volume objects for this volume with the references
+                curves_metadata = CurvesH5Metadata(
+                    curve_meta_group=curve_meta_group,
+                    shape=(shape_y, shape_x),
+                    channel_units=channels_units,
+                    segment_names=segment_names,
+                    flip_image=flip_image,
+                )
+                curves_volume = CurvesH5Volume(
+                    name=volume_name,
+                    shape=(shape_y, shape_x),
+                    volume_data_group=data_group,
+                    metadata=curves_metadata,
+                    flip_image=flip_image,
+                )
+                volumes[volume_name] = curves_volume
+
+        # Create a CurvesH5Dataset object to hold the volumes and metadata to return in the AFMScan object
+        curves_data = CurvesH5Dataset(
+            volumes=volumes,
+            metadata=top_level_meta,
+            essential_metadata=essential_global_metadata,
+            h5file=h5file,
+        )
+
+        return AFMScan(
+            image=image_stack,
+            pixel_to_nanometre_scaling=pixel_to_nanometre_scaling,
+            z_units=z_units,
+            timestamps=timestamps,
+            metadata=metadata,
+            curves_dataset=curves_data,
+        )
+
+    return AFMScan(
+        image=image_stack,
+        pixel_to_nanometre_scaling=pixel_to_nanometre_scaling,
+        z_units=z_units,
+        timestamps=timestamps,
+        metadata=metadata,
+    )
+
+
+def get_h5jpk_channels(file_path: Path | str) -> list[str]:
+    """
+    Get available channels from a .h5-jpk file.
+
+    Parameters
+    ----------
+    file_path : Path | str
+        Path to the .h5-jpk file.
+
+    Returns
+    -------
+    list
+        List of available channels.
+    """
+    with h5py.File(file_path, "r") as f:
+        return list(_available_channels(f))
+
+
+def copy_h5_file(
+    src_path: Path | str | h5py.File, dest_path: Path | str | h5py.File, without_paths: list[str] | None = None
+):
+    """
+    Copy an HDF5 file from source to destination.
+
+    Parameters
+    ----------
+    src_path : Path | str | h5py.File
+        Path to the source HDF5 file. We allow an already opened h5py.File object to be passed in, in which case
+        it will not be closed after the copy. This allows us to copy from an already opened file without closing it.
+    dest_path : Path | str | h5py.File
+        Path to the destination HDF5 file.
+    without_paths : list[str], optional
+        List of HDF5 paths to exclude from copying. If None or empty, the entire file is copied.
+        For example, to exclude just Trace volume of curve data use: ['Curve_Data/Trace_VOLM'].
+    """
+    logger.info(
+        f"Copying HDF5 file from "
+        f"{src_path if isinstance(src_path, (str, Path)) else src_path.filename} "
+        f"to {dest_path if isinstance(dest_path, (str, Path)) else dest_path.filename}"
+    )
+    if not without_paths:
+        if isinstance(src_path, h5py.File):
+            src_path = src_path.filename
+        if isinstance(dest_path, h5py.File):
+            dest_path = dest_path.filename
+
+        # If no paths are specified to exclude, we can use shutil.copy2 to copy the entire file efficiently.
+        shutil.copy2(src_path, dest_path)
+        return
+
+    # If there are paths to exclude, we need to copy the file group by group, excluding the specified paths.
+    with _h5_context(src_path, "r") as src_file, _h5_context(dest_path, "w") as dest_file:
+        _copy_h5_group(src_file, dest_file, _filter_without(without_paths))
+
+
+def _h5_context(file: Path | str | h5py.File, mode: str) -> AbstractContextManager[h5py.File]:
+    """
+    Get a context manager for an HDF5 file without closing caller-owned files.
+
+    Parameters
+    ----------
+    file : Path | str | h5py.File
+        Path to an HDF5 file or an already-open HDF5 file.
+    mode : str
+        Mode to use when opening a path.
+
+    Returns
+    -------
+    contextlib.AbstractContextManager
+        A context manager that yields an open HDF5 file.
+    """
+    if isinstance(file, h5py.File):
+        return nullcontext(file)
+    return h5py.File(file, mode)
+
+
+def _copy_h5_group(src_group: h5py.File | h5py.Group, dest_group: h5py.File | h5py.Group, without_paths: list[str]):
+    """
+    Recursively copy an HDF5 group while excluding selected child paths.
+
+    Parameters
+    ----------
+    src_group : h5py.File | h5py.Group
+        Source HDF5 file or group to copy from.
+    dest_group : h5py.File | h5py.Group
+        Destination HDF5 file or group to copy into.
+    without_paths : list[str]
+        Normalised child paths to exclude from the copied group.
+    """
+    for key, item in src_group.items():
+        # If the key is in the list of paths to exclude, we skip it (don't copy) and continue to the next item.
+        if key in without_paths:
+            continue
+
+        # If the item is a group, we need to check all its children
+        if isinstance(item, h5py.Group):
+            # Filter the without_paths so it is relative to the current group and only includes children of this group
+            child_without = [w.removeprefix(key + "/") for w in without_paths if w.startswith(key + "/")]
+            # If there are any children to exclude, we recursively call _copy_h5_group on the child group.
+            if child_without:
+                _copy_h5_group(item, dest_group.require_group(key), child_without)
+            # Otherwise, we can copy the entire group as is.
+            else:
+                src_group.copy(key, dest_group, name=key)
+
+        else:
+            src_group.copy(key, dest_group, name=key)
+
+
+def _filter_without(without: list[str]) -> list[str]:
+    """
+    Normalise excluded HDF5 paths and remove redundant nested entries.
+
+    For example, if both 'Curve_Data/Trace_VOLM' and 'Curve_Data/Trace_VOLM/Indices' are specified, only the top-level
+    path 'Curve_Data/Trace_VOLM' will be retained, as it already encompasses all nested paths.
+
+    Parameters
+    ----------
+    without : list[str]
+        HDF5 paths to exclude from a copy operation.
+
+    Returns
+    -------
+    list[str]
+        Normalised HDF5 paths with nested duplicates removed.
+    """
+    new_without = []
+    normalised_without = [path.strip("/") for path in without if path.strip("/")]
+    for top_key in normalised_without:
+        for inner_key in normalised_without:
+            if top_key != inner_key and top_key.startswith(inner_key + "/"):
+                break
+        else:
+            new_without.append(top_key)
+    return new_without

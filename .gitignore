@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+AFMReader/data/*
+AFMReader/notebooks/*
+
 # C extensions
 *.so
 

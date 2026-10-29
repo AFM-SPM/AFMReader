@@ -7,12 +7,18 @@ from pathlib import Path
 import numpy as np
 from igor2 import binarywave
 
+from AFMReader.data_classes import AFMScan
 from AFMReader.logging import logger
 
 logger.enable(__package__)
 
+CHANNEL_Z_UNITS = {
+    "Height": "m",
+    "ZSensor": "V",
+}
 
-def _ibw_pixel_to_nm_scaling(scan: dict) -> float:
+
+def _ibw_pixel_to_nm_scaling(scan: dict, channel: str) -> tuple[float, str]:
     """
     Extract pixel to nm scaling from the IBW image metadata.
 
@@ -20,11 +26,13 @@ def _ibw_pixel_to_nm_scaling(scan: dict) -> float:
     ----------
     scan : dict
         The loaded binary wave object.
+    channel : str
+        The channel used to determine the vertical units.
 
     Returns
     -------
-    float
-        A value corresponding to the real length of a single pixel.
+    tuple[float, str]
+        A value corresponding to the real length of a single pixel and the vertical units.
     """
     # Get metadata
     notes = {}
@@ -32,14 +40,49 @@ def _ibw_pixel_to_nm_scaling(scan: dict) -> float:
         if line.count(":"):
             key, val = line.split(":", 1)
             notes[key] = val.strip()
+            logger.debug(f"IBW file note - key: '{key}', value: '{val.strip()}'")
+    channel = channel.replace("Tracee", "").replace("Retracee", "").replace("Trace", "").replace("Retrace", "")
+    channel_unit_key = f"{channel}Unit"
+    z_units = "m"  # default to m if not found in the notes
+    if channel_unit_key in notes:
+        z_units = notes[channel_unit_key]
+    elif channel in CHANNEL_Z_UNITS:  # pylint: disable=consider-using-get
+        z_units = CHANNEL_Z_UNITS[channel]
+
     # Has potential for non-square pixels but not yet implemented
     return (
         float(notes["SlowScanSize"]) / scan["wave"]["wData"].shape[0] * 1e9,  # as in m
         float(notes["FastScanSize"]) / scan["wave"]["wData"].shape[1] * 1e9,  # as in m
-    )[0]
+    )[0], z_units
 
 
-def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
+def get_ibw_channels(file_path: Path | str) -> list[str]:
+    """
+    Extract a list of available channels and their corresponding dictionary key ids from the `.ibw` file.
+
+    Parameters
+    ----------
+    file_path : Path or str
+        Path to the .ibw file.
+
+    Returns
+    -------
+    list
+        List of available channels.
+    """
+    file_path = Path(file_path)
+    filename = file_path.stem
+    scan = binarywave.load(file_path)
+    logger.info(f"[{filename}] : Getting channels from : {file_path}")
+    labels = []
+    for label_list in scan["wave"]["labels"]:
+        for label in label_list:
+            if label:
+                labels.append(label.decode())
+    return labels
+
+
+def load_ibw(file_path: Path | str, channel: str) -> AFMScan:
     """
     Load image from Asylum Research (Igor) .ibw files.
 
@@ -52,8 +95,8 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
 
     Returns
     -------
-    tuple[np.ndarray, float]
-        A tuple containing the image and its pixel to nanometre scaling value.
+    AFMScan
+        An AFMScan object containing the image, its pixel to nanometre scaling value, and z-axis units.
 
     Raises
     ------
@@ -64,11 +107,14 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
 
     Examples
     --------
-    Load the image and pixel to nanometre scaling factor - 'HeightTracee' is the default channel name (the extra 'e' is
-    not a typo!).
+    Load the image and pixel to nanometre scaling factor - 'HeightTracee' is the default channel name
+    (the extra 'e' is not a typo!).
 
     >>> from AFMReader.ibw import load_ibw
-    >>> image, pixel_to_nanometre_scaling_factor = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
+    >>> afm_load = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
+    >>> image = afm_load.image
+    >>> pixel_to_nanometre_scaling_factor = afm_load.pixel_to_nanometre_scaling
+    >>> z_units = afm_load.z_units
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
@@ -86,7 +132,14 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
                 if label:
                     labels.append(label.decode())
         channel_idx = labels.index(channel)
-        image = scan["wave"]["wData"][:, :, channel_idx].T * 1e9  # Looks to be in m
+
+        pixel_to_nanometre_scaling, z_units = _ibw_pixel_to_nm_scaling(scan=scan, channel=channel)
+
+        if z_units == "m":
+            image = scan["wave"]["wData"][:, :, channel_idx].T * 1e9  # Convert from m to nm
+            z_units = "nm"
+        else:
+            image = scan["wave"]["wData"][:, :, channel_idx].T
         image = np.flipud(image)
         logger.info(f"[{filename}] : Extracted channel {channel}")
     except FileNotFoundError:
@@ -100,4 +153,4 @@ def load_ibw(file_path: Path | str, channel: str) -> tuple[np.ndarray, float]:
         raise e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return (image, _ibw_pixel_to_nm_scaling(scan))
+    return AFMScan(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=z_units)
