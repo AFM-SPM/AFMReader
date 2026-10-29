@@ -17,34 +17,19 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 # pylint: disable=too-many-arguments
 # pylint: disable=too-many-positional-arguments
 
+
 @pytest.mark.parametrize(
-        ("channel_name", "expected", "expectation"),
-        [
-            pytest.param(
-                "height_trace",
-                ("height", "trace"),
-                does_not_raise(),
-                id="height_trace"
-            ),
-            pytest.param(
-                "depth_retrace",
-                ("depth", "retrace"),
-                does_not_raise(),
-                id="retrace"
-            ),
-            pytest.param(
-                "height_other",
-                None,
-                pytest.raises(ValueError, match="Invalid trace type"),
-                id="invalid trace type"
-            ),
-            pytest.param(
-                "other",
-                None,
-                pytest.raises(ValueError, match="Invalid channel format"),
-                id="invalid channel format"
-            ),
-        ]
+    ("channel_name", "expected", "expectation"),
+    [
+        pytest.param("height_trace", ("height", "trace"), does_not_raise(), id="height_trace"),
+        pytest.param("depth_retrace", ("depth", "retrace"), does_not_raise(), id="retrace"),
+        pytest.param(
+            "height_other", None, pytest.raises(ValueError, match="Invalid trace type"), id="invalid trace type"
+        ),
+        pytest.param(
+            "other", None, pytest.raises(ValueError, match="Invalid channel format"), id="invalid channel format"
+        ),
+    ],
 )
 def test_parse_channel_name(channel_name: str, expected: tuple[str] | None, expectation) -> None:
     with expectation:
