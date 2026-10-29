@@ -5,8 +5,9 @@
 try:
     from datetime import UTC, datetime
 except ImportError:
-    from datetime import datetime, timezone
-    UTC = timezone.utc
+    from datetime import datetime
+
+    UTC = UTC
 from pathlib import Path
 from typing import Any
 
