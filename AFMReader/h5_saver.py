@@ -4,9 +4,9 @@
 # Discrepancy between py 3.10 and later versions
 try:
     from datetime import UTC, datetime
-except ImportError:
+except ImportError: # Python < 3.11
     from datetime import datetime, timezone
-    UTC = timezone.utc #noqa PLW0127
+    UTC = timezone.utc # noqa: UP017
 from pathlib import Path
 from typing import Any
 
