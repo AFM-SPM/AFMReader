@@ -117,13 +117,13 @@ def _jpk_pixel_to_nm_scaling_h5(measurement_group: h5py.Group) -> float:
         If required attributes are missing in the measurement group.
     """
     try:
-        ulength = measurement_group.attrs["position-pattern.grid.ulength"]  # physical length in meters
-        ilength = measurement_group.attrs["position-pattern.grid.ilength"]  # number of pixels
+        real_length = measurement_group.attrs["position-pattern.grid.ulength"]  # physical length in meters
+        px_length = measurement_group.attrs["position-pattern.grid.ilength"]  # number of pixels
 
-        if ilength == 0:
+        if px_length == 0:
             raise ValueError("Pixel count (ilength) is zero; cannot compute scaling.")
 
-        return (ulength / ilength) * 1e9
+        return (real_length / px_length) * 1e9
 
     except KeyError as e:
         missing = e.args[0]

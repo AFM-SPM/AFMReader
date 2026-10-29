@@ -5,6 +5,7 @@
 from contextlib import nullcontext as does_not_raise
 from pathlib import Path
 
+import h5py
 import numpy as np
 import pytest
 
@@ -49,6 +50,147 @@ def test_parse_channel_name(channel_name: str, expected: tuple[str] | None, expe
     with expectation:
         result = h5_jpk._parse_channel_name(channel_name)
         assert expected == result
+
+
+@pytest.mark.parametrize(
+    ("channel", "expected", "expectation"),
+    [
+        pytest.param(
+            "height_trace",
+            ("/Measurement_000/Channel_000", "/Measurement_000", "Height"),
+            does_not_raise(),
+            id="valid channel",
+        ),
+        pytest.param(
+            "depth_trace",
+            None,
+            pytest.raises(ValueError, match="not found"),
+            id="valid format but channel not in file",
+        ),
+        pytest.param(
+            "other",
+            None,
+            pytest.raises(ValueError, match="Invalid channel format"),
+            id="invalid channel format",
+        ),
+    ],
+)
+def test_get_channel_info(h5_file, monkeypatch, channel, expected, expectation) -> None:
+    # Skip over _get_channel_info()'s call of _available_channels() for this test only
+    monkeypatch.setattr(h5_jpk, "_available_channels", lambda _: {"height_trace": "Measurement_000/Channel_000"})
+
+    with expectation:
+        channel_group, measurement_group, dataset_name = h5_jpk._get_channel_info(h5_file, channel)
+        assert (channel_group.name, measurement_group.name, dataset_name) == expected
+
+
+REAL_LENGTH = "position-pattern.grid.ulength"
+PX_LENGTH = "position-pattern.grid.ilength"
+
+@pytest.mark.parametrize(
+    ("attrs", "expected", "expectation"),
+    [
+        pytest.param({REAL_LENGTH: 1e-6, PX_LENGTH: 512}, 1.953125, does_not_raise(), id="1 um over 512 px"),
+        pytest.param({REAL_LENGTH: 5e-7, PX_LENGTH: 100}, 5.0, does_not_raise(), id="500 nm over 100 px"),
+        pytest.param({REAL_LENGTH: 1e-6, PX_LENGTH: 0}, None, pytest.raises(ValueError, match="zero"), id="zero pixels"),
+        pytest.param({PX_LENGTH: 512}, None, pytest.raises(KeyError, match="ulength"), id="missing ulength"),
+        pytest.param({REAL_LENGTH: 1e-6}, None, pytest.raises(KeyError, match="ilength"), id="missing ilength"),
+    ],
+)
+def test_jpk_pixel_to_nm_scaling_h5(measurement_group, attrs, expected, expectation) -> None:
+    measurement_group.attrs.update(attrs)
+
+    with expectation:
+        assert h5_jpk._jpk_pixel_to_nm_scaling_h5(measurement_group) == pytest.approx(expected)
+
+
+MULTIPLIER = "net-encoder.scaling.multiplier"
+OFFSET = "net-encoder.scaling.offset"
+UNIT = "net-encoder.scaling.unit.unit"
+
+@pytest.mark.parametrize(
+        ("attrs", "expected"),
+        [
+            pytest.param({MULTIPLIER: 2.5e-9, OFFSET: -1e-9, UNIT: "m"}, (2.5e-9, -1e-9, "m"), id="all attributes present"),
+            pytest.param({MULTIPLIER: 2.0, OFFSET: 0.5, UNIT: np.bytes_(b"nm")}, (2.0, 0.5, "nm"), id="unit stored as bytes"),
+            pytest.param({MULTIPLIER: 2.0, OFFSET: 0.5}, (2.0, 0.5, "m"), id="unit missing defaults to m"),
+            pytest.param({UNIT: "V"}, (1.0, 0.0, "V"), id="multiplier and offset missing"),
+            pytest.param({}, (1.0, 0.0, "m"), id="no attributes"),
+        ],
+)
+def test_get_z_scaling_h5(channel_group, attrs, expected) -> None:
+    channel_group.attrs.update(attrs)
+    result = h5_jpk._get_z_scaling_h5(channel_group)
+
+    assert result == expected
+    assert all (isinstance(value, float) for value in result[:2])
+
+
+@pytest.mark.parametrize(
+    ("attr", "expected"),
+    [
+        pytest.param("nm", "nm", id="str"),
+        pytest.param(b"nm", "nm", id="bytes"),
+        pytest.param(np.bytes_(b"nm"), "nm", id="numpy bytes (as h5py returns fixed-length strings)"),
+        pytest.param(np.str_("nm"), "nm", id="numpy str"),
+        pytest.param("µm".encode(), "µm", id="non-ascii utf-8 bytes"),
+    ],
+)
+def test_decode_attr(attr, expected) -> None:
+    result = h5_jpk._decode_attr(attr)
+
+    assert result == expected
+    assert isinstance(result, str)
+
+
+@pytest.mark.parametrize("attr", [True, np.bool_(True), "true", " TRUE ", b"true", 1, np.int64(2)])
+def test_attr_to_bool_true(attr) -> None:
+    assert h5_jpk._attr_to_bool(attr) is True
+
+
+@pytest.mark.parametrize("attr", [False, "false", np.bytes_(b"false"), 0, 0.0, "1", "yes"])
+def test_attr_to_bool_false(attr) -> None:
+    assert h5_jpk._attr_to_bool(attr) is False
+
+
+def test_available_channels(jpk_h5_file) -> None:
+    assert h5_jpk._available_channels(jpk_h5_file) == {
+        "height_trace": "Measurement_000/Channel_000",
+        "height_retrace": "Measurement_000/Channel_001",
+        "error_trace": "Measurement_000/Channel_002",
+    }
+
+
+def test_available_channels_empty_file() -> None:
+    with h5py.File("empty.h5", "w", driver="core", backing_store=False) as f:
+        assert h5_jpk._available_channels(f) == {}
+
+
+@pytest.mark.parametrize(
+    ("attrs", "expected", "expectation"),
+    [
+        pytest.param({"timing-settings.scanRate": 2.5}, 2.5, does_not_raise(), id="scan rate present"),
+        pytest.param({}, None, pytest.raises(KeyError, match="scanRate"), id="scan rate missing"),
+    ],
+)
+def test_get_line_rate(measurement_group, attrs, expected, expectation) -> None:
+    measurement_group.attrs.update(attrs)
+
+    with expectation:
+        assert h5_jpk._get_line_rate(measurement_group) == expected
+
+
+@pytest.mark.parametrize(
+    ("num_frames", "line_rate", "image_size", "expected"),
+    [
+        pytest.param(3, 2.0, 4, {"frame 0": 0.0, "frame 1": 2.0, "frame 2": 4.0}, id="2s per frame"),
+        pytest.param(2, 512.0, 256, {"frame 0": 0.0, "frame 1": 0.5}, id="sub-second frames"),
+        pytest.param(1, 1.0, 10, {"frame 0": 0.0}, id="single frame"),
+        pytest.param(0, 1.0, 10, {}, id="no frames"),
+    ],
+)
+def test_generate_timestamps(num_frames, line_rate, image_size, expected) -> None:
+    assert h5_jpk.generate_timestamps(num_frames, line_rate, image_size) == pytest.approx(expected)
 
 
 @pytest.mark.parametrize(
