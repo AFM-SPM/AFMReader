@@ -458,14 +458,16 @@ class CurvesH5Volume(CurvesVolume):
             A dictionary containing the QI curve data for each channel and segment for a pixel.
         """
         rows, cols = self.shape
-        curves_group = self.volume_data_group["Curves"]
+        # Segment groups (e.g. Extend, Retract) sit directly in the volume's data group; skip any non-group members
+        segment_groups = {
+            name: item for name, item in self.volume_data_group.items() if isinstance(item, h5py.Group)
+        }
 
         # Read all the indices into memory first for all segments and channels (as these are small).
-        # A segment is one phase of the tip's movement (e.g. Extend, Retract), and `Indices` holds one
-        # dataset per channel, and holds the indices of where each pixel's curve starts in that segment's
+        # `Indices` holds one dataset per channel, giving where each pixel's curve starts in that segment's
         # flattened data
         indices_map: dict[str, dict[str, np.ndarray]] = {}
-        for segment_name, segment_group in curves_group.items():
+        for segment_name, segment_group in segment_groups.items():
             for channel in segment_group["Indices"]:
                 indices_map.setdefault(channel, {})[segment_name] = segment_group["Indices"][channel][:]
 
@@ -476,7 +478,7 @@ class CurvesH5Volume(CurvesVolume):
 
             # Read the whole row's data for each channel and segment
             data: dict[str, dict[str, np.ndarray]] = {}
-            for segment_name, segment_group in curves_group.items():
+            for segment_name, segment_group in segment_groups.items():
                 for channel in segment_group["Indices"]:
                     indices = indices_map[channel][segment_name]
                     start_idx, end_idx = int(indices[row_start]), int(indices[row_start + cols])
@@ -515,33 +517,35 @@ class CurvesH5Volume(CurvesVolume):
             A list of the segments as tuples. This first item in the tuple in a numpy array of the indices then we
             have a list of numpy arrays (all the curves concatenated together) for each channel in the order they
             were requested.
+
+        Raises
+        ------
+        ValueError
+            If a requested segment is not in the volume, or no channels are requested for a segment.
         """
-        # First read all the indices for the selected segments and channels into memory (these are small)
+        # First read all the indices for the selected segments into memory (these are small)
         indices_map: dict[str, np.ndarray] = {}
         for segment_name, channel_list in channel_segment_sets.items():
-            if segment_name in self.volume_data_group:
-                segment_group = self.volume_data_group[segment_name]
+            if segment_name not in self.volume_data_group:
+                available = [name for name, item in self.volume_data_group.items() if isinstance(item, h5py.Group)]
+                raise ValueError(f"Segment '{segment_name}' not found. Available segments: {available}")
+            if not channel_list:
+                raise ValueError(f"No channels requested for segment '{segment_name}'.")
 
-                # TODO: Currently we use the first channel to get the indicies. We should remove the duplicated
-                # storing of indices and just store it once per segment during saving to h5.
-                indices_map[segment_name] = segment_group["Indices"][channel_list[0]][:]
+            # TODO: Currently we use the first channel to get the indices. We should remove the duplicated
+            # storing of indices and just store it once per segment during saving to h5.
+            indices_map[segment_name] = self.volume_data_group[segment_name]["Indices"][channel_list[0]][:]
 
         # Then iterate over the curves in batches, yielding the data for each batch
         for idx in range(0, len(self), batch_size):
             data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
             for segment_name, channel_list in channel_segment_sets.items():
-                # Get the indicies for this batch of curves for the current segment
-                indicies = indices_map[segment_name][idx : idx + batch_size + 1]
-                data = []
-                for channel_name in channel_list:
-                    # Extract data for the channel and add it to the list
-                    channel_data = self.volume_data_group[segment_name]["Data"][channel_name][
-                        indicies[0] : indicies[-1]
-                    ]
-                    data.append(channel_data)
-
-                # Add the indicies and data for this segment to the batch
-                data_batch.append((indicies - indicies[0], data))
+                # Get the indices for this batch of curves for the current segment
+                indices = indices_map[segment_name][idx : idx + batch_size + 1]
+                data_group = self.volume_data_group[segment_name]["Data"]
+                # Extract the batch's data for each requested channel, in the order requested
+                data = [data_group[channel_name][indices[0] : indices[-1]] for channel_name in channel_list]
+                data_batch.append((indices - indices[0], data))
             yield data_batch
 
     def get_curve(self, y: int, x: int, flip_image: bool | None = None) -> dict[str, dict[str, np.ndarray]]:
@@ -561,28 +565,32 @@ class CurvesH5Volume(CurvesVolume):
         -------
         dict
             A dictionary containing the curve data for the specified pixel.
+
+        Raises
+        ------
+        IndexError
+            If the pixel is outside the image.
         """
-        if y < 0 or y >= self.shape[0] or x < 0 or x >= self.shape[1]:
-            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
+        if not (0 <= y < self.shape[0] and 0 <= x < self.shape[1]):
+            raise IndexError(f"Curve index out of bounds: y={y}, x={x} for shape {self.shape}")
         if flip_image is None:
             flip_image = self.flip_image
         if flip_image:
             y = self.shape[0] - 1 - y
         curve_num = self.shape[1] * y + x
 
-        # Instantiate a dictionary to hold the curve data for each channel and segment for this pixel
-        curve_dict: dict[str, dict[str, Any]] = {}
-        for segment, segment_group in self.volume_data_group.items():
+        # Hold the curve data for each channel and segment for this pixel
+        curve_dict: dict[str, dict[str, np.ndarray]] = {}
+        for segment_name, segment_group in self.volume_data_group.items():
+            # Skip any members of the data group that aren't segment groups
+            if not isinstance(segment_group, h5py.Group):
+                continue
             for channel in segment_group["Indices"]:
-                # The indicies list is of the start index of each curve (first item is 0)
-                start_idx = int(segment_group["Indices"][channel][curve_num])
-                # Hence, the next curve's start index can be used as a bound for this curve
-                # (the indices list is num_curves + 1 long)
-                end_idx = int(segment_group["Indices"][channel][curve_num + 1])
-                if channel not in curve_dict:
-                    curve_dict[channel] = {}
-                # Use the calculated indices to read the requested curve's data into a dictionary
-                curve_dict[channel][segment] = segment_group["Data"][channel][start_idx:end_idx]
+                # The indices list holds the start index of each curve (first item is 0) and is num_curves + 1 long,
+                # so the next curve's start index is this curve's end
+                indices = segment_group["Indices"][channel]
+                start_idx, end_idx = int(indices[curve_num]), int(indices[curve_num + 1])
+                curve_dict.setdefault(channel, {})[segment_name] = segment_group["Data"][channel][start_idx:end_idx]
         return curve_dict
 
 

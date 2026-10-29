@@ -193,6 +193,7 @@ def test_generate_timestamps(num_frames, line_rate, image_size, expected) -> Non
     ],
 )
 def test_iter_curves(volume_args, volume_data_group, curve_metadata, flip_image, expected_order) -> None:
+    """Test iterative loading of all curves in an image."""
     shape = volume_args["shape"]
     segments = volume_args["segments"]
     channels = volume_args["channels"]
@@ -217,6 +218,39 @@ def test_iter_curves(volume_args, volume_data_group, curve_metadata, flip_image,
         for channel in channels:
             for segment in segments:
                 np.testing.assert_array_equal(curve[channel][segment], np.arange(offsets[k], offsets[k + 1]))
+
+
+@pytest.mark.parametrize(
+    ("y", "x", "flip_image", "expected_curve"),
+    [
+        pytest.param(0, 0, False, 0, id="top-left, no flip"),
+        pytest.param(1, 0, False, 2, id="second row, no flip"),
+        pytest.param(0, 1, True, 3, id="flipped: row 0 reads stored row 1"),
+        pytest.param(1, 1, True, 1, id="flipped: row 1 reads stored row 0"),
+        pytest.param(0, 0, None, 2, id="None uses the instance's flip_image=True"),
+    ],
+)
+def test_get_curve(dummy_curves_h5_volume, volume_args, y, x, flip_image, expected_curve) -> None:
+    """Each pixel returns its own curve for every channel and segment."""
+    rows, cols = volume_args["shape"]
+    offsets = np.concatenate([[0], np.cumsum(np.arange(1, rows * cols + 1))])  # curve k has k + 1 points
+    expected = np.arange(offsets[expected_curve], offsets[expected_curve + 1])
+
+    curve = dummy_curves_h5_volume.get_curve(y, x, flip_image)
+
+    assert set(curve) == set(volume_args["channels"])
+    for channel in volume_args["channels"]:
+        assert set(curve[channel]) == set(volume_args["segments"])
+        for segment in volume_args["segments"]:
+            np.testing.assert_array_equal(curve[channel][segment], expected)
+
+
+@pytest.mark.parametrize(("y", "x"), [(-1, 0), (0, -1), (2, 0), (0, 2)])
+def test_get_curve_out_of_bounds(dummy_curves_h5_volume, y, x) -> None:
+    with pytest.raises(IndexError, match="out of bounds"):
+        dummy_curves_h5_volume.get_curve(y, x)
+
+
 
 
 @pytest.mark.parametrize(

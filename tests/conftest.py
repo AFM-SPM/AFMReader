@@ -53,19 +53,16 @@ def channel_group():
 
 @pytest.fixture
 def volume_data_group(h5_file, volume_args):
-    """Volume group where curve k has k + 1 points, with values equal to their position in the flat data."""
-    shape = volume_args["shape"]
-    segments = volume_args["segments"]
-    channels = volume_args["channels"]
-
-    group = h5_file.create_group("Measurement_000/Volume")
-    n_curves = shape[0] * shape[1]
-    lengths = np.arange(1, n_curves + 1)  # different lengths per curve
-    offsets = np.concatenate([[0], np.cumsum(lengths)])
-    for segment in segments:
-        for channel in channels:
-            group[f"Curves/{segment}/Indices/{channel}"] = offsets
-            group[f"Curves/{segment}/Data/{channel}"] = np.arange(offsets[-1], dtype=np.float64)
+    """Volume data group laid out like Curve_Data/<name>_VOLM/Data, where curve k has k + 1 points."""
+    rows, cols = volume_args["shape"]
+    group = h5_file.create_group("Curve_Data/Test_VOLM/Data")
+    n_curves = rows * cols
+    offsets = np.concatenate([[0], np.cumsum(np.arange(1, n_curves + 1))])
+    for segment in volume_args["segments"]:
+        for channel in volume_args["channels"]:
+            group[f"{segment}/Indices/{channel}"] = offsets  # was f"Curves/{segment}/Indices/{channel}"
+            group[f"{segment}/Data/{channel}"] = np.arange(offsets[-1], dtype=np.float64)  # was f"Curves/{segment}/Data/{channel}"
+    group["not_a_segment"] = np.zeros(3)  # non-group member, which must be skipped
     return group
 
 
@@ -119,14 +116,12 @@ def curve_metadata(h5_file, volume_args):
 
 
 @pytest.fixture
-def dummy_curves_h5_volumes(volume_args):
-    """Dummy instance of the CurvesH5Volumes class."""
-    shape = volume_args["shape"]
-
+def dummy_curves_h5_volume(volume_args, volume_data_group, curve_metadata):
+    """Dummy CurvesH5Volume built from the in-memory volume and metadata groups."""
     return h5_jpk.CurvesH5Volume(
-        name="dummy_curves_h5_volumes",
-        shape=shape,
+        name="dummy_curves_h5_volume",
+        shape=volume_args["shape"],
         volume_data_group=volume_data_group,
         metadata=curve_metadata,
-        flip_image=True
+        flip_image=True,
     )
