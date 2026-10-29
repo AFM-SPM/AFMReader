@@ -5,7 +5,7 @@
 # fmt: off
 try:
     from datetime import UTC, datetime
-except ImportError: # Python < 3.11
+except ImportError:  # Python < 3.11
     from datetime import datetime, timezone
     UTC = timezone.utc # noqa: UP017
 # fmt: on
