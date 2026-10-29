@@ -124,9 +124,12 @@ class H5Saver:
         channel_units : dict[str, str] | None, optional
             A dictionary mapping channel names to their units.
         """
+        # ruff and black fight about this
+        # fmt: off
         assert (
             self.h5file is not None
         ), "existing h5 file must be passed or create_file called before setup_curves_group"
+        # fmt: on
         # Create the main group for the curve data that all the curve data will be in
         self.curve_data_group = self.h5file.require_group("Curve_Data")
 
@@ -659,9 +662,12 @@ class H5Saver:
         idx : int
             The index of the image channel.
         """
+        # ruff and black fight about this
+        # fmt: off
         assert (
             self.h5file is not None
         ), "existing h5 file must be passed or create_file called before setup_curve_data_structure"
+        # fmt: on
         meas_grp = self.h5file.require_group("Measurement_000")
         chan_grp = meas_grp.require_group(f"Channel_{make_num_min_characters(idx)}")
         # Extract name and retrace information from the channel name
