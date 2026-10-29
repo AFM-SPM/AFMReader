@@ -72,12 +72,15 @@ def test_get_channel_info(h5_file, monkeypatch, channel, expected, expectation) 
 REAL_LENGTH = "position-pattern.grid.ulength"
 PX_LENGTH = "position-pattern.grid.ilength"
 
+
 @pytest.mark.parametrize(
     ("attrs", "expected", "expectation"),
     [
         pytest.param({REAL_LENGTH: 1e-6, PX_LENGTH: 512}, 1.953125, does_not_raise(), id="1 um over 512 px"),
         pytest.param({REAL_LENGTH: 5e-7, PX_LENGTH: 100}, 5.0, does_not_raise(), id="500 nm over 100 px"),
-        pytest.param({REAL_LENGTH: 1e-6, PX_LENGTH: 0}, None, pytest.raises(ValueError, match="zero"), id="zero pixels"),
+        pytest.param(
+            {REAL_LENGTH: 1e-6, PX_LENGTH: 0}, None, pytest.raises(ValueError, match="zero"), id="zero pixels"
+        ),
         pytest.param({PX_LENGTH: 512}, None, pytest.raises(KeyError, match="ulength"), id="missing ulength"),
         pytest.param({REAL_LENGTH: 1e-6}, None, pytest.raises(KeyError, match="ilength"), id="missing ilength"),
     ],
@@ -93,22 +96,25 @@ MULTIPLIER = "net-encoder.scaling.multiplier"
 OFFSET = "net-encoder.scaling.offset"
 UNIT = "net-encoder.scaling.unit.unit"
 
+
 @pytest.mark.parametrize(
-        ("attrs", "expected"),
-        [
-            pytest.param({MULTIPLIER: 2.5e-9, OFFSET: -1e-9, UNIT: "m"}, (2.5e-9, -1e-9, "m"), id="all attributes present"),
-            pytest.param({MULTIPLIER: 2.0, OFFSET: 0.5, UNIT: np.bytes_(b"nm")}, (2.0, 0.5, "nm"), id="unit stored as bytes"),
-            pytest.param({MULTIPLIER: 2.0, OFFSET: 0.5}, (2.0, 0.5, "m"), id="unit missing defaults to m"),
-            pytest.param({UNIT: "V"}, (1.0, 0.0, "V"), id="multiplier and offset missing"),
-            pytest.param({}, (1.0, 0.0, "m"), id="no attributes"),
-        ],
+    ("attrs", "expected"),
+    [
+        pytest.param({MULTIPLIER: 2.5e-9, OFFSET: -1e-9, UNIT: "m"}, (2.5e-9, -1e-9, "m"), id="all attributes present"),
+        pytest.param(
+            {MULTIPLIER: 2.0, OFFSET: 0.5, UNIT: np.bytes_(b"nm")}, (2.0, 0.5, "nm"), id="unit stored as bytes"
+        ),
+        pytest.param({MULTIPLIER: 2.0, OFFSET: 0.5}, (2.0, 0.5, "m"), id="unit missing defaults to m"),
+        pytest.param({UNIT: "V"}, (1.0, 0.0, "V"), id="multiplier and offset missing"),
+        pytest.param({}, (1.0, 0.0, "m"), id="no attributes"),
+    ],
 )
 def test_get_z_scaling_h5(channel_group, attrs, expected) -> None:
     channel_group.attrs.update(attrs)
     result = h5_jpk._get_z_scaling_h5(channel_group)
 
     assert result == expected
-    assert all (isinstance(value, float) for value in result[:2])
+    assert all(isinstance(value, float) for value in result[:2])
 
 
 @pytest.mark.parametrize(
