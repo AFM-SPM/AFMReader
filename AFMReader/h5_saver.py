@@ -112,7 +112,8 @@ class H5Saver:
         if UTC is not None:
             self.h5file.attrs["created_on"] = datetime.now(UTC).isoformat()
         else:
-            self.h5file.attrs["created_on"] = datetime.now(timezone.utc).isoformat()
+            # ruff and black fight so ignore this line in ruff, ruff's suggestion does not exist in py 3.10
+            self.h5file.attrs["created_on"] = datetime.now(timezone.utc).isoformat() # noqa: UP017
         self.h5file.attrs["source_type"] = source if source is not None else "new"
         return self.h5file
 
