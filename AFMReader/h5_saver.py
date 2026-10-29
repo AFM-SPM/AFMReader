@@ -2,11 +2,13 @@
 """Module for saving AFM reader data to HDF5 files."""
 
 # Discrepancy between py 3.10 and later versions
+# fmt: off
 try:
     from datetime import UTC, datetime
 except ImportError: # Python < 3.11
     from datetime import datetime, timezone
     UTC = timezone.utc # noqa: UP017
+# fmt: on
 from pathlib import Path
 from typing import Any
 
