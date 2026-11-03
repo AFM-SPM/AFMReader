@@ -222,6 +222,7 @@ def test_iter_curves(volume_args, volume_data_group, curve_metadata, flip_image,
 CURVE_LENGTHS = {"extend": [3, 2, 4], "retract": [1, 3, 2]}
 CHANNELS = ["height", "vDeflection"]
 
+
 def expected_curve(segment: str, channel: str, curve: int) -> np.ndarray:
     """Distinct, predictable values for each curve so outputs can be checked exactly."""
     length = CURVE_LENGTHS[segment][curve]
@@ -302,6 +303,7 @@ def test_multiple_segments_keep_request_order(volume):
 def test_invalid_requests_raise(volume, channel_segment_sets, message):
     with pytest.raises(ValueError, match=message):
         next(volume.iter_segments(channel_segment_sets))
+
 
 @pytest.mark.parametrize(
     ("y", "x", "flip_image", "expected_curve"),
