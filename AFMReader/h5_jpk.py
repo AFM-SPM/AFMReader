@@ -452,6 +452,12 @@ class CurvesH5Volume(CurvesVolume):
         """
         Iterate over the QI curve data, yielding one pixel's data at a time.
 
+        Parameters
+        ----------
+        flip_image: bool (optional)
+            Unused in this function, but is a required parameter for compatability with
+            ``Curvesvolume.iter_cuves``.
+
         Yields
         ------
         dict
