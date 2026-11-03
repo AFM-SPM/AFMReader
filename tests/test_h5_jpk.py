@@ -219,9 +219,89 @@ def test_iter_curves(volume_args, volume_data_group, curve_metadata, flip_image,
                 np.testing.assert_array_equal(curve[channel][segment], np.arange(offsets[k], offsets[k + 1]))
 
 
-# def test_iter_segments(volume_args, volume_data_group, curve_metadata, flip_image, expected_order) -> None:
-#     """Test iterative loading of all segments in an image."""
+CURVE_LENGTHS = {"extend": [3, 2, 4], "retract": [1, 3, 2]}
+CHANNELS = ["height", "vDeflection"]
 
+def expected_curve(segment: str, channel: str, curve: int) -> np.ndarray:
+    """Distinct, predictable values for each curve so outputs can be checked exactly."""
+    length = CURVE_LENGTHS[segment][curve]
+    segment_offset = 1000 if segment == "retract" else 0
+    channel_offset = 100 if channel == "vDeflection" else 0
+    return np.arange(length, dtype=float) + segment_offset + channel_offset + curve * 10
+
+
+@pytest.fixture
+def volume(tmp_path, monkeypatch):
+    path = tmp_path / "test.h5"
+    with h5py.File(path, "w") as f:
+        for segment, lengths in CURVE_LENGTHS.items():
+            offsets = np.concatenate([[0], np.cumsum(lengths)])
+            for channel in CHANNELS:
+                f[f"{segment}/Indices/{channel}"] = offsets
+                f[f"{segment}/Data/{channel}"] = np.concatenate(
+                    [expected_curve(segment, channel, c) for c in range(len(lengths))]
+                )
+
+    h5_file = h5py.File(path, "r")
+    # Build the object without its normal constructor, then attach the test data
+    vol = object.__new__(h5_jpk.CurvesH5Volume)
+    vol.volume_data_group = h5_file
+    monkeypatch.setattr(h5_jpk.CurvesH5Volume, "__len__", lambda self: 3)
+    yield vol
+    h5_file.close()
+
+
+def test_batch_size_one_returns_each_curve(volume):
+    batches = list(volume.iter_segments({"extend": ["height"]}))
+
+    assert len(batches) == 3
+    for curve, batch in enumerate(batches):
+        [(indices, data)] = batch
+        np.testing.assert_array_equal(indices, [0, CURVE_LENGTHS["extend"][curve]])
+        np.testing.assert_array_equal(data[0], expected_curve("extend", "height", curve))
+
+
+def test_uneven_final_batch(volume):
+    batches = list(volume.iter_segments({"extend": ["height"]}, batch_size=2))
+    assert len(batches) == 2
+
+    # First batch: curves 0 and 1, concatenated, with offsets rebased to start at 0
+    [(indices, data)] = batches[0]
+    np.testing.assert_array_equal(indices, [0, 3, 5])
+    expected = np.concatenate([expected_curve("extend", "height", c) for c in (0, 1)])
+    np.testing.assert_array_equal(data[0], expected)
+
+    # Second batch: only curve 2 is left
+    [(indices, data)] = batches[1]
+    np.testing.assert_array_equal(indices, [0, 4])
+    np.testing.assert_array_equal(data[0], expected_curve("extend", "height", 2))
+
+
+def test_multiple_segments_keep_request_order(volume):
+    channel_segment_sets = {"retract": ["vDeflection", "height"], "extend": ["height"]}
+    first_batch = next(volume.iter_segments(channel_segment_sets))
+
+    assert len(first_batch) == 2  # one entry per requested segment
+    retract_indices, retract_data = first_batch[0]
+    np.testing.assert_array_equal(retract_indices, [0, 1])
+    np.testing.assert_array_equal(retract_data[0], expected_curve("retract", "vDeflection", 0))
+    np.testing.assert_array_equal(retract_data[1], expected_curve("retract", "height", 0))
+
+    extend_indices, extend_data = first_batch[1]
+    np.testing.assert_array_equal(extend_indices, [0, 3])
+    np.testing.assert_array_equal(extend_data[0], expected_curve("extend", "height", 0))
+
+
+@pytest.mark.parametrize(
+    ("channel_segment_sets", "message"),
+    [
+        ({"missing": ["height"]}, "not found"),
+        ({"extend": []}, "No channels requested"),
+    ],
+)
+def test_invalid_requests_raise(volume, channel_segment_sets, message):
+    with pytest.raises(ValueError, match=message):
+        next(volume.iter_segments(channel_segment_sets))
 
 @pytest.mark.parametrize(
     ("y", "x", "flip_image", "expected_curve"),
