@@ -700,6 +700,9 @@ def make_num_min_characters(num: int, min_chars: int = 3) -> str:
     """
     Zero-pad an integer to a minimum number of characters.
 
+    e.g. num = 5, min_chars = 3
+        5 -> 005
+
     Parameters
     ----------
     num : int

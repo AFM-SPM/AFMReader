@@ -220,6 +220,9 @@ def test_iter_curves(volume_args, volume_data_group, curve_metadata, flip_image,
                 np.testing.assert_array_equal(curve[channel][segment], np.arange(offsets[k], offsets[k + 1]))
 
 
+def test_iter_segments(volume_args, volume_data_group, curve_metadata, flip_image, expected_order) -> None:
+    """Test iterative loading of all segments in an image."""
+
 @pytest.mark.parametrize(
     ("y", "x", "flip_image", "expected_curve"),
     [
@@ -249,8 +252,6 @@ def test_get_curve(dummy_curves_h5_volume, volume_args, y, x, flip_image, expect
 def test_get_curve_out_of_bounds(dummy_curves_h5_volume, y, x) -> None:
     with pytest.raises(IndexError, match="out of bounds"):
         dummy_curves_h5_volume.get_curve(y, x)
-
-
 
 
 @pytest.mark.parametrize(
