@@ -454,7 +454,7 @@ class CurvesH5Volume(CurvesVolume):
 
         Parameters
         ----------
-        flip_image: bool (optional)
+        flip_image : bool, optional
             Unused in this function, but is a required parameter for compatability with
             ``Curvesvolume.iter_cuves``.
 
