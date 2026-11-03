@@ -197,7 +197,6 @@ def test_iter_curves(volume_args, volume_data_group, curve_metadata, flip_image,
     shape = volume_args["shape"]
     segments = volume_args["segments"]
     channels = volume_args["channels"]
-    
 
     volume = h5_jpk.CurvesH5Volume(
         name="dummy_curves_h5_volume",
@@ -222,6 +221,7 @@ def test_iter_curves(volume_args, volume_data_group, curve_metadata, flip_image,
 
 # def test_iter_segments(volume_args, volume_data_group, curve_metadata, flip_image, expected_order) -> None:
 #     """Test iterative loading of all segments in an image."""
+
 
 @pytest.mark.parametrize(
     ("y", "x", "flip_image", "expected_curve"),
