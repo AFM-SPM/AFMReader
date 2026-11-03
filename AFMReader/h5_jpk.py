@@ -448,7 +448,7 @@ class CurvesH5Volume(CurvesVolume):
         """
         return self.iter_curves()
 
-    def iter_curves(self) -> Iterator[dict[str, dict[str, np.ndarray]]]:
+    def iter_curves(self, flip_image: bool | None = None) -> Iterator[dict[str, dict[str, np.ndarray]]]:
         """
         Iterate over the QI curve data, yielding one pixel's data at a time.
 
