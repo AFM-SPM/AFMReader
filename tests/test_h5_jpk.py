@@ -220,8 +220,8 @@ def test_iter_curves(volume_args, volume_data_group, curve_metadata, flip_image,
                 np.testing.assert_array_equal(curve[channel][segment], np.arange(offsets[k], offsets[k + 1]))
 
 
-def test_iter_segments(volume_args, volume_data_group, curve_metadata, flip_image, expected_order) -> None:
-    """Test iterative loading of all segments in an image."""
+# def test_iter_segments(volume_args, volume_data_group, curve_metadata, flip_image, expected_order) -> None:
+#     """Test iterative loading of all segments in an image."""
 
 @pytest.mark.parametrize(
     ("y", "x", "flip_image", "expected_curve"),
