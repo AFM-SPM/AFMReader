@@ -57,7 +57,7 @@ can be specified with the `config_path` parameter which should point to the loca
 |             | `grid_jlength`       | `32839`       |
 |             | `slot_size`          | `48`          |
 
-## AFMScan
+## AFMScan dataclass
 
 A processed scan's data (from any available file type) will be returned as an `AFMScan` dataclass object.
 Data such as the image itself, the pixel to nm scaling factor and metadata are attributes of this dataclass.
