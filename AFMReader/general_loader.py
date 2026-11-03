@@ -3,7 +3,6 @@
 from pathlib import Path
 from typing import Any
 
-# from AFMReader import ardf
 from AFMReader import asd, gwy, h5_jpk, ibw, jpk, jpk_qi, raw_bin, spm, stp, top, topostats
 from AFMReader.data_classes import AFMScan
 from AFMReader.logging import logger
