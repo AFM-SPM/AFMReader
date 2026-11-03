@@ -32,6 +32,7 @@ awaiting refactoring to move their functionality into AFMReader these are denote
 | `.nhf`      | [Nanosurf](https://www.nanosurf.com/en/)                | To Be Implemented. |
 | `.aris`     | [Imaris Oxford Instruments](https://imaris.oxinst.com/) | To Be Implemented. |
 | `.tiff`     | [Park Systems](https://www.parksystems.com/)            | To Be Implemented. |
+| `.ardf`     | [Oxford Instruments](https://afm.oxinst.com/)           | To Be Implemented. |
 
 ## Configuration
 
