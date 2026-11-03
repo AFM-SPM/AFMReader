@@ -16,11 +16,7 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 @pytest.fixture()
 def volume_args():
     """Constants to be used in this script and across other volume related tests."""
-    return {
-        "shape": (2, 2),
-        "segments": ["extend", "retract"],
-        "channels": ["height", "vDeflection"]
-    }
+    return {"shape": (2, 2), "segments": ["extend", "retract"], "channels": ["height", "vDeflection"]}
 
 
 @pytest.fixture()
@@ -51,6 +47,7 @@ def channel_group():
     with h5py.File("in_memory.h5", "w", driver="core", backing_store=False) as f:
         yield f.create_group("Measurement_000/Channel_001")
 
+
 @pytest.fixture
 def volume_data_group(h5_file, volume_args):
     """Volume data group laid out like Curve_Data/<name>_VOLM/Data, where curve k has k + 1 points."""
@@ -61,7 +58,9 @@ def volume_data_group(h5_file, volume_args):
     for segment in volume_args["segments"]:
         for channel in volume_args["channels"]:
             group[f"{segment}/Indices/{channel}"] = offsets  # was f"Curves/{segment}/Indices/{channel}"
-            group[f"{segment}/Data/{channel}"] = np.arange(offsets[-1], dtype=np.float64)  # was f"Curves/{segment}/Data/{channel}"
+            group[f"{segment}/Data/{channel}"] = np.arange(
+                offsets[-1], dtype=np.float64
+            )  # was f"Curves/{segment}/Data/{channel}"
     group["not_a_segment"] = np.zeros(3)  # non-group member, which must be skipped
     return group
 
@@ -108,7 +107,7 @@ def curve_metadata(h5_file, volume_args):
     """Metadata for the dummy volume, with an empty metadata group."""
     shape = volume_args["shape"]
     segments = volume_args["segments"]
-    
+
     group = h5_file.create_group("Measurement_000/CurveMetadata")
     return h5_jpk.CurvesH5Metadata(
         group, shape=shape, channel_units={"height": "m", "vDeflection": "V"}, segment_names=segments, flip_image=True

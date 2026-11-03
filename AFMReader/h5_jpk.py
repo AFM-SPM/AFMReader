@@ -459,9 +459,7 @@ class CurvesH5Volume(CurvesVolume):
         """
         rows, cols = self.shape
         # Segment groups (e.g. Extend, Retract) sit directly in the volume's data group; skip any non-group members
-        segment_groups = {
-            name: item for name, item in self.volume_data_group.items() if isinstance(item, h5py.Group)
-        }
+        segment_groups = {name: item for name, item in self.volume_data_group.items() if isinstance(item, h5py.Group)}
 
         # Read all the indices into memory first for all segments and channels (as these are small).
         # `Indices` holds one dataset per channel, giving where each pixel's curve starts in that segment's
@@ -496,7 +494,6 @@ class CurvesH5Volume(CurvesVolume):
                         end_idx = int(indices[row_start + x + 1]) - row_offset
                         curve_data[channel][segment_name] = segment_data[start_idx:end_idx]
                 yield curve_data
-
 
     def iter_segments(
         self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1
