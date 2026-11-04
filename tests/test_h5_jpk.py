@@ -476,7 +476,7 @@ def test_load_h5jpk(
     assert afm_load.z_units == unit
 
 
-@pytest.mark.skip(reason="Test files are too large to store in the repo; a remote storage solution is needed.")
+# @pytest.mark.skip(reason="Test files are too large to store in the repo; a remote storage solution is needed.")
 @pytest.mark.parametrize(
     (
         "file_name",
@@ -492,12 +492,10 @@ def test_load_h5jpk(
             "height_trace",
             True,
             (0, 0),
-            "Segment_0",
+            "extend",
             {
-                "height": (31, 0.00019106604),
-                "measuredHeight": (31, 0.00027384484),
-                "smoothedMeasuredHeight": (31, -38066577408.0),
-                "vDeflection": (31, 2.7409627e-07),
+                "height": (24, 1.2e-05),
+                "vDeflection": (24, 1.1863341275153487e-07),
             },
             id="test curves 0",
         ),
@@ -534,6 +532,7 @@ def test_load_h5jpk_curves(
     assert curve_dataset is not None
     curve_at_coords = curve_dataset.get_default_volume()[curve_coords[0], curve_coords[1]]
     for curve_channel, (expected_size, expected_sum) in curve_targets.items():
+        print(curve_at_coords.keys())
         curve = curve_at_coords[curve_channel][curve_direction]
         assert curve.shape == (expected_size,)
         assert curve.sum() == pytest.approx(expected_sum)
