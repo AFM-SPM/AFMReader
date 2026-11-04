@@ -11,7 +11,7 @@ BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
 
 
-@pytest.mark.skip(reason="Test files are too large to store in the repo; a remote storage solution is needed.")
+# @pytest.mark.skip(reason="Test files are too large to store in the repo; a remote storage solution is needed.")
 @pytest.mark.parametrize(
     (
         "file_name",
@@ -28,85 +28,85 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         pytest.param(
             "sample_0.jpk-qi-data",
             "height_trace",
-            390.62499999999994,
+            99.99999999999989,
             (256, 256),
             float,
-            412271271.9961158,
+            189899202.3380369,
             (0, 0),
-            "Segment_0",
+            "Extend",
             {
-                "height": (31, 0.00019106601492896875),
-                "vDeflection": (31, 2.740962611337846e-07),
-                "measuredHeight": (31, 0.00027384485398464497),
-                "smoothedMeasuredHeight": (31, -38066578894.999535),
+                "height": (121, 0.0003540424940311566),
+                "Vertical Deflection": (121, 1.6379227487083055e-07),
+                "Height (Measured)": (121, 0.000420769736210223),
+                "Lateral Deflection": (121, -53.68046313645267),
             },
             id="qi-data 0; height_trace",
         ),
         pytest.param(
             "sample_0.jpk-qi-data",
             "slope_trace",
-            390.62499999999994,
+            99.99999999999989,
             (256, 256),
             float,
-            267675.3050073493,
+            7370.169032247781,
             (0, 0),
-            "Segment_0",
+            "Extend",
             {
-                "height": (31, 0.00019106601492896875),
-                "vDeflection": (31, 2.740962611337846e-07),
-                "measuredHeight": (31, 0.00027384485398464497),
-                "smoothedMeasuredHeight": (31, -38066578894.999535),
+                "height": (121, 0.0003540424940311566),
+                "Vertical Deflection": (121, 1.6379227487083055e-07),
+                "Height (Measured)": (121, 0.000420769736210223),
+                "Lateral Deflection": (121, -53.68046313645267),
             },
             id="qi-data 0; slope_trace",
         ),
         pytest.param(
             "sample_0.jpk-qi-data",
             "adhesion_trace",
-            390.62499999999994,
+            99.99999999999989,
             (256, 256),
             float,
-            0.0008930453784792601,
+            1.550791819528104e-05,
             (0, 0),
-            "Segment_0",
+            "Extend",
             {
-                "height": (31, 0.00019106601492896875),
-                "vDeflection": (31, 2.740962611337846e-07),
-                "measuredHeight": (31, 0.00027384485398464497),
-                "smoothedMeasuredHeight": (31, -38066578894.999535),
+                "height": (121, 0.0003540424940311566),
+                "Vertical Deflection": (121, 1.6379227487083055e-07),
+                "Height (Measured)": (121, 0.000420769736210223),
+                "Lateral Deflection": (121, -53.68046313645267),
             },
             id="qi-data 0; adhesion_trace",
         ),
         pytest.param(
             "sample_0.jpk-qi-data",
             "measuredHeight_trace",
-            390.62499999999994,
+            99.99999999999989,
             (256, 256),
             float,
-            590908347.7454677,
+            223855050.55169588,
             (0, 0),
-            "Segment_0",
+            "Extend",
             {
-                "height": (31, 0.00019106601492896875),
-                "vDeflection": (31, 2.740962611337846e-07),
-                "measuredHeight": (31, 0.00027384485398464497),
-                "smoothedMeasuredHeight": (31, -38066578894.999535),
+                "height": (121, 0.0003540424940311566),
+                "Vertical Deflection": (121, 1.6379227487083055e-07),
+                "Height (Measured)": (121, 0.000420769736210223),
+                "Lateral Deflection": (121, -53.68046313645267),
             },
             id="qi-data 0; measuredHeight_trace",
         ),
         pytest.param(
             "sample_0.jpk-qi-data",
             "vDeflection_trace",
-            390.62499999999994,
+            99.99999999999989,
             (256, 256),
             float,
-            0.0004062236060247368,
+            0.00017690850877567513,
             (0, 0),
-            "Segment_0",
+            "Extend",
             {
-                "height": (31, 0.00019106601492896875),
-                "vDeflection": (31, 2.740962611337846e-07),
-                "measuredHeight": (31, 0.00027384485398464497),
-                "smoothedMeasuredHeight": (31, -38066578894.999535),
+                "height": (121, 0.0003540424940311566),
+                "Vertical Deflection": (121, 1.6379227487083055e-07),
+                "Height (Measured)": (121, 0.000420769736210223),
+                "Lateral Deflection": (121, -53.68046313645267),
             },
             id="qi-data 0; vDeflection_trace",
         ),
@@ -139,6 +139,7 @@ def test_load_jpk_qi_data(  # pylint: disable=too-many-arguments,too-many-positi
     assert curve_dataset is not None, "Curves data not found/ is None"
     curve_at_coords = curve_dataset.get_default_volume()[curve_coords[0], curve_coords[1]]
     for curve_channel, (expected_size, expected_sum) in curve_targets.items():
+        print(curve_at_coords.keys())
         curve = curve_at_coords[curve_channel][curve_direction]
         assert curve.shape == (expected_size,)
         assert curve.sum() == pytest.approx(expected_sum)
