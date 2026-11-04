@@ -476,7 +476,6 @@ def test_load_h5jpk(
     assert afm_load.z_units == unit
 
 
-# @pytest.mark.skip(reason="Test files are too large to store in the repo; a remote storage solution is needed.")
 @pytest.mark.parametrize(
     (
         "file_name",
