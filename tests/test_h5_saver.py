@@ -71,6 +71,7 @@ def test_setup_curves_group(saver, channel_units) -> None:
     expected = {f"channel.unit.{name}": unit for name, unit in (channel_units or {}).items()}
     assert unit_attrs == expected
 
+
 def test_setup_curves_group_twice_keeps_existing(saver) -> None:
     saver.create_file()
     saver.setup_curves_group({"height": "m"})
@@ -81,6 +82,7 @@ def test_setup_curves_group_twice_keeps_existing(saver) -> None:
     assert "existing" in saver.curve_data_group
     assert saver.global_meta_group.attrs["channel.unit.height"] == "m"
     assert saver.global_meta_group.attrs["channel.unit.vDeflection"] == "N"
+
 
 def test_setup_curves_group_without_file_raises(saver) -> None:
     with pytest.raises(AssertionError, match="create_file called before"):
@@ -105,6 +107,7 @@ class DummyCurvesVolume(CurvesVolume):
 N_CURVES = 4
 ALLOCATED_POINTS = 100
 
+
 def test_complete_saving(volume_saver):
     volume = DummyCurvesVolume()
     data_group = volume_saver.setup_volume(volume)
@@ -115,10 +118,10 @@ def test_complete_saving(volume_saver):
     assert data_group["extend/Indices/height"][-1] == 30
     assert data_group["extend/Data/height"].shape == (30,)
 
+
 def test_complete_saving_without_file_raises(saver, dummy_curves_volume) -> None:
     with pytest.raises(AssertionError, match="create_file called before complete_saving"):
         saver.complete_saving(dummy_curves_volume)
-
 
 
 @pytest.mark.parametrize(
@@ -153,6 +156,7 @@ def test_predict_total_points(saver, monkeypatch, sample, missing, expected) -> 
 
     assert result == {"extend": {"height": expected}}
 
+
 def test_predict_total_points_no_readable_curves(saver, monkeypatch) -> None:
     monkeypatch.setattr(saver, "get_curves_sample", lambda shape_x, shape_y: [5])
 
@@ -181,6 +185,7 @@ def test_setup_volume_create_datasets(volume_saver) -> None:
     assert volume_saver.volumes_data_buffer["test"] == {"extend": {"height": {"Data": [], "Indices": []}}}
     assert volume_saver.volumes_dims["test"] == (2, 3)
 
+
 def test_setup_volume_create_metadata_datasets(volume_saver) -> None:
     volume_saver.setup_volume(DummyCurvesVolume(), changing_curve_keys={"force"}, changing_segment_keys={"speed"})
 
@@ -199,7 +204,6 @@ def test_setup_volume_create_metadata_datasets(volume_saver) -> None:
     assert segment_set.name == meta_group["segment.speed"].name
     assert segment_buffer == []
     assert volume_saver.segment_search_terms["test"] == [b"speed="]
-
 
 
 def test_save_curve_segments():
@@ -221,8 +225,10 @@ def test_get_curve_search_terms():
 def test_save_curve_meta_attr():
     pass
 
+
 N_CURVES = 3
 N_SEGMENTS = 2
+
 
 def test_save_segment_meta_attr():
     pass
@@ -240,6 +246,7 @@ def test_save_global_meta_metadata(ready_saver, monkeypatch) -> None:
     assert attrs["instrument"] == "JPK"
     # h5py can't store a dict, fall back to the string form
     assert attrs["settings"] == str({"a": 1})
+
 
 def test_save_global_meta_grid(ready_saver) -> None:
     ready_saver.save_global_meta({}, size_x=3e-6, size_y=2e-6, shape_x=3, shape_y=2)
@@ -276,23 +283,26 @@ def test_save_image(saver, image_name, channel_name, is_retrace, dataset_name) -
     # Image is stored flat
     np.testing.assert_array_equal(chan_grp[dataset_name][:], [[0], [1], [2], [3], [4], [5]])
 
+
 def test_save_image_separate_channels(saver) -> None:
     saver.create_file()
 
     saver.save_image(np.zeros((2, 2)), "height_trace", z_unit="m", idx=0)
     saver.save_image(np.ones((2, 2)), "adhesion_trace", z_unit="N", idx=1)
 
-    np.testing.assert_array_equal(saver.h5file[
-        f"Measurement_000/Channel_{make_num_min_characters(0)}"
-    ]["Height"][:], np.zeros((4, 1)))
+    np.testing.assert_array_equal(
+        saver.h5file[f"Measurement_000/Channel_{make_num_min_characters(0)}"]["Height"][:], np.zeros((4, 1))
+    )
 
-    np.testing.assert_array_equal(saver.h5file[
-        f"Measurement_000/Channel_{make_num_min_characters(1)}"
-    ]["Adhesion"][:], np.ones((4, 1)))
+    np.testing.assert_array_equal(
+        saver.h5file[f"Measurement_000/Channel_{make_num_min_characters(1)}"]["Adhesion"][:], np.ones((4, 1))
+    )
 
-    assert saver.h5file[
-        f"Measurement_000/Channel_{make_num_min_characters(1)}"
-    ].attrs["net-encoder.scaling.unit.unit"] == "N"
+    assert (
+        saver.h5file[f"Measurement_000/Channel_{make_num_min_characters(1)}"].attrs["net-encoder.scaling.unit.unit"]
+        == "N"
+    )
+
 
 # -----------------------
 
