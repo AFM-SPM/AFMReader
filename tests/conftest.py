@@ -159,3 +159,17 @@ def saver(tmp_path: Path):
     h5file = getattr(saver, "h5file", None)
     if h5file:
         h5file.close()
+
+@pytest.fixture
+def ready_saver(saver):
+    """A saver with a file and curve groups set up, ready to save metadata."""
+    saver.create_file()
+    saver.setup_curves_group()
+    return saver
+
+@pytest.fixture
+def volume_saver(saver, monkeypatch):
+    """A saver with a file open and a fixed points prediction of 50 for the dummy volume."""
+    saver.create_file()
+    monkeypatch.setattr(saver, "predict_total_points", lambda curves_volume: {"extend": {"height": 50}})
+    return saver

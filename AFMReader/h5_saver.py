@@ -243,10 +243,17 @@ class H5Saver:
         # maximum points throughout data is no more than 10% higher
         for segment_name in curves_volume.metadata.segment_names:
             predicted_points_per_channel_segment[segment_name] = {}
-            for channel in points_for_channel_segment[segment_name]:
+            for channel, counts in points_for_channel_segment[segment_name].items():
+                if not counts:
+                    raise ValueError(
+                        f"None of the sampled curves could be read, so the number of points for segment "
+                        f"'{segment_name}', channel '{channel}' can't be predicted."
+                    )
+                max_points = max(counts)
                 predicted_points_per_channel_segment[segment_name][channel] = (
-                    int(np.max(points_for_channel_segment[segment_name][channel]) * 1.1) * num_of_curves
-                )
+                    max_points + (max_points + 9) // 10
+                ) * num_of_curves
+
         return predicted_points_per_channel_segment
 
     def setup_volume(
@@ -391,7 +398,7 @@ class H5Saver:
         segment_name: str,
         channel_name: str,
         num_of_curves: int,
-    ):
+    ) -> None:
         """
         Save a curve segment's data and indices to the h5 file.
 
