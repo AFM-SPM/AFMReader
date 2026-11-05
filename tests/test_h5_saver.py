@@ -90,6 +90,7 @@ def test_setup_curves_group_without_file_raises(saver):
 N_CURVES = 4
 ALLOCATED_POINTS = 100
 
+
 def test_complete_saving(saver, dummy_curves_volume):
     h5file = saver.create_file()
     saver.volume_datasets = {dummy_curves_volume.name: {}}
@@ -112,22 +113,25 @@ def test_complete_saving(saver, dummy_curves_volume):
 
     saver.complete_saving(dummy_curves_volume)
 
+
 def test_complete_saving_without_file_raises(saver, dummy_curves_volume):
     with pytest.raises(AssertionError, match="create_file called before complete_saving"):
         saver.complete_saving(dummy_curves_volume)
 
+
 @pytest.mark.parametrize(
-        ("shape_x", "shape_y", "minimum_sample_size", "expected"),
-        [
-            pytest.param(8, 8, 3, range(0, 64, 21), id="standard"),
-            pytest.param(2, 2, 2, range(4), id="min equal to shape dim"),
-            pytest.param(2, 2, 8, range(4), id="min exceeds pixel count")
-        ]
+    ("shape_x", "shape_y", "minimum_sample_size", "expected"),
+    [
+        pytest.param(8, 8, 3, range(0, 64, 21), id="standard"),
+        pytest.param(2, 2, 2, range(4), id="min equal to shape dim"),
+        pytest.param(2, 2, 8, range(4), id="min exceeds pixel count"),
+    ],
 )
 def test_get_curves_sample(saver, shape_x, shape_y, minimum_sample_size, expected):
     sample_nums = saver.get_curves_sample(shape_x, shape_y, minimum_sample_size)
 
     assert sample_nums == expected
+
 
 # def test_predict_total_points(saver, dummy_curves_volume) -> None:
 #     predicted_points_per_channel_segment = saver.predict_total_points(dummy_curves_volume)

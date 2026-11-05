@@ -59,9 +59,7 @@ def volume_data_group(h5_file, volume_args):
     for segment in volume_args["segments"]:
         for channel in volume_args["channels"]:
             group[f"{segment}/Indices/{channel}"] = offsets
-            group[f"{segment}/Data/{channel}"] = np.arange(
-                offsets[-1], dtype=np.float64
-            )
+            group[f"{segment}/Data/{channel}"] = np.arange(offsets[-1], dtype=np.float64)
     group["not_a_segment"] = np.zeros(3)  # non-group member, which must be skipped
     return group
 
@@ -142,12 +140,7 @@ def dummy_curves_volume_metadata(volume_args):
 def dummy_curves_volume(volume_args, dummy_curves_volume_metadata):
     shape = volume_args["shape"]
 
-    return CurvesVolume(
-        "name",
-        shape,
-        dummy_curves_volume_metadata,
-        False
-    )
+    return CurvesVolume("name", shape, dummy_curves_volume_metadata, False)
 
 
 @pytest.fixture
