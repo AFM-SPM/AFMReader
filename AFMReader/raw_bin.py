@@ -1,0 +1,125 @@
+"""Module to decode and load .bin AFM files into Python Numpy arrays."""
+
+import math
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from AFMReader.data_classes import AFMScan
+
+from .logging import logger
+
+# pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,fixme
+
+DTYPE_MAP = {
+    "IEEE double": np.float64,
+    "DBL": np.float64,
+    "IEEE single": np.float32,
+    "SGL": np.float32,
+    "U32": np.uint32,
+    "I32": np.int32,
+    "U16": np.uint16,
+    "I16": np.int16,
+    "U8": np.uint8,
+    "I8": np.int8,
+    "float64": np.float64,
+    "float32": np.float32,
+    "int32": np.int32,
+}
+
+
+def load_bin(
+    filepath: str | Path,
+    data_type: str,
+    offset_bytes: int,
+    size_x: float | None = None,
+    size_y: float | None = None,
+    shape_x: int | None = None,
+    shape_y: int | None = None,
+    z_scaling: float = 1.0,
+    z_unit: str = "nm",
+) -> AFMScan:
+    """
+    Load image from binary file. Parameters to interpret the binary file must be provided.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the binary file.
+    data_type : str
+        Data type of the binary file.
+    offset_bytes : int
+        Number of bytes to skip at the beginning of the file.
+    size_x : float, optional
+        Real world size of the image in the x direction (default is None).
+    size_y : float, optional
+        Real world size of the image in the y direction (default is None).
+    shape_x : int, optional
+        Number of pixels in the x direction (default is None).
+    shape_y : int, optional
+        Number of pixels in the y direction (default is None).
+    z_scaling : float, optional
+        Scaling factor for the z values (default is 1.0).
+    z_unit : str, optional
+        Unit of the z values (default is "nm").
+
+    Returns
+    -------
+    AFMScan
+        An AFMScan object containing the image, its pixel to nanometre scaling value, and z-axis units.
+    """
+    filepath = Path(filepath)
+    dt_key = str(data_type).strip()
+    shape_x = None if shape_x == 0 else shape_x
+    shape_y = None if shape_y == 0 else shape_y
+
+    # Confirm dtype of input data
+    if dt_key in DTYPE_MAP:
+        np_dtype = DTYPE_MAP[dt_key]
+    else:
+        logger.warning(f"Unknown data type '{dt_key}'. Defaulting to float64.")
+        np_dtype = np.float64
+    # Read data from correct position in file
+    with filepath.open("rb") as f:
+        f.seek(offset_bytes)
+        flat_data = np.fromfile(f, dtype=np_dtype)
+    # If x or y size has not been specified calculate both from the length of the flattened data (sqrt)
+    if None in [shape_x, shape_y]:
+        dimension = int(math.sqrt(len(flat_data)))
+        shape_x, shape_y = dimension, dimension
+    # Ensure both the pixel count and real world size exists for each axis - first assert not necessary but satisfies mypy
+    assert shape_x is not None and shape_y is not None
+    assert size_x is not None and size_y is not None
+    if shape_x * shape_y != len(flat_data):
+        logger.error(f"Loading binary file {filepath.stem} did not receive a shape and is not square")
+        raise ValueError(
+            f"{filepath.stem}: {len(flat_data)} values cannot be reshaped to {shape_y} x {shape_x} (rows x cols)."
+        )
+    # Float conversion to avoid int * float errors
+    image = flat_data.reshape((shape_y, shape_x)).astype(np.float64) * z_scaling
+    pixel_to_nm_scaling_factor_x = size_x / shape_x if shape_x > 0 else 1.0
+    pixel_to_nm_scaling_factor_y = size_y / shape_y if shape_y > 0 else 1.0
+    pixel_to_nanometre_scaling = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
+    return AFMScan(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=z_unit)
+
+
+def get_bin_params() -> dict[str, Any]:
+    """
+    Get the expected keyword arguments for loading a binary file.
+
+    Returns
+    -------
+    dict
+        Dictionary of expected keyword arguments for loading a binary file.
+    """
+    return {
+        "data_type": (str, DTYPE_MAP.keys()),
+        "offset_bytes": int,
+        "size_x": float,
+        "size_y": float,
+        "shape_x": int,
+        "shape_y": int,
+        "z_scaling": float,
+        "z_unit": str,
+    }

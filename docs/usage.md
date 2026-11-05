@@ -32,6 +32,7 @@ awaiting refactoring to move their functionality into AFMReader these are denote
 | `.nhf`      | [Nanosurf](https://www.nanosurf.com/en/)                | To Be Implemented. |
 | `.aris`     | [Imaris Oxford Instruments](https://imaris.oxinst.com/) | To Be Implemented. |
 | `.tiff`     | [Park Systems](https://www.parksystems.com/)            | To Be Implemented. |
+| `.ardf`     | [Oxford Instruments](https://afm.oxinst.com/)           | To Be Implemented. |
 
 ## Configuration
 
@@ -56,6 +57,14 @@ can be specified with the `config_path` parameter which should point to the loca
 |             | `grid_jlength`       | `32839`       |
 |             | `slot_size`          | `48`          |
 
+## AFMScan dataclass
+
+A processed scan's data (from any available file type) will be returned as an `AFMScan` dataclass object.
+Data such as the image itself, the pixel to nm scaling factor and metadata are attributes of this dataclass.
+
+Each example below returns an instance of `AFMScan` into `scan_data`. From here individual attributes can be
+selected:
+
 ## .topostats
 
 You can open `.topostats` files using the `load_topostats` function. Just pass in the path to the file.
@@ -63,7 +72,11 @@ You can open `.topostats` files using the `load_topostats` function. Just pass i
 ```python
 from AFMReader.topostats import load_topostats
 
-image, pixel_to_nanometre_scaling_factor, metadata = load_topostats(file_path="./my_topostats_file.topostats")
+scan_data = load_topostats(file_path="./my_topostats_file.topostats")
+
+image = scan_data.image
+pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling
+metadata = scan_data.metadata
 ```
 
 ## .spm
@@ -75,7 +88,10 @@ channel name that you want to use. (If in doubt use one of the following: "Heigh
 ```python
 from AFMReader.spm import load_spm
 
-image, pixel_to_nanometre_scaling_factor = load_spm(file_path="./my_spm_file.spm", channel="Height")
+scan_data = load_spm(file_path="./my_spm_file.spm", channel="Height")
+
+image = scan_data.image
+pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling
 ```
 
 ## .gwy
@@ -87,7 +103,10 @@ channel name that you want to use. (If in doubt use one one of the following: "H
 ```python
 from AFMReader.gwy import load_gwy
 
-image, pixel_to_nanometre_scaling_factor = load_gwy(file_path="./my_gwy_file.gwy", channel="Height")
+scan_data = load_gwy(file_path="./my_gwy_file.gwy", channel="Height")
+
+image = scan_data.image
+pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling_factor
 ```
 
 ## .asd
@@ -103,7 +122,11 @@ Other channels: `"ER"` - Error, `"PH"` - Phase
 ```python
 from AFMReader.asd import load_asd
 
-frames, pixel_to_nanometre_scaling_factor, metadata = load_asd(file_path="./my_asd_file.asd", channel="TP")
+scan_data = load_asd(file_path="./my_asd_file.asd", channel="TP")
+
+frames = scan_data.frames
+pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling_factor
+metadata = scan_data.metadata
 ```
 
 ## .ibw
@@ -115,7 +138,10 @@ extra 'e'), `ZSensorTrace`, or `ZSensor`).
 ```python
 from AFMReader.ibw import load_ibw
 
-image, pixel_to_nanometre_scaling_factor = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTrace")
+scan_data = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTrace")
+
+image = scan_data.image
+pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling_factor
 ```
 
 ## .jpk
@@ -126,5 +152,8 @@ to the file and the channel name you want to use. (If in doubt, use `height_trac
 ```python
 from AFMReader.jpk import load_jpk
 
-image, pixel_to_nanometre_scaling_factor = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
+scan_data = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
+
+image = scan_data.image
+pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling_factor
 ```
