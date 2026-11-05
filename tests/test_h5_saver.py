@@ -27,6 +27,7 @@ from AFMReader.h5_saver import H5Saver, find_unused_filename, make_num_min_chara
     ],
 )
 def test_create_file(saver, source, file_exists, expected_source) -> None:
+    """Create an h5 file and then open it, checking the contents is what is expected."""
     if file_exists:
         with h5py.File(saver.filepath, "w") as f:
             f["existing"] = [1, 2, 3]
@@ -206,23 +207,23 @@ def test_setup_volume_create_metadata_datasets(volume_saver) -> None:
     assert volume_saver.segment_search_terms["test"] == [b"speed="]
 
 
-def test_save_curve_segments():
+def test_save_curve_segments() -> None:
     pass
 
 
-def test_save_curve():
+def test_save_curve() -> None:
     pass
 
 
-def test_get_segment_search_terms():
+def test_get_segment_search_terms() -> None:
     pass
 
 
-def test_get_curve_search_terms():
+def test_get_curve_search_terms() -> None:
     pass
 
 
-def test_save_curve_meta_attr():
+def test_save_curve_meta_attr() -> None:
     pass
 
 
