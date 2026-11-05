@@ -153,12 +153,14 @@ def saver(tmp_path: Path):
     if h5file:
         h5file.close()
 
+
 @pytest.fixture
 def ready_saver(saver):
     """A saver with a file and curve groups set up, ready to save metadata."""
     saver.create_file()
     saver.setup_curves_group()
     return saver
+
 
 @pytest.fixture
 def volume_saver(saver, monkeypatch):
