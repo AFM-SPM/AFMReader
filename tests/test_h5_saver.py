@@ -120,13 +120,14 @@ def test_complete_saving_without_file_raises(saver, dummy_curves_volume) -> None
         saver.complete_saving(dummy_curves_volume)
 
 
+
 @pytest.mark.parametrize(
-        ("shape_x", "shape_y", "minimum_sample_size", "expected"),
-        [
-            pytest.param(8, 8, 3, range(0, 64, 21), id="standard"),
-            pytest.param(2, 2, 2, range(4), id="min equal to shape dim"),
-            pytest.param(2, 2, 8, range(4), id="min exceeds pixel count")
-        ]
+    ("shape_x", "shape_y", "minimum_sample_size", "expected"),
+    [
+        pytest.param(8, 8, 3, range(0, 64, 21), id="standard"),
+        pytest.param(2, 2, 2, range(4), id="min equal to shape dim"),
+        pytest.param(2, 2, 8, range(4), id="min exceeds pixel count"),
+    ],
 )
 def test_get_curves_sample(saver, shape_x, shape_y, minimum_sample_size, expected) -> None:
     sample_nums = saver.get_curves_sample(shape_x, shape_y, minimum_sample_size)

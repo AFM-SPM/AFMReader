@@ -59,9 +59,7 @@ def volume_data_group(h5_file, volume_args):
     for segment in volume_args["segments"]:
         for channel in volume_args["channels"]:
             group[f"{segment}/Indices/{channel}"] = offsets
-            group[f"{segment}/Data/{channel}"] = np.arange(
-                offsets[-1], dtype=np.float64
-            )
+            group[f"{segment}/Data/{channel}"] = np.arange(offsets[-1], dtype=np.float64)
     group["not_a_segment"] = np.zeros(3)  # non-group member, which must be skipped
     return group
 
@@ -142,12 +140,7 @@ def dummy_curves_volume_metadata(volume_args):
 def dummy_curves_volume(volume_args, dummy_curves_volume_metadata):
     shape = volume_args["shape"]
 
-    return CurvesVolume(
-        "name",
-        shape,
-        dummy_curves_volume_metadata,
-        False
-    )
+    return CurvesVolume("name", shape, dummy_curves_volume_metadata, False)
 
 
 @pytest.fixture
@@ -159,6 +152,7 @@ def saver(tmp_path: Path):
     h5file = getattr(saver, "h5file", None)
     if h5file:
         h5file.close()
+<<<<<<< HEAD
 
 @pytest.fixture
 def ready_saver(saver):
@@ -173,3 +167,5 @@ def volume_saver(saver, monkeypatch):
     saver.create_file()
     monkeypatch.setattr(saver, "predict_total_points", lambda curves_volume: {"extend": {"height": 50}})
     return saver
+=======
+>>>>>>> 18284309496e56299d36eee608004583c55e8add
