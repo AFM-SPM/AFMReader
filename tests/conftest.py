@@ -152,7 +152,6 @@ def saver(tmp_path: Path):
     h5file = getattr(saver, "h5file", None)
     if h5file:
         h5file.close()
-<<<<<<< HEAD
 
 @pytest.fixture
 def ready_saver(saver):
@@ -167,5 +166,3 @@ def volume_saver(saver, monkeypatch):
     saver.create_file()
     monkeypatch.setattr(saver, "predict_total_points", lambda curves_volume: {"extend": {"height": 50}})
     return saver
-=======
->>>>>>> 18284309496e56299d36eee608004583c55e8add
