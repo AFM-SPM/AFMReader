@@ -95,7 +95,7 @@ write_to = "AFMReader/_version.py"
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "--cov"
+addopts = "--cov=AFMReader"
 testpaths = [
     "tests",
 ]

@@ -6,6 +6,7 @@ except ImportError:  # Python < 3.11
 from pathlib import Path
 
 import h5py
+import numpy as np
 import pytest
 
 from AFMReader import __version__
@@ -83,14 +84,52 @@ def test_setup_curves_group_without_file_raises(saver):
         saver.setup_curves_group()
 
 
-def test_complete_saving():
-    pass
+N_CURVES = 4
+ALLOCATED_POINTS = 100
 
-def test_get_curves_sample():
-    pass
+def test_complete_saving(saver, dummy_curves_volume):
+    h5file = saver.create_file()
+    saver.volume_datasets = {dummy_curves_volume.name: {}}
+    saver.volume_points_saved = {dummy_curves_volume.name: {}}
+    expected_points = {}
 
-def test_predict_total_points():
-    pass
+    for s, segment in enumerate(dummy_curves_volume.metadata.segment_names):
+        saver.volume_datasets[dummy_curves_volume.name][segment] = {}
+        saver.volume_points_saved[dummy_curves_volume.name][segment] = {}
+        for c, channel in enumerate(dummy_curves_volume.metadata.channel_units):
+            group = h5file.require_group(f"{segment}/{channel}")
+            indices = group.create_dataset("Indices", data=np.zeros(N_CURVES + 1, dtype=np.int64))
+            data = group.create_dataset("Data", data=np.arange(ALLOCATED_POINTS, dtype=float), maxshape=(None,))
+
+            # A different count for each segment/channel, so mixing them up would be caught
+            points_saved = 10 + 5 * s + c
+            saver.volume_datasets[dummy_curves_volume.name][segment][channel] = {"Indices": indices, "Data": data}
+            saver.volume_points_saved[dummy_curves_volume.name][segment][channel] = points_saved
+            expected_points[(segment, channel)] = points_saved
+
+    saver.complete_saving(dummy_curves_volume)
+
+def test_complete_saving_without_file_raises(saver, dummy_curves_volume):
+    with pytest.raises(AssertionError, match="create_file called before complete_saving"):
+        saver.complete_saving(dummy_curves_volume)
+
+@pytest.mark.parametrize(
+        ("shape_x", "shape_y", "minimum_sample_size", "expected"),
+        [
+            pytest.param(8, 8, 3, range(0, 64, 21), id="standard"),
+            pytest.param(2, 2, 2, range(4), id="min equal to shape dim"),
+            pytest.param(2, 2, 8, range(4), id="min exceeds pixel count")
+        ]
+)
+def test_get_curves_sample(saver, shape_x, shape_y, minimum_sample_size, expected):
+    sample_nums = saver.get_curves_sample(shape_x, shape_y, minimum_sample_size)
+
+    assert sample_nums == expected
+
+# def test_predict_total_points(saver, dummy_curves_volume) -> None:
+#     predicted_points_per_channel_segment = saver.predict_total_points(dummy_curves_volume)
+
+#     print(predicted_points_per_channel_segment)
 
 def test_setup_volume():
     pass

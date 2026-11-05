@@ -7,7 +7,8 @@ import numpy as np
 import pySPM
 import pytest
 
-from AFMReader import h5_jpk
+from AFMReader import h5_jpk, h5_saver
+from AFMReader.data_classes import CurvesVolume, CurvesVolumeMetadata
 
 BASE_DIR = Path.cwd()
 RESOURCES = BASE_DIR / "tests" / "resources"
@@ -57,10 +58,10 @@ def volume_data_group(h5_file, volume_args):
     offsets = np.concatenate([[0], np.cumsum(np.arange(1, n_curves + 1))])
     for segment in volume_args["segments"]:
         for channel in volume_args["channels"]:
-            group[f"{segment}/Indices/{channel}"] = offsets  # was f"Curves/{segment}/Indices/{channel}"
+            group[f"{segment}/Indices/{channel}"] = offsets
             group[f"{segment}/Data/{channel}"] = np.arange(
                 offsets[-1], dtype=np.float64
-            )  # was f"Curves/{segment}/Data/{channel}"
+            )
     group["not_a_segment"] = np.zeros(3)  # non-group member, which must be skipped
     return group
 
@@ -98,7 +99,7 @@ def curve_meta_group(volume_args):
         n_curves = shape[0] * shape[1]
         group.create_dataset("curve.index", data=np.arange(n_curves))
         group.create_dataset("segment.index", data=np.arange(n_curves * len(segments)))
-        group.attrs["curve.instrument"] = "JPK"  # constant value, stored as an attribute
+        group.attrs["curve.instrument"] = "JPK"
         yield group
 
 
@@ -124,3 +125,37 @@ def dummy_curves_h5_volume(volume_args, volume_data_group, curve_metadata):
         metadata=curve_metadata,
         flip_image=True,
     )
+
+
+@pytest.fixture
+def dummy_curves_volume_metadata(volume_args):
+    shape = volume_args["shape"]
+    segments = volume_args["segments"]
+    channel_units = {
+        "height": "nm",
+        "vDeflection": "N",
+    }
+    return CurvesVolumeMetadata(shape, channel_units, segments, False)
+
+
+@pytest.fixture
+def dummy_curves_volume(volume_args, dummy_curves_volume_metadata):
+    shape = volume_args["shape"]
+
+    return CurvesVolume(
+        "name",
+        shape,
+        dummy_curves_volume_metadata,
+        False
+    )
+
+
+@pytest.fixture
+def saver(tmp_path: Path):
+    """Init the H5Saver class for tests on functions within it."""
+    saver = h5_saver.H5Saver(filepath=tmp_path / "test.h5-jpk")
+    yield saver
+
+    h5file = getattr(saver, "h5file", None)
+    if h5file:
+        h5file.close()
