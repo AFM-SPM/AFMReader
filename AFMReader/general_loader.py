@@ -73,33 +73,33 @@ class LoadFile:
             self.kwargs = kwargs
         try:
             if self.suffix == ".asd":
-                afm_load = asd.load_asd(self.filepath, self.channel)
+                afm_scan = asd.load_asd(self.filepath, self.channel)
             elif self.suffix == ".gwy":
-                afm_load = gwy.load_gwy(self.filepath, self.channel)
+                afm_scan = gwy.load_gwy(self.filepath, self.channel)
             elif self.suffix == ".ibw":
-                afm_load = ibw.load_ibw(self.filepath, self.channel)
+                afm_scan = ibw.load_ibw(self.filepath, self.channel)
             elif self.suffix in [".jpk", ".jpk-qi-image"]:
-                afm_load = jpk.load_jpk(self.filepath, self.channel)
+                afm_scan = jpk.load_jpk(self.filepath, self.channel)
             elif self.suffix == ".spm":
-                afm_load = spm.load_spm(self.filepath, self.channel)
+                afm_scan = spm.load_spm(self.filepath, self.channel)
             elif self.suffix == ".h5-jpk":
-                afm_load = h5_jpk.load_h5jpk(self.filepath, self.channel)
+                afm_scan = h5_jpk.load_h5jpk(self.filepath, self.channel)
             elif self.suffix in [".jpk-qi-data", ".jpk-force-map"]:
-                afm_load = jpk_qi.load_jpk_data(
+                afm_scan = jpk_qi.load_jpk_data(
                     filepath=self.filepath, channel=self.channel, cached_data=self.cached_data
                 )
             elif self.suffix == ".stp":
-                afm_load = stp.load_stp(self.filepath)
+                afm_scan = stp.load_stp(self.filepath)
             elif self.suffix == ".top":
-                afm_load = top.load_top(self.filepath)
+                afm_scan = top.load_top(self.filepath)
             elif self.suffix == ".topostats":
-                afm_load = topostats.load_topostats(self.filepath, self.channel)
+                afm_scan = topostats.load_topostats(self.filepath, self.channel)
             elif self.suffix == ".bin":
-                afm_load = raw_bin.load_bin(self.filepath, **self.kwargs)
+                afm_scan = raw_bin.load_bin(self.filepath, **self.kwargs)
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
 
-            return afm_load
+            return afm_scan
 
         except ValueError as e:
             logger.error(f"{e}")

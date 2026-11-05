@@ -279,10 +279,10 @@ def load_jpk(
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_jpk
-    >>> afm_load = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
-    >>> image = afm_load.image
-    >>> pixel_to_nanometre_scaling_factor = afm_load.pixel_to_nanometre_scaling
-    >>> z_units = afm_load.z_units
+    >>> afm_scan = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
+    >>> image = afm_scan.image
+    >>> pixel_to_nanometre_scaling_factor = afm_scan.pixel_to_nanometre_scaling
+    >>> z_units = afm_scan.z_units
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)

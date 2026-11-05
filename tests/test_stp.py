@@ -35,11 +35,11 @@ def test_load_stp(
 ) -> None:
     """Test the normal operation of loading a .stp file."""
     file_path = RESOURCES / file_name
-    afm_load = load_stp(file_path=file_path)
+    afm_scan = load_stp(file_path=file_path)
 
-    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(expected_pixel_to_nm_scaling)
-    assert isinstance(afm_load.image, np.ndarray)
-    assert afm_load.image.shape == expected_image_shape
-    assert afm_load.image.dtype == expected_image_dtype
-    assert afm_load.image.sum() == pytest.approx(expected_image_sum)
-    assert afm_load.z_units == expected_z_units
+    assert afm_scan.pixel_to_nanometre_scaling == pytest.approx(expected_pixel_to_nm_scaling)
+    assert isinstance(afm_scan.image, np.ndarray)
+    assert afm_scan.image.shape == expected_image_shape
+    assert afm_scan.image.dtype == expected_image_dtype
+    assert afm_scan.image.sum() == pytest.approx(expected_image_sum)
+    assert afm_scan.z_units == expected_z_units

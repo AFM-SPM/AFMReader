@@ -20,12 +20,12 @@ RESOURCES = BASE_DIR / "tests" / "resources"
 def test_load_asd(file_name: str, channel: str, number_of_frames: int, pixel_to_nm_scaling: float, unit: str) -> None:
     """Test the normal operation of loading a .asd file."""
     file_path = RESOURCES / file_name
-    afm_load = asd.load_asd(file_path, channel)
+    afm_scan = asd.load_asd(file_path, channel)
 
-    assert len(afm_load.image) == number_of_frames
-    assert afm_load.pixel_to_nanometre_scaling == pixel_to_nm_scaling
-    assert isinstance(afm_load.metadata, dict)
-    assert afm_load.z_units == unit
+    assert len(afm_scan.image) == number_of_frames
+    assert afm_scan.pixel_to_nanometre_scaling == pixel_to_nm_scaling
+    assert isinstance(afm_scan.metadata, dict)
+    assert afm_scan.z_units == unit
 
 
 def test_load_asd_file_not_found() -> None:

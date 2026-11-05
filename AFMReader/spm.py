@@ -84,10 +84,10 @@ def load_spm(file_path: Path | str, channel: str) -> AFMScan:
     Sensor'.
 
     >>> from AFMReader.spm import load_spm
-    >>> afm_load = load_spm(file_path="path/to/file.spm", channel="Height")
-    >>> image = afm_load.image
-    >>> pixel_to_nm = afm_load.pixel_to_nanometre_scaling
-    >>> z_units = afm_load.z_units
+    >>> afm_scan = load_spm(file_path="path/to/file.spm", channel="Height")
+    >>> image = afm_scan.image
+    >>> pixel_to_nm = afm_scan.pixel_to_nanometre_scaling
+    >>> z_units = afm_scan.z_units
     ```
     """
     logger.info(f"Loading image from : {file_path}")

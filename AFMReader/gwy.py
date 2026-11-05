@@ -67,10 +67,10 @@ def load_gwy(file_path: Path | str, channel: str) -> AFMScan:
     Sensor'.
 
     >>> from AFMReader.gwy import load_gwy
-    >>> afm_load = load_gwy(file_path="path/to/file.gwy", channel="Height")
-    >>> image = afm_load.image
-    >>> pixel_to_nanometre_scaling = afm_load.pixel_to_nanometre_scaling
-    >>> z_units = afm_load.z_units
+    >>> afm_scan = load_gwy(file_path="path/to/file.gwy", channel="Height")
+    >>> image = afm_scan.image
+    >>> pixel_to_nanometre_scaling = afm_scan.pixel_to_nanometre_scaling
+    >>> z_units = afm_scan.z_units
     ```
     """
     logger.info(f"Loading image from : {file_path}")

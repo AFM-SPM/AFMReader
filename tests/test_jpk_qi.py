@@ -126,16 +126,16 @@ def test_load_jpk_qi_data(  # pylint: disable=too-many-arguments,too-many-positi
     """Test the normal operation of loading a .jpk-qi-data file."""
     file_path = RESOURCES / file_name
     jpk_qi_loader = jpk_qi.JPKQILoader(file_path, channel)
-    afm_load = jpk_qi_loader.load()
+    afm_scan = jpk_qi_loader.load()
 
-    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
-    assert isinstance(afm_load.image, np.ndarray)
-    assert afm_load.image.shape == image_shape
-    assert afm_load.image.dtype == image_dtype
-    assert afm_load.image.sum() == pytest.approx(image_sum)
+    assert afm_scan.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
+    assert isinstance(afm_scan.image, np.ndarray)
+    assert afm_scan.image.shape == image_shape
+    assert afm_scan.image.dtype == image_dtype
+    assert afm_scan.image.sum() == pytest.approx(image_sum)
 
     # Test curve data for all targets
-    curve_dataset = afm_load.curves_dataset
+    curve_dataset = afm_scan.curves_dataset
     assert curve_dataset is not None, "Curves data not found/ is None"
     curve_at_coords = curve_dataset.get_default_volume()[curve_coords[0], curve_coords[1]]
     for curve_channel, (expected_size, expected_sum) in curve_targets.items():

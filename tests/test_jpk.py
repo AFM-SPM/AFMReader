@@ -88,14 +88,14 @@ def test_load_jpk(
 ) -> None:
     """Test the normal operation of loading a .jpk file."""
     file_path = RESOURCES / file_name
-    afm_load = jpk.load_jpk(file_path, channel)
+    afm_scan = jpk.load_jpk(file_path, channel)
 
-    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
-    assert isinstance(afm_load.image, np.ndarray)
-    assert afm_load.image.shape == image_shape
-    assert afm_load.image.dtype == image_dtype
-    assert afm_load.image.sum() == pytest.approx(image_sum)
-    assert afm_load.z_units == unit
+    assert afm_scan.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
+    assert isinstance(afm_scan.image, np.ndarray)
+    assert afm_scan.image.shape == image_shape
+    assert afm_scan.image.dtype == image_dtype
+    assert afm_scan.image.sum() == pytest.approx(image_sum)
+    assert afm_scan.z_units == unit
 
 
 def test_load_jpk_file_not_found() -> None:

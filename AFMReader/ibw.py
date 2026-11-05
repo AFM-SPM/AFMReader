@@ -111,10 +111,10 @@ def load_ibw(file_path: Path | str, channel: str) -> AFMScan:
     (the extra 'e' is not a typo!).
 
     >>> from AFMReader.ibw import load_ibw
-    >>> afm_load = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
-    >>> image = afm_load.image
-    >>> pixel_to_nanometre_scaling_factor = afm_load.pixel_to_nanometre_scaling
-    >>> z_units = afm_load.z_units
+    >>> afm_scan = load_ibw(file_path="./my_ibw_file.ibw", channel="HeightTracee")
+    >>> image = afm_scan.image
+    >>> pixel_to_nanometre_scaling_factor = afm_scan.pixel_to_nanometre_scaling
+    >>> z_units = afm_scan.z_units
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)

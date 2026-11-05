@@ -678,9 +678,9 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
     Load height trace channel from the .jpk file. 'height_trace' is the default channel name.
 
     >>> from AFMReader.jpk import load_h5jpk
-    >>> afm_load = load_h5jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
-    >>> image = afm_load.image
-    >>> pixel_to_nm_scaling = afm_load.pixel_to_nanometre_scaling
+    >>> afm_scan = load_h5jpk(file_path="./my_jpk_file.jpk", channel="height_trace", flip_image=True)
+    >>> image = afm_scan.image
+    >>> pixel_to_nm_scaling = afm_scan.pixel_to_nanometre_scaling
     """
     logger.info(f"Loading H5-JPK file from : {file_path}")
     file_path = Path(file_path)

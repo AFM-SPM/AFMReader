@@ -36,9 +36,9 @@ def load_topostats(file_path: Path | str, channel: str) -> AFMScan:
 
     Examples
     --------
-    >>> afm_load = load_topostats("path/to/topostats_file.topostats", channel="image")
-    >>> image = afm_load.image
-    >>> pixel_to_nm_scaling = afm_load.pixel_to_nanometre_scaling
+    >>> afm_scan = load_topostats("path/to/topostats_file.topostats", channel="image")
+    >>> image = afm_scan.image
+    >>> pixel_to_nm_scaling = afm_scan.pixel_to_nanometre_scaling
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)

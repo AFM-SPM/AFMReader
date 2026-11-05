@@ -459,21 +459,21 @@ def test_load_h5jpk(
     unit: str,
 ) -> None:
     """Test the normal operation of loading a .h5-jpk file."""
-    afm_load = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)
+    afm_scan = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)
 
-    assert afm_load.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
-    assert isinstance(afm_load.image, np.ndarray)
-    assert afm_load.image.shape == image_shape
-    assert afm_load.image.dtype == np.dtype(image_dtype)
-    assert isinstance(afm_load.timestamps, timestamps_dtype)
-    assert afm_load.image.sum() == pytest.approx(image_sum)
-    assert afm_load.timestamps is not None
-    assert len(afm_load.timestamps) == afm_load.image.shape[0]
+    assert afm_scan.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
+    assert isinstance(afm_scan.image, np.ndarray)
+    assert afm_scan.image.shape == image_shape
+    assert afm_scan.image.dtype == np.dtype(image_dtype)
+    assert isinstance(afm_scan.timestamps, timestamps_dtype)
+    assert afm_scan.image.sum() == pytest.approx(image_sum)
+    assert afm_scan.timestamps is not None
+    assert len(afm_scan.timestamps) == afm_scan.image.shape[0]
     assert all(
-        afm_load.timestamps[f"frame {i}"] < afm_load.timestamps[f"frame {i + 1}"]
-        for i in range(len(afm_load.timestamps) - 1)
+        afm_scan.timestamps[f"frame {i}"] < afm_scan.timestamps[f"frame {i + 1}"]
+        for i in range(len(afm_scan.timestamps) - 1)
     )
-    assert afm_load.z_units == unit
+    assert afm_scan.z_units == unit
 
 
 @pytest.mark.parametrize(
@@ -526,8 +526,8 @@ def test_load_h5jpk_curves(
     curve_targets : dict[str, tuple[int, float]]
         A dictionary mapping curve channels to their expected size and sum, used for validating the loaded curve data.
     """
-    afm_load = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)
-    curve_dataset = afm_load.curves_dataset
+    afm_scan = h5_jpk.load_h5jpk(RESOURCES / file_name, channel, flip_image)
+    curve_dataset = afm_scan.curves_dataset
     assert curve_dataset is not None
     curve_at_coords = curve_dataset.get_default_volume()[curve_coords[0], curve_coords[1]]
     for curve_channel, (expected_size, expected_sum) in curve_targets.items():
