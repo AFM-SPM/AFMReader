@@ -463,6 +463,9 @@ class CurvesH5Volume(CurvesVolume):
         dict
             A dictionary containing the QI curve data for each channel and segment for a pixel.
         """
+        if flip_image is None:
+            flip_image = self.flip_image
+
         rows, cols = self.shape
         # Segment groups (e.g. Extend, Retract) sit directly in the volume's data group; skip any non-group members
         segment_groups = {name: item for name, item in self.volume_data_group.items() if isinstance(item, h5py.Group)}

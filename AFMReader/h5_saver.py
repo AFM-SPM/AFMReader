@@ -250,6 +250,8 @@ class H5Saver:
                         f"'{segment_name}', channel '{channel}' can't be predicted."
                     )
                 max_points = max(counts)
+                # Pass max_points + 10% to ensure headroom, 10% written as `(max_points + 9) // 10` to avoid
+                # floating points errors and ensure rounding up.
                 predicted_points_per_channel_segment[segment_name][channel] = (
                     max_points + (max_points + 9) // 10
                 ) * num_of_curves
