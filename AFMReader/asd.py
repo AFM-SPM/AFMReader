@@ -10,7 +10,7 @@ import numpy as np
 import numpy.typing as npt
 from matplotlib import animation
 
-from AFMReader.data_classes import AFMScan
+from AFMReader.data_classes import AFMLoad
 from AFMReader.io import (
     read_ascii,
     read_bool,
@@ -175,7 +175,7 @@ def calculate_scaling_factor(
     raise ValueError(f"channel {channel} not known for .asd file type.")
 
 
-def load_asd(file_path: str | Path, channel: str) -> AFMScan:
+def load_asd(file_path: str | Path, channel: str) -> AFMLoad:
     """
     Load a .asd file.
 
@@ -280,7 +280,7 @@ def load_asd(file_path: str | Path, channel: str) -> AFMScan:
             unit = "deg"
         else:
             unit = "nm"
-        return AFMScan(
+        return AFMLoad(
             image=frames,
             pixel_to_nanometre_scaling=pixel_to_nanometre_scaling_factor,
             z_units=unit,

@@ -387,7 +387,7 @@ class CurvesDataset:
 
 
 @dataclass(eq=False)
-class AFMScan:
+class AFMLoad:
     """
     Loaded data from an AFM scan, including the image and scaling factors.
 

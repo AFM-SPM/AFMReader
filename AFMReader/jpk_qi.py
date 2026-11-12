@@ -20,7 +20,7 @@ import numpy as np
 from tqdm import tqdm
 
 from AFMReader import jpk
-from AFMReader.data_classes import AFMScan, CurvesDataset, CurvesVolume, CurvesVolumeMetadata
+from AFMReader.data_classes import AFMLoad, CurvesDataset, CurvesVolume, CurvesVolumeMetadata
 from AFMReader.h5_saver import H5Saver, find_unused_filename
 from AFMReader.io import coerce_metadata_dict, coerce_metadata_value, load_config
 from AFMReader.logging import logger
@@ -671,7 +671,7 @@ class JPKQILoader:
         config_path: Path | str | None = None,
         flip_image: bool | None = True,
         save_as_h5: bool | None = None,
-    ) -> AFMScan:
+    ) -> AFMLoad:
         """
         Load the .jpk-qi-data file.
 
@@ -734,7 +734,7 @@ class JPKQILoader:
         self.image, _, self.z_unit = self.get_image()
 
         # Return dataclass object of loaded data
-        return AFMScan(
+        return AFMLoad(
             image=self.image,
             pixel_to_nanometre_scaling=self.pixel_to_nanometre_scaling,
             z_units=self.z_unit,
@@ -1416,7 +1416,7 @@ class JPKQILoader:
         self.list_of_all_paths = []
 
 
-def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict) -> AFMScan:
+def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict) -> AFMLoad:
     """
     Load the JPK QI data using the JPKQILoader.
 

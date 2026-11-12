@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from igor2 import binarywave
 
-from AFMReader.data_classes import AFMScan
+from AFMReader.data_classes import AFMLoad
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -82,7 +82,7 @@ def get_ibw_channels(file_path: Path | str) -> list[str]:
     return labels
 
 
-def load_ibw(file_path: Path | str, channel: str) -> AFMScan:
+def load_ibw(file_path: Path | str, channel: str) -> AFMLoad:
     """
     Load image from Asylum Research (Igor) .ibw files.
 
@@ -153,4 +153,4 @@ def load_ibw(file_path: Path | str, channel: str) -> AFMScan:
         raise e
 
     logger.info(f"[{filename}] : Extracted image.")
-    return AFMScan(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=z_units)
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=z_units)

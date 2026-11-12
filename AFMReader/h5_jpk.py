@@ -15,7 +15,7 @@ import h5py
 import numpy as np
 
 from AFMReader.data_classes import (
-    AFMScan,
+    AFMLoad,
     CurvesDataset,
     CurvesVolume,
     CurvesVolumeMetadata,
@@ -651,7 +651,7 @@ class CurvesH5Dataset(CurvesDataset):
             self.h5file = None
 
 
-def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True) -> AFMScan:
+def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, load_curves: bool = True) -> AFMLoad:
     """
     Load image from JPK Instruments .h5-jpk files.
 
@@ -810,7 +810,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
             h5file=h5file,
         )
 
-        return AFMScan(
+        return AFMLoad(
             image=image_stack,
             pixel_to_nanometre_scaling=pixel_to_nanometre_scaling,
             z_units=z_units,
@@ -819,7 +819,7 @@ def load_h5jpk(file_path: Path | str, channel: str, flip_image: bool = True, loa
             curves_dataset=curves_data,
         )
 
-    return AFMScan(
+    return AFMLoad(
         image=image_stack,
         pixel_to_nanometre_scaling=pixel_to_nanometre_scaling,
         z_units=z_units,

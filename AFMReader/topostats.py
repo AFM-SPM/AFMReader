@@ -5,14 +5,14 @@ from pathlib import Path
 import h5py
 from packaging.version import parse as parse_version
 
-from AFMReader.data_classes import AFMScan
+from AFMReader.data_classes import AFMLoad
 from AFMReader.io import unpack_hdf5
 from AFMReader.logging import logger
 
 logger.enable(__package__)
 
 
-def load_topostats(file_path: Path | str, channel: str) -> AFMScan:
+def load_topostats(file_path: Path | str, channel: str) -> AFMLoad:
     """
     Extract image and pixel to nm scaling from the .topostats (HDF5 format) file.
 
@@ -73,7 +73,7 @@ def load_topostats(file_path: Path | str, channel: str) -> AFMScan:
         ) from exc
 
     # Analyses are stored to metadata - this might be a bit clunky and potentially should be stored to their own attr
-    return AFMScan(
+    return AFMLoad(
         image=image,
         pixel_to_nanometre_scaling=pixel_to_nanometre_scaling_factor,
         z_units="nm",

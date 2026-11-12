@@ -7,7 +7,7 @@ from typing import IO
 import numpy as np
 import tifffile
 
-from AFMReader.data_classes import AFMScan
+from AFMReader.data_classes import AFMLoad
 from AFMReader.io import read_yaml
 from AFMReader.logging import logger
 
@@ -246,7 +246,7 @@ def get_jpk_channels(file_path: Path | str, config_path: Path | str | None = Non
 
 def load_jpk(
     file_path: Path | str, channel: str, config_path: Path | str | None = None, flip_image: bool = True
-) -> AFMScan:
+) -> AFMLoad:
     """
     Load image from JPK Instruments .jpk files.
 
@@ -295,7 +295,7 @@ def load_jpk(
         config_path=config_path,
         flip_image=flip_image,
     )
-    return AFMScan(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=units)
+    return AFMLoad(image=image, pixel_to_nanometre_scaling=pixel_to_nanometre_scaling, z_units=units)
 
 
 def _load_jpk(
