@@ -19,25 +19,24 @@
 # (https://github.com/richardsheridan/magic-afm).
 
 
-
 # NOTE: Add this import to general_loader.py:
-        # from AFMReader import ardf
+# from AFMReader import ardf
 
 # NOTE: Then in general_loader.py::LoadFile.load():
-        # if self.suffix == ".ardf":
-        #     afm_load = ardf.load_ardf(self.filepath, self.channel, self.cached_data)
+# if self.suffix == ".ardf":
+#     afm_load = ardf.load_ardf(self.filepath, self.channel, self.cached_data)
 
 # NOTE: Then in general_loader.py::LoadFile.get_available_channels():
-        # if self.suffix == ".ardf":
-        #     available_channels = ardf.get_ardf_channels(self.filepath, self.cached_data)
+# if self.suffix == ".ardf":
+#     available_channels = ardf.get_ardf_channels(self.filepath, self.cached_data)
 
 # NOTE: In general_loader.py::LoadFile.get_additional_params():
-        # if self.suffix == ".ardf":
-        #     return ardf.get_ardf_params()
+# if self.suffix == ".ardf":
+#     return ardf.get_ardf_params()
 
 # NOTE: In general_loader.py:LoadFile.save_to_h5():
-        # elif self.suffix == ".ardf":
-        #     h5_path = ardf.save_ardf_to_h5(filepath=self.filepath, cached_data=self.cached_data)
+# elif self.suffix == ".ardf":
+#     h5_path = ardf.save_ardf_to_h5(filepath=self.filepath, cached_data=self.cached_data)
 
 import mmap
 import struct
