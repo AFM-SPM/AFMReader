@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import Any
 
-from AFMReader import asd, gwy, h5_jpk, ibw, jpk, jpk_qi, raw_bin, spm, stp, top, topostats
-from AFMReader.data_classes import AFMScan
+from AFMReader import ardf, asd, gwy, h5_jpk, ibw, jpk, jpk_qi, raw_bin, spm, stp, top, topostats
+from AFMReader.data_classes import AFMLoad
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -46,7 +46,7 @@ class LoadFile:
         # Store heavy loaded data in a dict to avoid having to reload it
         self.cached_data: dict[str, Any] = {}
 
-    def load(self, channel: str | None = None, kwargs: dict | None = None) -> AFMScan:
+    def load(self, channel: str | None = None, kwargs: dict | None = None) -> AFMLoad:
         """
         Generally loads a file type that can be handled by AFMReader.
 
@@ -72,34 +72,36 @@ class LoadFile:
         if kwargs:
             self.kwargs = kwargs
         try:
-            if self.suffix == ".asd":
-                afm_scan = asd.load_asd(self.filepath, self.channel)
+            if self.suffix == ".ardf":
+                afm_load = ardf.load_ardf(self.filepath, self.channel, self.cached_data)
+            elif self.suffix == ".asd":
+                afm_load = asd.load_asd(self.filepath, self.channel)
             elif self.suffix == ".gwy":
-                afm_scan = gwy.load_gwy(self.filepath, self.channel)
+                afm_load = gwy.load_gwy(self.filepath, self.channel)
             elif self.suffix == ".ibw":
-                afm_scan = ibw.load_ibw(self.filepath, self.channel)
+                afm_load = ibw.load_ibw(self.filepath, self.channel)
             elif self.suffix in [".jpk", ".jpk-qi-image"]:
-                afm_scan = jpk.load_jpk(self.filepath, self.channel)
+                afm_load = jpk.load_jpk(self.filepath, self.channel)
             elif self.suffix == ".spm":
-                afm_scan = spm.load_spm(self.filepath, self.channel)
+                afm_load = spm.load_spm(self.filepath, self.channel)
             elif self.suffix == ".h5-jpk":
-                afm_scan = h5_jpk.load_h5jpk(self.filepath, self.channel)
+                afm_load = h5_jpk.load_h5jpk(self.filepath, self.channel)
             elif self.suffix in [".jpk-qi-data", ".jpk-force-map"]:
-                afm_scan = jpk_qi.load_jpk_data(
+                afm_load = jpk_qi.load_jpk_data(
                     filepath=self.filepath, channel=self.channel, cached_data=self.cached_data
                 )
             elif self.suffix == ".stp":
-                afm_scan = stp.load_stp(self.filepath)
+                afm_load = stp.load_stp(self.filepath)
             elif self.suffix == ".top":
-                afm_scan = top.load_top(self.filepath)
+                afm_load = top.load_top(self.filepath)
             elif self.suffix == ".topostats":
-                afm_scan = topostats.load_topostats(self.filepath, self.channel)
+                afm_load = topostats.load_topostats(self.filepath, self.channel)
             elif self.suffix == ".bin":
-                afm_scan = raw_bin.load_bin(self.filepath, **self.kwargs)
+                afm_load = raw_bin.load_bin(self.filepath, **self.kwargs)
             else:
                 raise ValueError(f"File type '{self.suffix}' is not currently handled by AFMReader.")
 
-            return afm_scan
+            return afm_load
 
         except ValueError as e:
             logger.error(f"{e}")
@@ -121,7 +123,9 @@ class LoadFile:
         """
         self.kwargs = kwargs if kwargs else self.kwargs
         available_channels: list[str] | dict[str, int]
-        if self.suffix == ".asd":
+        if self.suffix == ".ardf":
+            available_channels = ardf.get_ardf_channels(self.filepath, self.cached_data)
+        elif self.suffix == ".asd":
             available_channels = asd.get_asd_channels(self.filepath)
         elif self.suffix == ".gwy":
             available_channels = gwy.get_gwy_channels(self.filepath)
@@ -156,12 +160,16 @@ class LoadFile:
             return raw_bin.get_bin_params()
         if self.suffix in [".jpk-qi-data", ".jpk-force-map"]:
             return jpk_qi.get_jpk_data_params()
+        if self.suffix == ".ardf":
+            return ardf.get_ardf_params()
         return {}
 
     def save_to_h5(self):
         """Save the loaded data to an h5 file."""
         if self.suffix in [".jpk-qi-data", ".jpk-force-map"]:
             h5_path = jpk_qi.save_jpk_data_to_h5(filepath=self.filepath, cached_data=self.cached_data)
+        elif self.suffix == ".ardf":
+            h5_path = ardf.save_ardf_to_h5(filepath=self.filepath, cached_data=self.cached_data)
         else:
             raise ValueError(f"Saving to h5 is not currently implemented for file type '{self.suffix}'.")
         # Once saved to h5, update the filepath and suffix to point to the new h5 file for future loading
