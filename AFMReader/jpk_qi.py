@@ -1,0 +1,1500 @@
+"""
+Module to decode and load JPK QI (Quantitative Imaging) data files.
+
+It provides lazy loading for curve data and metadata to minimize memory usage,
+and supports exporting to HDF5 format.
+"""
+
+# pylint: disable=too-many-lines,too-many-positional-arguments,too-few-public-methods,too-many-instance-attributes
+# pylint: disable=too-many-locals,too-many-branches,protected-access,attribute-defined-outside-init,fixme
+# pylint: disable=too-many-arguments
+
+import io
+import zipfile
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
+import javaproperties
+import numpy as np
+from tqdm import tqdm
+
+from AFMReader import jpk
+from AFMReader.data_classes import AFMScan, CurvesDataset, CurvesVolume, CurvesVolumeMetadata
+from AFMReader.h5_saver import H5Saver, find_unused_filename
+from AFMReader.io import coerce_metadata_dict, coerce_metadata_value, load_config
+from AFMReader.logging import logger
+
+
+def _get_standard_segment_mapping(
+    seg_names: list[str], segment_names_map: dict[str, list[str]] | None
+) -> dict[str, str]:
+    """
+    Map source segment names to canonical segment names.
+
+    Parameters
+    ----------
+    seg_names : list[str]
+        Source segment names present in the curve data.
+    segment_names_map : dict[str, list[str]] | None
+        Dictionary mapping canonical segment names to their accepted aliases. This is read from the config file.
+
+    Returns
+    -------
+    dict[str, str]
+        Dictionary mapping source segment names to canonical segment names.
+    """
+    if segment_names_map is None:
+        return {}
+    new_segment_mapping = {}
+    for key, names in segment_names_map.items():
+        for name in names:
+            if name in seg_names:
+                # We have found an alias option that matches a source segment name, so we map it to the canonical name
+                new_segment_mapping[name] = key
+                # We only want to map the first option so we break once we found the matching alias
+                break
+    return new_segment_mapping
+
+
+def _get_standard_channel_mapping(
+    channel_names: list[str], channel_names_map: dict[str, list[str]] | None
+) -> dict[str, str]:
+    """
+    Map at most one source channel name to each canonical channel name.
+
+    Parameters
+    ----------
+    channel_names : list[str]
+        Source channel names present in the curve data.
+    channel_names_map : dict[str, list[str]] | None
+        Dictionary mapping canonical channel names to their accepted aliases. This is read from the config file.
+        The lists are ordered by preference, so the first matching alias found in the source channel names will
+        be used as the canonical name.
+
+    Returns
+    -------
+    dict[str, str]
+        Dictionary mapping source channel names to canonical channel names.
+    """
+    if channel_names_map is None:
+        return {}
+    channel_mapping = {}
+    for key, names in channel_names_map.items():
+        for name in names:
+            if name in channel_names:
+                # We have found an alias option that matches a source channel name, so we map it to the canonical name
+                channel_mapping[name] = key
+                # We only want to map the first option so we break once we found the matching alias
+                break
+    return channel_mapping
+
+
+def _get_channel_scaling(loaded_jpk_properties: dict, channel_index: int) -> tuple[float, float, str]:
+    """
+    Parse the JPK properties dictionary to find cumulative multiplier and offset for a specific channel index.
+
+    Each conversion step can have different multipliers and offsets but by combining these in the right way we
+    can end up with as single value for each that can be applied to the raw data.
+
+    The idea is that we should keep multiplying the multipliers and adding the offsets (with successive scaling
+    applied to the offsets) as we go through the conversion chain, storing the current step in
+    conversion_step, and keeping going until there is no longer a pointer to the next conversion step, meaning
+    we have calculated the combined effective scaling for the channel.
+
+    Note that we are working backwards from the targeted unit to the raw encoded values in our calculation of
+    the scaling as the offset from the first step (applied to the raw values) gets multiplied by all subsequent
+    multipliers (the same is true for the later offsets, in that they get multiplied by the multipliers of the
+    steps that come after them in the chain) and hence to know what that multiplier is we need to work backwards.
+
+    For example, if we have M1, O1, M2, O2, M3, O3 as the multipliers and offsets for three conversion steps, where,
+    as an example, M1 and O1 get you from raw integer values to volts, M2 and O2 get you from volts to nanometres,
+    and M3 and O3 get you from nanometres to newtons (the target) the final value is calculated as:
+        final_value = M3 * (M2 * (M1 * raw_value + O1) + O2) + O3
+    Which can be rearranged to:
+        final_value = (M3 * M2 * M1) * raw_value + (M3 * M2 * O1 + M3 * O2 + O3)
+
+    Parameters
+    ----------
+    loaded_jpk_properties : dict
+        The properties dictionary loaded from the JPK file.
+    channel_index : int
+        The index of the channel to find the scaling for (e.g., '1' for vDeflection).
+
+    Returns
+    -------
+    final_multiplier : float
+        The cumulative multiplier for the specified channel.
+    final_offset : float
+        The cumulative offset for the specified channel.
+    unit : str
+        The unit of the channel.
+    """
+    prefix = f"lcd-info.{channel_index}."
+
+    # Encoder scaling converts raw stored values into the base calibration slot (e.g. volts)
+    encoder_multiplier = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.multiplier", "1.0"))
+    encoder_offset = float(loaded_jpk_properties.get(f"{prefix}encoder.scaling.offset", "0.0"))
+    encoder_unit = loaded_jpk_properties.get(f"{prefix}encoder.scaling.unit.unit", "Unknown")
+
+    step = loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.default")
+    base = loaded_jpk_properties.get(f"{prefix}conversion-set.conversions.base")
+
+    # Some channels have no conversion chain, so encoder scaling alone gives the final values
+    if not step:
+        return encoder_multiplier, encoder_offset, encoder_unit
+
+    unit = loaded_jpk_properties.get(f"{prefix}conversion-set.conversion.{step}.scaling.unit.unit") or encoder_unit
+
+    # Walk backwards from the default slot to the base slot, composing each step's scaling
+    cumulative_multiplier, cumulative_offset = 1.0, 0.0
+    # Keep a record of the calibration steps in case of circular references (which would cause an infinite while loop)
+    visited = set()
+    # While another step exists and is not the initial conversion we still have more to do
+    while step and step != base:
+        if step in visited:
+            raise ValueError(f"Circular calibration chain in channel {channel_index} at slot '{step}'.")
+        visited.add(step)
+
+        conversion_prefix = f"{prefix}conversion-set.conversion.{step}."
+        multiplier_key = f"{conversion_prefix}scaling.multiplier"
+        if multiplier_key not in loaded_jpk_properties:
+            logger.warning(
+                f"Channel {channel_index}: conversion slot '{step}' has no scaling; calibration may be incomplete."
+            )
+            break
+
+        multiplier = float(loaded_jpk_properties[multiplier_key])
+        offset = float(loaded_jpk_properties.get(f"{conversion_prefix}scaling.offset", "0.0"))
+        # value = cum_m * (multiplier * x + offset) + cum_o, so the offset uses the multiplier before updating
+        cumulative_offset += cumulative_multiplier * offset
+        cumulative_multiplier *= multiplier
+
+        step = loaded_jpk_properties.get(f"{conversion_prefix}base-calibration-slot")
+
+    final_multiplier = cumulative_multiplier * encoder_multiplier
+    final_offset = cumulative_multiplier * encoder_offset + cumulative_offset
+
+    return final_multiplier, final_offset, unit
+
+
+class CurvesJPKDataset(CurvesDataset):
+    """
+    A top-level dataset class for JPK QI data that holds the raw data as well as metadata.
+
+    Parameters
+    ----------
+    volumes : dict[str, CurvesVolume]
+        A dictionary mapping curve names to CurvesVolume instances that
+        provide access to the curve data for each pixel.
+    metadata : dict
+        Global metadata for the curve dataset.
+    essential_metadata : dict
+        Essential global metadata for the curve dataset.
+    archive : zipfile.ZipFile
+        The ZIP archive containing the JPK data.
+    """
+
+    def __init__(
+        self, volumes: dict[str, CurvesVolume], metadata: dict, essential_metadata: dict, archive: zipfile.ZipFile
+    ):
+        """
+        Initialise CurvesJPKDataset.
+
+        Parameters
+        ----------
+        volumes : dict[str, CurvesVolume]
+            A dictionary mapping curve names to CurvesVolume instances that
+            provide access to the curve data for each pixel.
+        metadata : dict
+            A dictionary containing all metadata for the dataset.
+        essential_metadata : dict
+            A dictionary containing essential metadata for the dataset.
+        archive : zipfile.ZipFile
+            The ZIP archive containing the JPK data.
+        """
+        super().__init__(volumes, metadata, essential_metadata)
+        self.archive = archive
+
+    def close(self):
+        """Close the ZIP archive when done to free up resources."""
+        self.archive.close()
+        self.archive = None
+
+
+class CurvesJPKMetadata(CurvesVolumeMetadata):
+    """
+    A metadata class for JPK QI data that provides lazy loading of pixel metadata.
+
+    Parameters
+    ----------
+    archive : zipfile.ZipFile
+        The ZIP archive containing the JPK data.
+    shape : tuple[int, int]
+        The shape of the image as (rows, columns).
+    channel_units : dict[str, str]
+        A dictionary mapping channel names to their units.
+    segment_names : list[str]
+        The names of the curve segments available in this volume.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
+    """
+
+    def __init__(
+        self,
+        archive: zipfile.ZipFile,
+        shape: tuple[int, int],
+        channel_units: dict[str, str],
+        segment_names: list[str],
+        flip_image: bool = True,
+    ):
+        """
+        Initialise the CurvesJPKMetadata instance.
+
+        Parameters
+        ----------
+        archive : zipfile.ZipFile
+            The ZIP archive containing the JPK data.
+        shape : tuple[int, int]
+            The shape of the image as (rows, columns).
+        channel_units : dict[str, str]
+            A dictionary mapping channel names to their units.
+        segment_names : list[str]
+            The names of the curve segments available in this volume.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is True.
+        """
+        super().__init__(shape, channel_units, segment_names, flip_image)
+        self.archive = archive
+
+    def get_point_metadata(self, y: int, x: int, segment_name: str | None = None) -> dict[str, Any]:
+        """
+        Fetch the metadata for a specific pixel or segment.
+
+        Parameters
+        ----------
+        y : int
+            Row index of the pixel.
+        x : int
+            Column index of the pixel.
+        segment_name : str, optional
+            The name of the segment to fetch metadata for. If None, returns metadata for the entire pixel.
+
+        Returns
+        -------
+        dict
+            The metadata for the specified pixel (or segment, if provided).
+        """
+        if y < 0 or y >= self.shape[0] or x < 0 or x >= self.shape[1]:
+            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
+        if self.flip_image:
+            y = self.shape[0] - 1 - y
+        # JPK Data is stored in a linear fashion, so we calculate the curve number based on the pixel coordinates
+        curve_num = (y * self.shape[1]) + x
+        # Determine path based on whether we want the per-curve or per-segment metadata
+        if segment_name is None:
+            path = f"index/{curve_num}/header.properties"
+        else:
+            segment_number = self.segment_names.index(segment_name)
+            path = f"index/{curve_num}/segments/{segment_number}/segment-header.properties"
+
+        try:
+            with self.archive.open(path) as f:
+                # Load properties and coerce them into a standardised metadata dictionary removing the unnecessary
+                # prefix from the keys which is consistent for most properties in the file
+                meta_dict = coerce_metadata_dict(
+                    {k.split(".", 1)[1] if "." in k else k: v for k, v in javaproperties.load(f).items()}
+                )
+        except KeyError:
+            meta_dict = {}
+
+        return meta_dict
+
+
+class CurvesJPKVolume(CurvesVolume):
+    """
+    A CurvesVolume implementation for JPK QI curve data that provides lazy loading of curve data for each pixel.
+
+    Parameters
+    ----------
+    name : str
+        The name of the curve volume.
+    shape : tuple[int, int]
+        The shape of the image as (rows, columns).
+    archive : zipfile.ZipFile
+        The ZIP archive containing the JPK data.
+    metadata : CurvesJPKMetadata
+        Metadata associated with this JPK curve volume.
+    channel_scaling : dict[str, dict[str, float]]
+        A dictionary mapping channel names to their scaling factors.
+    segment_mapping : dict[str, str]
+        A dictionary mapping source segment names to canonical segment names.
+    channel_mapping : dict[str, str]
+        A dictionary mapping source channel names to canonical channel names.
+    flip_image : bool, optional
+        Whether to flip the image vertically. Default is True.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        shape: tuple[int, int],
+        archive: zipfile.ZipFile,
+        metadata: CurvesJPKMetadata,
+        channel_scaling: dict[str, dict[str, float]],
+        segment_mapping: dict[str, str],
+        channel_mapping: dict[str, str],
+        flip_image: bool = True,
+    ):
+        """
+        Initialise CurvesJPKVolume.
+
+        Parameters
+        ----------
+        name : str
+            The name of the curve volume.
+        shape : tuple[int, int]
+            The shape of the image as (rows, columns).
+        archive : zipfile.ZipFile
+            The ZIP archive containing the JPK data.
+        metadata : CurvesJPKMetadata
+            Metadata associated with this JPK curve volume.
+        channel_scaling : dict[str, dict[str, float]]
+            A dictionary mapping channel names to their scaling factors.
+        segment_mapping : dict[str, str]
+            A dictionary mapping source segment names to canonical segment names.
+        channel_mapping : dict[str, str]
+            A dictionary mapping source channel names to canonical channel names.
+        flip_image : bool, optional
+            Whether to flip the image vertically. Default is True.
+        """
+        super().__init__(
+            name=name,
+            shape=shape,
+            metadata=metadata,
+            flip_image=flip_image,
+        )
+        self.archive = archive
+        self.channel_scaling = channel_scaling
+        self.segment_mapping = segment_mapping
+        self.channel_mapping = channel_mapping
+
+    def get_curve(self, y: int, x: int, flip_image: bool | None = None) -> dict[str, dict[str, np.ndarray]]:
+        """
+        Fetch the curve data for a specific pixel.
+
+        Parameters
+        ----------
+        y : int
+            Row index of the pixel.
+        x : int
+            Column index of the pixel.
+        flip_image : bool, optional
+            Whether to flip the image vertically. If None, uses the instance's flip_image attribute.
+
+        Returns
+        -------
+        dict
+            Dictionary containing the curve data for the specified pixel.
+        """
+        if y < 0 or y >= self.shape[0] or x < 0 or x >= self.shape[1]:
+            raise IndexError(f"Curve index out of bounds: ({x}, {y})")
+        if flip_image is None:
+            flip_image = self.flip_image
+        if flip_image:
+            y = self.shape[0] - 1 - y
+        curve_num = y * self.shape[1] + x
+        curve_data: dict[str, Any] = {}
+
+        for channel_name, scale in self.channel_scaling.items():
+            standard_channel_name = self.channel_mapping.get(channel_name, channel_name)
+            curve_data[standard_channel_name] = {}
+            # A segment is one phase of the tip's movement (e.g. Extend, Retract)
+            # `segment_name` is a string naming the phase, `segment_group` holds its data
+            for segment_idx, segment_name in enumerate(self.metadata.segment_names):
+                dat_path = f"index/{curve_num}/segments/{segment_idx}/channels/{channel_name}.dat"
+                try:
+                    # Access the file directly without re-parsing the ZIP directory
+                    with self.archive.open(dat_path) as f:
+                        raw_array = np.frombuffer(f.read(), dtype=">i4")
+                        standard_segment_name = self.segment_mapping.get(segment_name, segment_name)
+                        # Convert from raw values to calibrated values with units using the scaling factors
+                        curve_data[standard_channel_name][standard_segment_name] = (
+                            raw_array * scale["multiplier"]
+                        ) + scale["offset"]
+                except KeyError as e:
+                    raise KeyError(
+                        f"Internal data file missing for pixel ({x}, {y}), "
+                        f"segment {segment_name}, channel {channel_name}"
+                    ) from e
+
+        return curve_data
+
+    def iter_segments(
+        self, channel_segment_sets: dict[str, list[str]], batch_size: int = 1
+    ) -> Iterator[list[tuple[np.ndarray, list[np.ndarray]]]]:
+        """
+        Iterate over segments for specified channels and segments, yielding data in batches.
+
+        This method allows for more efficient processing by yielding data in batches of numpy arrays and only loading
+        the required segments and channels. By returning many curves in a single array with the indices for extraction
+        alongside, we can run numpy operations on the entire batch or with numba ``@njit`` compiled functions for
+        vastly improved performance as we avoid the overhead of library calls for each individual curve.
+
+        Parameters
+        ----------
+        channel_segment_sets : dict[str, list[str]]
+            A dictionary mapping segment names to lists of channel names to iterate over.
+        batch_size : int, optional
+            The number of pixels to read in each batch. Default is 1.
+
+        Yields
+        ------
+        list[tuple[np.ndarray, list[np.ndarray]]]
+            A list of the segments as tuples. This first item in the tuple in a numpy array of the indices then we
+            have a list of numpy arrays for each channel in the order they were requested. Each numpy array contains
+            the concatenated curve data for the specified batch of pixels for that channel and segment.
+        """
+        if batch_size <= 0:
+            raise ValueError("Batch size must be greater than zero")
+
+        new_channel_segment_sets = {}
+
+        # Create a mapping from canonical to source channel names as we require the original for extracting the data
+        channel_source_mapping = {v: k for k, v in self.channel_mapping.items()}
+
+        # Use the channel_source_mapping to convert the channel segment sets to use source channel names for extraction
+        for segment_name, channel_list in channel_segment_sets.items():
+            source_channels = [channel_source_mapping.get(channel_name, channel_name) for channel_name in channel_list]
+            new_channel_segment_sets[segment_name] = source_channels
+
+        # Create a mapping from canonical name to the segment index which is how the data is structured in the archive
+        segment_index_mapping = {segment_name: index for index, segment_name in enumerate(self.metadata.segment_names)}
+
+        num_of_curves = self.shape[0] * self.shape[1]
+
+        for batch_starting_curve_index in range(0, num_of_curves, batch_size):
+            data_batch: list[tuple[np.ndarray, list[np.ndarray]]] = []
+            # Determine how many curves to read in this batch, which may be less than the batch size for the last batch
+            curves_in_batch = min(
+                batch_size,
+                num_of_curves - batch_starting_curve_index,
+            )
+            # A segment is one phase of the tip's movement (e.g. Extend, Retract)
+            for segment_name, channel_list in new_channel_segment_sets.items():
+                segment_index = segment_index_mapping[segment_name]
+                # Preallocate an array to hold the lengths of each segment for the curves in this batch (-1 is unread)
+                segment_lengths = np.full(curves_in_batch, -1, dtype=np.int64)
+                data = []
+                for channel_name in channel_list:
+                    scale = self.channel_scaling[channel_name]
+                    # channel_data will be a list of numpy arrays, one for each curve in the batch
+                    channel_data = []
+                    for offset in range(curves_in_batch):
+                        curve_num = batch_starting_curve_index + offset
+                        dat_path = f"index/{curve_num}/segments/{segment_index}/channels/{channel_name}.dat"
+                        try:
+                            with self.archive.open(dat_path) as f:
+                                raw_array = np.frombuffer(f.read(), dtype=">i4")
+                                channel_data.append((raw_array * scale["multiplier"]) + scale["offset"])
+                                segment_length = len(raw_array)
+                                if segment_lengths[offset] == -1:
+                                    # Record the segment length for this pixel if it hasn't been recorded yet
+                                    # Only do this for the first channel as all channels should be same length
+                                    segment_lengths[offset] = segment_length
+                                elif segment_length != segment_lengths[offset]:
+                                    # Data lengths between channels for same segment should be consistent, this likely
+                                    # indicates a missing channel for a segment
+                                    raise ValueError(
+                                        f"Inconsistent segment length for pixel ({curve_num}), "
+                                        f"segment {segment_name}, channel {channel_name}"
+                                    )
+                        except KeyError as e:
+                            # Missing channel data is treated as an empty array and is fine as long as the other
+                            # channels for this segment are also empty.
+                            if segment_lengths[offset] == -1:
+                                segment_lengths[offset] = 0
+                            elif segment_lengths[offset] != 0:
+                                raise ValueError(
+                                    f"Channel {channel_name} missing for pixel ({curve_num}), segment {segment_name}"
+                                ) from e
+                    # Concatenate the channel data for this segment and channel into a contiguous array for the batch
+                    data.append(np.concatenate(channel_data) if channel_data else np.empty(0, dtype=np.float64))
+                indices = np.empty(curves_in_batch + 1, dtype=np.int64)
+                indices[0] = 0
+                # Use cumulative sum to calculate the starting index for each curve in the concatenated data array
+                np.cumsum(segment_lengths, out=indices[1:])
+                data_batch.append((indices, data))
+            yield data_batch
+
+
+class JPKQILoader:
+    """
+    Class for readability and improving modularity in the load jpk qi data function.
+
+    Parameters
+    ----------
+    filepath : Path | str
+        The path to the .jpk-qi file to be loaded.
+    channel : str | None, optional
+        The specific channel to be extracted (e.g., "measuredHeight"). Default is None.
+    config_path : Path | str | None, optional
+        The path to the configuration file, if any. Default is None.
+    flip_image : bool | None, optional
+        Whether to flip the image vertically. Default is True.
+    save_as_h5 : bool, optional
+        Whether to save the loaded data as an H5 file. Default is False.
+    """
+
+    def __init__(
+        self,
+        filepath: Path | str,
+        channel: str | None = None,
+        config_path: Path | str | None = None,
+        flip_image: bool | None = True,
+        save_as_h5: bool = False,
+    ):
+        """
+        Initialise the loader with the provided parameters.
+
+        Parameters
+        ----------
+        filepath : Path | str
+            The path to the .jpk-qi file to be loaded.
+        channel : str | None, optional
+            The specific channel to be extracted (e.g., "measuredHeight"). Default is None.
+        config_path : Path | str | None, optional
+            The path to the configuration file, if any. Default is None.
+        flip_image : bool | None, optional
+            Whether to flip the image vertically. Default is True.
+        save_as_h5 : bool, optional
+            Whether to save the loaded data as an H5 file. Default is False.
+        """
+        self.filepath = Path(filepath)
+        self.channel = channel
+        self.config_path = config_path
+        self.flip_image = flip_image
+        self.save_as_h5 = save_as_h5
+
+        self.config = load_config(self.config_path)
+
+        # Open the ZIP archive once and keep it open for the duration of the loading process
+        self.qi_archive = zipfile.ZipFile(self.filepath, "r")  # pylint: disable=consider-using-with
+        logger.info(f"Opened JPK QI archive at {self.filepath}")
+        # Store the list of all paths in the archive to avoid having to call namelist() multiple times
+        self.list_of_all_paths = self.qi_archive.namelist()
+        # For holding the reference to where the actual .jqk-qi image is (not the metadata).
+        self.path_to_image: str | None = None
+
+        # Chunk size for H5 datasets. Chunking is necessary to allow the resizing of h5 datasets and continual writing
+        self.DATA_CHUNKSIZE = 512 * 1024
+        # Chunk size for indices datasets
+        self.INDICES_CHUNKSIZE = 64 * 1024
+        # Chunk size for metadata datasets (if needed)
+        self.META_CHUNKSIZE = 64 * 1024
+        # Maximum number of curves to check for changing metadata keys (to avoid checking every curve)
+        self.MAX_CURVE_CHECKS = 20
+        # Number of curves to hold in buffer
+        self.BUFFER_SIZE = 500
+
+        # Initialise key attributes that will be returned / accessed frequently
+
+        # Just the top level metadata extracted from the header files
+        self.top_level_meta: dict[str, Any] = {}
+        # A lazy reference containing all metadata
+        self.volume_metadata: CurvesJPKMetadata | None = None
+        # A 2D list of curve data dictionaries
+        self.curves_volume: CurvesJPKVolume | None = None
+        # A lookup for channel name to unit to be returned
+        self.channels_units: dict[str, str] = {}
+        # The list of channels for the segments with their scaling information extracted from the shared header
+        self.segment_channels: list[dict[str, Any]] = []
+        self.curve_meta: dict[str, Any] = {}
+        self.segment_meta: dict[str, Any] = {}
+        self.segment_names: list[str] = []
+        # Dictionary mapping source segment names to canonical segment names
+        self.segment_mapping: dict[str, str] = {}
+        # Dictionary mapping source channel names to canonical channel names
+        self.channel_mapping: dict[str, str] = {}
+
+        # Define the image shape and size attributes
+        self.size_x: float = np.nan
+        self.size_y: float = np.nan
+        self.shape_x: int = 0
+        self.shape_y: int = 0
+        self.failed_curves: set[tuple[int, int | None, str | None]] = set()
+
+        # Instantiate containers for data to be saved (so an exception is not caused if not saving)
+        self.curve_groups = None
+        self.saved_to_h5 = False
+
+        self.extract_global_metadata()
+
+        self.parse_dimension_data()
+        self.essential_metadata = self.extract_essential_metadata(self.top_level_meta)
+
+    def get_available_channels(self) -> dict[str, int]:
+        """
+        Retrieve available channels from the .jpk-qi-image file within the archive.
+
+        Returns
+        -------
+        channels : list
+            A list of available channels including the calculated channels.
+        metadata_options : dict
+            A dictionary of options for what metadata to return.
+        """
+        # Look for a jpk-qi-image file in the archive
+        if self.path_to_image is None:
+            for file_name in self.list_of_all_paths:
+                if file_name.endswith(".jpk-qi-image"):
+                    self.path_to_image = file_name
+
+        # Look for a force file in the archive if no jpk-qi-image file is found
+        if self.path_to_image is None:
+            for file_name in self.list_of_all_paths:
+                if file_name.endswith(".force"):
+                    self.path_to_image = file_name
+
+        if self.path_to_image is None:
+            raise FileNotFoundError(f"No .jpk-qi-image file found in {self.filepath}")
+
+        # Add the channels which exist in the jpk-qi-image file
+        with self.qi_archive.open(self.path_to_image, "r") as image_file:
+            return jpk._get_jpk_channels(
+                file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(self.path_to_image)
+            )
+
+    def load(
+        self,
+        channel: str | None = None,
+        config_path: Path | str | None = None,
+        flip_image: bool | None = True,
+        save_as_h5: bool | None = None,
+    ) -> AFMScan:
+        """
+        Load the .jpk-qi-data file.
+
+        Parameters
+        ----------
+        channel : str | None, optional
+            The specific channel to be extracted. Default is None.
+        config_path : Path | str | None, optional
+            Path to the configuration file. Default is None.
+        flip_image : bool | None, optional
+            Whether to flip the image. Default is True.
+        save_as_h5 : bool, optional
+            Whether to save the loaded data as an H5 file. Default is False.
+
+        Returns
+        -------
+        AFMScan
+            An AFMScan object containing the image, its pixel to nanometre
+            scaling value, z-axis unit, and curves dataset.
+        """
+        # Update instance attributes based on provided parameters
+        self.channel = channel if channel else self.channel
+        self.config_path = config_path if config_path else self.config_path
+        self.flip_image = flip_image if flip_image is not None else self.flip_image
+        self.save_as_h5 = save_as_h5 if save_as_h5 is not None else self.save_as_h5
+
+        logger.info(f"Loading JPK QI data from {self.filepath} with channel {self.channel}")
+
+        # Setup H5 Data structures if needed
+        if self.save_as_h5 and not self.saved_to_h5:
+            self.save_to_h5()
+
+        # Establish the lazy loading structures for curve data and metadata. Note how lazy structure is used even if
+        # all the data has been accessed and saved to H5 to prevent excessive memory usage
+        self.volume_metadata = CurvesJPKMetadata(
+            self.qi_archive,
+            shape=(self.shape_y, self.shape_x),
+            channel_units=self.channels_units,
+            segment_names=self.segment_names,
+            flip_image=bool(self.flip_image),
+        )
+        self.curves_volume = CurvesJPKVolume(
+            name="Original",
+            shape=(self.shape_y, self.shape_x),
+            archive=self.qi_archive,
+            metadata=self.volume_metadata,
+            channel_scaling=self.channel_scaling,
+            segment_mapping=self.segment_mapping,
+            channel_mapping=self.channel_mapping,
+            flip_image=bool(self.flip_image),
+        )
+        self.curves_dataset = CurvesJPKDataset(
+            volumes={"Original": self.curves_volume},
+            metadata=self.top_level_meta,
+            essential_metadata=self.essential_metadata,
+            archive=self.qi_archive,
+        )
+
+        # Load the image
+        self.image, _, self.z_unit = self.get_image()
+
+        # Return dataclass object of loaded data
+        return AFMScan(
+            image=self.image,
+            pixel_to_nanometre_scaling=self.pixel_to_nanometre_scaling,
+            z_units=self.z_unit,
+            curves_dataset=self.curves_dataset,
+        )
+
+    def output_summary(self):
+        """Output a summary of the loading process, including any failed curve loads and their details."""
+        if self.failed_curves:
+            logger.warning(f"Failed to load {len(self.failed_curves)} files.")
+            logger.warning("Summary of missing files (up to 10 shown):")
+
+            # Output the first 10 failed loads with details
+            for i, (curve_num, segment, channel_name) in enumerate(self.failed_curves):
+                if i < 10:
+                    if channel_name:
+                        logger.warning(
+                            f"Failed to load data for curve {curve_num}, segment {segment}, channel {channel_name}"
+                        )
+                    else:
+                        if segment is not None:
+                            logger.warning(f"Failed to load segment meta file for curve {curve_num}, segment {segment}")
+                        else:
+                            logger.warning(f"Failed to load curve meta file for curve {curve_num}")
+                else:
+                    break
+        else:
+            # If there are no failed loads, log that all data was loaded successfully
+            logger.info("Successfully loaded all curve data without any missing files.")
+
+    def extract_and_save_per_curve_data(self, h5_saver: H5Saver, include_metadata: bool = True):
+        """
+        Load all curve data and optionally metadata from the JPK QI archive and save into HDF5 datasets.
+
+        Parameters
+        ----------
+        h5_saver : H5Saver
+            H5Saver instance for managing HDF5 datasets and buffers.
+        include_metadata : bool, optional
+            Whether to include metadata in the loading process, by default True.
+        """
+        logger.info(
+            f"Loading all curve data from JPK QI archive with {len(self.list_of_all_paths)} files "
+            f"{'' if include_metadata else 'not '}including metadata"
+        )
+        # Get the changing keys for curve and segment metadata which we actually need to read from each file
+        curve_meta_search_terms = h5_saver.get_curve_search_terms("Original")
+        segment_meta_search_terms = h5_saver.get_segment_search_terms("Original")
+
+        num_of_segments = len(self.segment_names)
+        for curve_num in tqdm(range(self.num_of_curves)):
+            for segment_idx, segment_name in enumerate(self.segment_names):
+                for chan in self.segment_channels:
+                    # Save the actual curve data to the h5 datasets
+                    self.extract_dat_file(
+                        h5_saver=h5_saver,
+                        volume_name="Original",
+                        curve_num=curve_num,
+                        segment_idx=segment_idx,
+                        segment_name=segment_name,
+                        channel_name=chan["name"],
+                    )
+
+                if include_metadata:
+                    # Extract and store the segment metadata for later saving
+                    self.extract_segment_metadata(
+                        h5_saver=h5_saver,
+                        curve_num=curve_num,
+                        segment_idx=segment_idx,
+                        search_terms=segment_meta_search_terms,
+                        volume_name="Original",
+                        num_of_segments=num_of_segments,
+                    )
+
+            if include_metadata:
+                # Extract and store the curve metadata for later saving
+                self.extract_curve_metadata(
+                    h5_saver=h5_saver, curve_num=curve_num, search_terms=curve_meta_search_terms, volume_name="Original"
+                )
+
+    def save_to_h5(
+        self,
+        include_per_curve_metadata: bool = True,
+    ) -> Path:
+        """
+        Save data as an H5 file. If include_per_curve_metadata is False, only curve data is saved.
+
+        Parameters
+        ----------
+        include_per_curve_metadata : bool, optional
+            If True, per-curve metadata will be included in the saved H5 file. Default is True.
+
+        Returns
+        -------
+        Path
+            The path to the saved H5 file.
+        """
+        self.volume_metadata = CurvesJPKMetadata(
+            archive=self.qi_archive,
+            shape=(self.shape_y, self.shape_x),
+            channel_units=self.channels_units,
+            segment_names=self.segment_names,
+            flip_image=bool(self.flip_image),
+        )
+        self.curves_volume = CurvesJPKVolume(
+            name="Original",
+            shape=(self.shape_y, self.shape_x),
+            archive=self.qi_archive,
+            metadata=self.volume_metadata,
+            channel_scaling=self.channel_scaling,
+            segment_mapping=self.segment_mapping,
+            channel_mapping=self.channel_mapping,
+            flip_image=bool(self.flip_image),
+        )
+        # Determine the path for the H5 file, ensuring it does not overwrite an existing file
+        self.h5_path = find_unused_filename(self.filepath)
+
+        h5_saver = H5Saver(self.h5_path)
+        with h5_saver.create_file(source=self.filepath.suffix) as file:
+            # Sample curves in dataset to make a best guess for the meta keys
+            self.changing_curve_keys, self.changing_segment_keys = self.get_changing_keys(h5_saver)
+            h5_saver.setup_curves_group()
+
+            h5_saver.setup_volume(
+                curves_volume=self.curves_volume,
+                changing_curve_keys=self.changing_curve_keys,
+                changing_segment_keys=self.changing_segment_keys,
+            )
+
+            # Extract data from the JPK QI archive and save to H5 datasets
+            self.extract_and_save_per_curve_data(
+                h5_saver,
+                include_metadata=include_per_curve_metadata,
+            )
+            # Resize the datasets to the actual number of points read
+            h5_saver.complete_saving(self.curves_volume)
+
+            # Save the global metadata to the h5 file
+            h5_saver.save_global_meta(
+                self.get_collated_metadata(), self.size_x, self.size_y, self.shape_x, self.shape_y
+            )
+
+            logger.info(f"QI data copied to h5 data {file.filename}")
+
+            # Save a lite form of the images (precalculated) if saving to a file
+            self.save_image_data(h5_saver)
+
+            self.output_summary()
+            self.saved_to_h5 = True
+            return self.h5_path
+
+    def get_changing_keys(self, h5_saver: H5Saver) -> tuple[set[str], set[str]]:
+        """
+        Check a sample of curves to see which metadata keys change across curves and segments.
+
+        This allows us to extract only the changing keys for each curve and segment.
+        Non-changing keys are moved to the top-level metadata and not extracted for each curve/segment.
+
+        Parameters
+        ----------
+        h5_saver : H5Saver
+            The H5Saver instance to use for sampling curves.
+
+        Returns
+        -------
+        tuple:
+            A tuple containing two sets: changing_curve_keys and changing_segment_keys.
+        """
+        curve_meta_dict: dict[str, list[Any]] = {}
+        segment_meta_dict: dict[str, list[Any]] = {}
+        # Get a sample of a specific size but ensure they are not in the same row or column to make it representative
+        curves_to_check = h5_saver.get_curves_sample(self.shape_x, self.shape_y, self.MAX_CURVE_CHECKS)
+        for curve_num in curves_to_check:
+            for segment_idx in range(len(self.segment_names)):
+                while True:
+                    meta_path = f"index/{curve_num}/segments/{segment_idx}/segment-header.properties"
+                    try:
+                        with self.qi_archive.open(meta_path) as f:
+                            # Load the metadata for the sampled segments
+                            meta_dict = coerce_metadata_dict(
+                                {k.split(".", 1)[1] if "." in k else k: v for k, v in javaproperties.load(f).items()}
+                            )
+                            # Add the value of each key to the list of values for that key
+                            for k, v in meta_dict.items():
+                                if k not in segment_meta_dict:
+                                    segment_meta_dict[k] = []
+                                segment_meta_dict[k].append(v)
+                        break
+
+                    except KeyError:
+                        if curve_num + 1 >= self.num_of_curves:
+                            # If we've gone past the number of curves, stop checking
+                            break
+
+                        # Otherwise, increment the curve number and try again to find a valid segment metadata file
+                        curve_num += 1
+                        continue
+            meta_path = f"index/{curve_num}/header.properties"
+            while True:
+                try:
+                    with self.qi_archive.open(meta_path) as f:
+                        # Load metadata for the sampled curves
+                        meta_dict = coerce_metadata_dict(
+                            {".".join(k.split(".")[1:]): v for k, v in javaproperties.load(f).items()}
+                        )
+                        # Add the value of each key to the list of values for that key
+                        for k, v in meta_dict.items():
+                            if k not in curve_meta_dict:
+                                curve_meta_dict[k] = []
+                            curve_meta_dict[k].append(v)
+                        break
+                except KeyError:
+                    if curve_num + 1 >= self.num_of_curves:
+                        # If we've gone past the number of curves, stop checking
+                        break
+                    # Otherwise, increment the curve number and try again to find a valid curve metadata file
+                    curve_num += 1
+                    continue
+
+        changing_curve_keys, changing_segment_keys = set(), set()
+        for key, values in curve_meta_dict.items():
+            if len({v for v in values if v is not None}) > 1:
+                changing_curve_keys.add(key)
+            else:
+                # If the key does not change across curves, move it to the top level metadata
+                self.top_level_meta[f"curve.{key}"] = values[0]
+        for key, values in segment_meta_dict.items():
+            if len({v for v in values if v is not None}) > 1:
+                changing_segment_keys.add(key)
+            else:
+                # If the key does not change across segments, move it to the top level metadata
+                self.top_level_meta[f"segment.{key}"] = values[0]
+        return changing_curve_keys, changing_segment_keys
+
+    def get_collated_metadata(self) -> dict[str, Any]:
+        """
+        Collate metadata from the general top level meta, the channel units and the essential metadata.
+
+        This prepares the metadata for saving to HDF5, where the distinction between these types will be recorded
+        with different prefixes.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the collated metadata.
+        """
+        collated_meta = {}
+        for seg_chan in self.segment_channels:
+            channel_name = self.channel_mapping.get(seg_chan["name"], seg_chan["name"])
+            collated_meta[f"channel.unit.{channel_name}"] = seg_chan["unit"]
+        for key, value in self.top_level_meta.items():
+            collated_meta[key] = value
+        for key, value in self.essential_metadata.items():
+            collated_meta[f"essential.{key}"] = value
+        return collated_meta
+
+    def get_image(
+        self, overide_channel: str | None = None, convert_to_nm: bool = True, flip_image: bool | None = None
+    ) -> tuple[np.ndarray, float, str]:
+        """
+        Process the flat curve data dictionary into a 2D list structure matching the image dimensions.
+
+        Parameters
+        ----------
+        overide_channel : str | None, optional
+            Channel name to use instead of the instance default. Default is None.
+        convert_to_nm : bool, optional
+            Whether to convert the image data to nanometres. Default is True.
+        flip_image : bool | None, optional
+            Whether to flip the image vertically. Defaults to the instance setting if None.
+
+        Returns
+        -------
+        tuple[np.ndarray, float, str]
+            A 2D array representing the image data, the pixel-to-nm scaling factor, and the unit of the z-axis.
+        """
+        # Get channel and flip_image parameters
+        channel = str(overide_channel) if overide_channel else str(self.channel)
+
+        if flip_image is None:
+            flip_image = bool(self.flip_image)
+
+        # Search through the namelist to find .jpk-qi-image file
+        path_to_image = None
+        for file_name in self.list_of_all_paths:
+            if file_name.endswith(".jpk-qi-image"):
+                path_to_image = file_name
+
+        # Search through the namelist to find .force file if no .jpk-qi-image file is found
+        if path_to_image is None:
+            for file_name in self.list_of_all_paths:
+                if file_name.endswith(".force"):
+                    path_to_image = file_name
+
+        if path_to_image is None:
+            raise FileNotFoundError(f"{path_to_image} not found in JPK archive")
+
+        # Read the .jpk-qi-image file as bytes and load it using the existing jpk loading function
+        tif_bytes = self.qi_archive.read(path_to_image)
+
+        virtual_file = io.BytesIO(tif_bytes)
+        logger.info(f"Looking for channel {channel} in {path_to_image}")
+        return jpk._load_jpk(
+            virtual_file,
+            path_to_image,
+            channel=channel,
+            file_suffix=".jpk-qi-data",
+            config_path=self.config_path,
+            convert_to_nm=convert_to_nm,
+            flip_image=bool(flip_image),
+        )
+
+    def save_image_data(self, h5_saver: H5Saver):
+        """
+        Save the image data and the metadata required to interpret it to H5.
+
+        Parameters
+        ----------
+        h5_saver : H5Saver
+            An instance of the H5Saver class used for saving data to the H5 file.
+        """
+        logger.info(f"Saving a hdf5 copy of the data {self.h5_path}")
+
+        # Look for the jpk-qi-image file in the archive
+        path_to_image = None
+        for file_name in self.list_of_all_paths:
+            if file_name.endswith(".jpk-qi-image"):
+                path_to_image = file_name
+                break
+
+        # If no jpk-qi-image file is found, look for a .force file in the archive
+        if path_to_image is None:
+            for file_name in self.list_of_all_paths:
+                if file_name.endswith(".force"):
+                    path_to_image = file_name
+                    break
+
+        if path_to_image is None:
+            raise FileNotFoundError(f"No .jpk-qi-image or .force file found in {self.filepath}")
+        # Add the channels which exist in the jpk-qi-image file
+        h5_channels: dict[str, int] = {}
+        if path_to_image:
+            with self.qi_archive.open(path_to_image, "r") as image_file:
+                h5_channels = jpk._get_jpk_channels(
+                    file=image_file, filename=self.filepath.stem, file_path=self.filepath / Path(path_to_image)
+                )
+        else:
+            logger.warning(
+                f"No image data found in {self.filepath}. Cannot save image data to H5."
+                f"Please check the file and channel name."
+            )
+            return
+
+        for i, h5_channel in enumerate(h5_channels):
+            channel_image, _, z_unit = self.get_image(overide_channel=h5_channel, convert_to_nm=False, flip_image=False)
+            h5_saver.save_image(channel_image, image_name=h5_channel, z_unit=z_unit, idx=i)
+
+    def extract_dat_file(
+        self,
+        h5_saver: H5Saver,
+        volume_name: str,
+        curve_num: int,
+        segment_idx: int,
+        segment_name: str,
+        channel_name: str,
+    ):
+        """
+        Extract the data from a .dat file in the JPK QI archive.
+
+        Applies the appropriate scaling and saves it to the internal data structure and h5 dataset if required.
+
+        Parameters
+        ----------
+        h5_saver : H5Saver
+            An instance of the H5Saver class used for saving data to the H5 file.
+        volume_name : str
+            The name of the volume to which the curve belongs.
+        curve_num : int
+            The curve number associated with the .dat file, parsed from the filename.
+        segment_idx : int
+            The segment index associated with the .dat file, parsed from the filename.
+        segment_name : str
+            The segment name associated with the .dat file, parsed from the filename.
+        channel_name : str
+            The channel name associated with the .dat file, parsed from the filename.
+        """
+        if channel_name in self.channel_scaling:
+            # Get data structures for this channel and segment
+            scale = self.channel_scaling[channel_name]
+            dat_path = f"index/{curve_num}/segments/{segment_idx}/channels/{channel_name}.dat"
+
+            try:
+                with self.qi_archive.open(dat_path) as f:
+                    # Read binary data as big-endian 32-bit integers
+                    raw_bytes = f.read()
+
+                    raw_array = np.frombuffer(raw_bytes, dtype=">i4")
+
+                    # Apply scaling to convert raw values into real world values
+                    segment_array = (raw_array * scale["multiplier"]) + scale["offset"]
+
+            except KeyError:
+                self.failed_curves.add((curve_num, segment_idx, channel_name))
+
+                # Limit the number of warnings to avoid spamming the logs
+                if len(self.failed_curves) < 10:
+                    logger.warning(
+                        f"Data file {dat_path} not found in archive. Skipping data for curve {curve_num}, "
+                        f"segment {segment_name}, channel {channel_name}."
+                    )
+                elif len(self.failed_curves) == 10:
+                    logger.warning(
+                        "Lots of missing files, further warnings will be suppressed. View summary at the end."
+                    )
+                segment_array = np.empty(0, dtype=np.float32)
+            h5_saver.save_curve_segment(
+                volume_name=volume_name,
+                segment_data=segment_array,
+                curve_num=curve_num,
+                segment_name=segment_name,
+                channel_name=self.channel_mapping.get(channel_name, channel_name),
+                num_of_curves=self.num_of_curves,
+            )
+
+        else:
+            # Log if curve failed
+            self.failed_curves.add((curve_num, segment_idx, channel_name))
+            if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
+                logger.warning(
+                    f"Channel {channel_name} not found in scaling information. Skipping data for curve {curve_num}, "
+                    f"segment {segment_name}."
+                )
+
+    def extract_curve_metadata(self, h5_saver: H5Saver, curve_num: int, search_terms: list[bytes], volume_name: str):
+        """
+        Extract the curve metadata from its header.properties file in the JPK QI archive and save to h5.
+
+        Parameters
+        ----------
+        h5_saver : H5Saver
+            The H5Saver instance to save the metadata to.
+        curve_num : int
+            The curve number associated with the metadata.
+        search_terms : list[bytes]
+            A list of search terms to look for in the metadata file.
+        volume_name : str
+            The name of the volume.
+        """
+        meta_path = f"index/{curve_num}/header.properties"
+        raw_bytes = b""
+        try:
+            # Read metadata file as raw bytes
+            with self.qi_archive.open(meta_path) as f:
+                raw_bytes = f.read()
+        except KeyError:
+            self.failed_curves.add((curve_num, None, None))
+            # Limit the number of warnings to avoid spamming the logs
+            if len(self.failed_curves) < 10:
+                logger.warning(
+                    f"Metadata file {meta_path} not found in archive. Skipping metadata for curve {curve_num}."
+                )
+            elif len(self.failed_curves) == 10:
+                logger.warning("Lots of missing files, further warnings will be suppressed. View summary at the end.")
+
+        for attr_idx, search_term in enumerate(search_terms):
+            # Find the location of the metadata value in the raw bytes
+            start = raw_bytes.find(search_term)
+            # If found, extract the actual value
+            if start != -1:
+                start += len(search_term)
+                end = raw_bytes.find(b"\n", start)
+                value = coerce_metadata_value(raw_bytes[start:end].decode("utf-8").strip())
+            # Save a no data value if the search term is not found in the metadata file
+            else:
+                value = "No data"
+            h5_saver.save_curve_meta_attr(
+                curve_num=curve_num,
+                attr_idx=attr_idx,
+                value=value,
+                volume_name=volume_name,
+                num_of_curves=self.num_of_curves,
+            )
+
+    def extract_segment_metadata(
+        self,
+        h5_saver: H5Saver,
+        curve_num: int,
+        segment_idx: int,
+        search_terms: list[bytes],
+        volume_name: str,
+        num_of_segments: int,
+    ):
+        """
+        Extract segment metadata from its header.properties file.
+
+        Parameters
+        ----------
+        h5_saver : H5Saver
+            The H5Saver instance to save the metadata to.
+        curve_num : int
+            The curve number associated with the metadata.
+        segment_idx : int
+            The segment index associated with the metadata.
+        search_terms : list[bytes]
+            A list of search terms to look for in the metadata file.
+        volume_name : str
+            The name of the volume.
+        num_of_segments : int
+            The number of segments in each curve.
+        """
+        meta_path = f"index/{curve_num}/segments/{segment_idx}/segment-header.properties"
+        raw_content = b""
+        try:
+            with self.qi_archive.open(meta_path) as f:
+                raw_content = f.read()
+        except KeyError:
+            self.failed_curves.add((curve_num, segment_idx, None))
+            if len(self.failed_curves) < 10:  # Limit the number of warnings to avoid spamming the logs
+                logger.warning(
+                    f"Metadata file {meta_path} not found in archive. Skipping metadata for curve {curve_num}, "
+                    f"segment {self.segment_names[segment_idx]}."
+                )
+            elif len(self.failed_curves) == 10:
+                logger.warning("Lots of missing files, further warnings will be suppressed. View summary at the end.")
+        for attr_idx, search_term in enumerate(search_terms):
+            start = raw_content.find(search_term)
+            if start != -1:
+                start += len(search_term)
+                end = raw_content.find(b"\n", start)
+                value = coerce_metadata_value(raw_content[start:end].decode("utf-8").strip())
+            else:
+                value = "No data"
+            h5_saver.save_segment_meta_attr(
+                curve_num=curve_num,
+                segment_idx=segment_idx,
+                attr_idx=attr_idx,
+                value=value,
+                volume_name=volume_name,
+                num_of_curves=self.num_of_curves,
+                num_of_segments=num_of_segments,
+            )
+
+    def parse_dimension_data(self):
+        """Parse dimension data and calculate the pixel to nanometer scaling factor."""
+        # Extract both real size and pixel dimensions from the metadata
+        for key, value in self.top_level_meta.items():
+            if key.endswith(".ulength"):
+                self.size_x = float(value)
+            if key.endswith(".vlength"):
+                self.size_y = float(value)
+            if key.endswith(".ilength"):
+                self.shape_x = int(value)
+            if key.endswith(".jlength"):
+                self.shape_y = int(value)
+
+        # Log an error if any of these do not exist
+        if np.isnan(self.size_x) or np.isnan(self.size_y) or 0 in [self.shape_x, self.shape_y]:
+            logger.error(f"Incomplete dimension data in {self.filepath}")
+
+        # Calculate the pixel to nano metre scaling as an average of the scale for each axis
+        pixel_to_nm_scaling_factor_x = self.size_x / self.shape_x * 1e9 if self.shape_x > 0 else 1.0
+        pixel_to_nm_scaling_factor_y = self.size_y / self.shape_y * 1e9 if self.shape_y > 0 else 1.0
+        self.pixel_to_nanometre_scaling = (pixel_to_nm_scaling_factor_x + pixel_to_nm_scaling_factor_y) / 2
+
+        # Establish number of curves
+        self.num_of_curves = self.shape_x * self.shape_y
+
+    def extract_global_metadata(self):
+        """Extract global metadata and populate top level metadata dictionary and segment channels list."""
+        # Load the metadata from the global properties file
+        if "header.properties" in self.list_of_all_paths:
+            with self.qi_archive.open("header.properties") as archive_meta_file:
+                props = coerce_metadata_dict(javaproperties.load(archive_meta_file))
+
+                # Add data from the main header to the top level metadata with a prefix to avoid key clashes
+                for key, value in props.items():
+                    self.top_level_meta[f"main-header.{key}"] = value
+        else:
+            logger.error(f"File {self.filepath} does not contain essential metadata and cannot be loaded")
+
+        # Load the metadata from the shared header
+        if "shared-data/header.properties" in self.list_of_all_paths:
+            with self.qi_archive.open("shared-data/header.properties") as shared_data_file:
+                shared_meta = coerce_metadata_dict(javaproperties.load(shared_data_file))
+                channel_idx = 0
+                segment_count = int(shared_meta.get("force-segment-header-infos.count", 0))
+                self.segment_names = [
+                    shared_meta.get(f"force-segment-header-info.{seg_idx}.settings.style", f"Segment {seg_idx}")
+                    for seg_idx in range(segment_count)
+                ]
+                self.segment_mapping = _get_standard_segment_mapping(
+                    self.segment_names,
+                    self.config.get("standard_curve", {}).get("segment_names", {}),
+                )
+                self.segment_names = [
+                    self.segment_mapping.get(segment_name, segment_name) for segment_name in self.segment_names
+                ]
+
+                # Add all the data from the shared header to the top level metadata with a prefix to avoid key clashes
+                for key, value in shared_meta.items():
+                    self.top_level_meta[f"shared-data.{key}"] = value
+
+                # Collect channel data from the shared metadata
+                while f"lcd-info.{channel_idx}.channel.name" in shared_meta:
+                    channel_dict = {}
+                    # Calculate and store the offset and multiplier to convert raw values into real world values
+                    multiplier, offset, unit = _get_channel_scaling(shared_meta, channel_idx)
+                    channel_dict["name"] = shared_meta[f"lcd-info.{channel_idx}.channel.name"]
+                    channel_dict["offset"] = offset
+                    channel_dict["multiplier"] = multiplier
+                    channel_dict["unit"] = unit
+                    # Add the channel dict to the list
+                    self.segment_channels.append(channel_dict)
+                    # Increment the channel index to look for the next channel
+                    channel_idx += 1
+        else:
+            logger.error(f"File {self.filepath} does not contain essential channel metadata and cannot be loaded")
+
+        if len(self.segment_channels) == 0:
+            logger.error("Could not find channels for segments")
+
+        # Create a lookup for channel name to unit to be returned
+        self.channels_units = {seg_chan["name"]: seg_chan["unit"] for seg_chan in self.segment_channels}
+        # Lookup map for binary scaling
+        self.channel_scaling = {chan["name"]: chan for chan in self.segment_channels}
+        self.channel_mapping = _get_standard_channel_mapping(
+            list(self.channel_scaling),
+            self.config.get("standard_curve", {}).get("channel_names", {}),
+        )
+        self.channels_units = {
+            self.channel_mapping.get(channel_name, channel_name): unit
+            for channel_name, unit in self.channels_units.items()
+        }
+
+    def extract_essential_metadata(self, raw_metadata: dict[str, Any]) -> dict[str, Any]:
+        """
+        Extract canonical essential metadata from raw global metadata.
+
+        This ensures that certain metadata items which exists under different names in different curve file formats
+        but may be needed for analysis functions such as the sample rate or spring constant, exists under a consistent
+        canonical name (read from the config file). These attributes are also more likely to be the functions that the
+        user wants to view.
+
+        Parameters
+        ----------
+        raw_metadata : dict
+            The raw metadata dictionary to filter.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary containing only the essential metadata keys.
+        """
+        # Get the options for the what 'essential' metadata may be found under in jpk data file
+        essential_key_options = self.config.get("jpk_qi", {}).get("essential_metadata_keys", {})
+        essential_metadata = {}
+        for target_name, source_keys in essential_key_options.items():
+            for source_key in source_keys:
+                if source_key in raw_metadata:
+                    # If one of the source options exists in the file, we save the value at that key
+                    essential_metadata[target_name] = raw_metadata[source_key]
+                    # Once we have found a source key option, we stop (so the first source key is prioritised)
+                    break
+
+        # Read sample rate is not usually present in jpk data files, but can be calculated from other metadata
+        if (
+            "read_sample_rate" not in essential_metadata
+            and "extend_num_points" in essential_metadata
+            and "extend_duration" in essential_metadata
+        ):
+            essential_metadata["read_sample_rate"] = (
+                essential_metadata["extend_num_points"] / essential_metadata["extend_duration"]
+            )
+        return essential_metadata
+
+    def close(self):
+        """Close the ZIP archive when done to free up system resources."""
+        self.qi_archive.close()
+        self.list_of_all_paths = []
+
+
+def load_jpk_data(filepath: str | Path, channel: str, cached_data: dict) -> AFMScan:
+    """
+    Load the JPK QI data using the JPKQILoader.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the JPK QI file.
+    channel : str
+        The channel to load from the file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+
+    Returns
+    -------
+    AFMScan
+        The loaded JPK QI data.
+    """
+    if "jpk_qi_loader" not in cached_data:
+        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath, channel=channel)
+    return cached_data["jpk_qi_loader"].load(channel=channel)
+
+
+def get_jpk_data_channels(filepath: str | Path, cached_data: dict) -> list[str]:
+    """
+    Get the available channels in the JPK QI data.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the JPK QI file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+
+    Returns
+    -------
+    list[str]
+        A list of available channels in the JPK QI data.
+    """
+    if "jpk_qi_loader" not in cached_data:
+        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath)
+    return cached_data["jpk_qi_loader"].get_available_channels()
+
+
+def get_jpk_data_params() -> dict:
+    """
+    Get any additional parameters for the JPK QI data.
+
+    Returns
+    -------
+    dict
+        A dictionary containing any additional parameters for the JPK QI data.
+    """
+    return {"save_as_h5": bool}
+
+
+def save_jpk_data_to_h5(filepath: str | Path, cached_data: dict | None = None) -> Path:
+    """
+    Save the JPK QI data as an h5 file for faster future loading.
+
+    Parameters
+    ----------
+    filepath : str | Path
+        Path to the JPK QI file.
+    cached_data : dict
+        Cached data to avoid reloading heavy data.
+
+    Returns
+    -------
+    Path
+        The path to the saved h5 file.
+    """
+    if cached_data is None:
+        cached_data = {}
+    if "jpk_qi_loader" not in cached_data:
+        cached_data["jpk_qi_loader"] = JPKQILoader(filepath=filepath)
+    h5_path = cached_data["jpk_qi_loader"].save_to_h5()
+
+    # Close the loader to free up resources after saving to h5 as the h5 file should now be used instead
+    cached_data["jpk_qi_loader"].close()
+    cached_data.pop("jpk_qi_loader")
+    return h5_path

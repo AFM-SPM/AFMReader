@@ -1,0 +1,18 @@
+# Set default behavior to automatically normalize line endings to LF on commit
+* text=auto eol=lf
+
+# Explicitly mark binary files so Git never touches their line endings
+*.asd binary
+*.bin binary
+*.gwy binary
+*.h5 binary
+*.h5-jpk binary
+*.hdf5 binary
+*.ibw binary
+*.jpk binary
+*.jpk-qi-data binary
+*.jpk-qi-image binary
+*.spm binary
+*.stp binary
+*.top binary
+*.topostats binary

@@ -62,19 +62,26 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             id="version 0.2",
         ),
         pytest.param(
-            "sample_2_3_2.topostats",
+            "minicircle_small.topostats",
             "topostats_version",
-            "2.3.2",
+            "2.4",
             (64, 64),
             1.97601171875,
             {
                 "pixel_to_nm_scaling",
-                "image",
+                "image_original",
+                "config",
+                "filename",
+                "img_path",
                 "topostats_version",
+                "image_statistics",
+                "full_image_plots",
+                "grain_crops",
+                "image_name",
+                "full_mask_tensor",
             },
-            112069.51332503435,
-            id="version 2.3.2",
-            marks=pytest.mark.xfail(reason="Not yet implemented"),
+            1176.601500617851,
+            id="version 2.4",
         ),
     ],
 )
@@ -89,21 +96,23 @@ def test_load_topostats(
 ) -> None:
     """Test the normal operation of loading a .topostats (HDF5 format) file."""
     file_path = RESOURCES / file_name
-    topostats_data = topostats.load_topostats(file_path)
+    afm_scan = topostats.load_topostats(file_path, channel="image")
 
-    assert set(topostats_data.keys()) == data_keys  # type: ignore
+    expected_metadata_keys = data_keys - {"image", "pixel_to_nm_scaling"}
+    assert afm_scan.metadata is not None
+    assert set(afm_scan.metadata.keys()) == expected_metadata_keys
     if version_key == "topostats_file_version":
-        assert topostats_data[version_key] == float(version)
+        assert afm_scan.metadata[version_key] == float(version)
     else:
-        assert topostats_data[version_key] == version
-    assert topostats_data["pixel_to_nm_scaling"] == pytest.approx(pixel_to_nm_scaling)
-    assert topostats_data["image"].shape == image_shape
-    assert topostats_data["image"].sum() == pytest.approx(image_sum)
+        assert afm_scan.metadata[version_key] == version
+    assert afm_scan.pixel_to_nanometre_scaling == pytest.approx(pixel_to_nm_scaling)
+    assert afm_scan.image.shape == image_shape
+    assert afm_scan.image.sum() == pytest.approx(image_sum)
     if version > "0.2":
-        assert isinstance(topostats_data["img_path"], Path)
+        assert isinstance(afm_scan.metadata["img_path"], Path)
 
 
 def test_load_topostats_file_not_found() -> None:
     """Ensure FileNotFound error is raised."""
     with pytest.raises(FileNotFoundError):
-        topostats.load_topostats("nonexistant_file.topostats")
+        topostats.load_topostats("nonexistant_file.topostats", channel="image")
