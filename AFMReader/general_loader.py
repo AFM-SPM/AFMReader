@@ -116,7 +116,7 @@ class LoadFile:
 
         Returns
         -------
-        list
+        list[str] | dict[str, int]
             List of available channels.
         """
         self.kwargs = kwargs if kwargs else self.kwargs
