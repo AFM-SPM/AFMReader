@@ -199,3 +199,7 @@ Pull Requests will be reviewed in a timely and hopefully constructive manner.
 [uv-lock]: https://docs.astral.sh/uv/concepts/projects/#project-lockfile
 [venv]: https://docs.python.org/3/library/venv.html
 [virtualenvwrapper]: https://virtualenvwrapper.readthedocs.io/en/latest/
+
+## Releases
+
+TODO: Add documentation on how to make a release.
