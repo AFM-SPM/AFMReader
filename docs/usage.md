@@ -57,15 +57,17 @@ can be specified with the `config_path` parameter which should point to the loca
 |             | `grid_jlength`       | `32839`       |
 |             | `slot_size`          | `48`          |
 
-## AFMScan dataclass
+## Loading files
+
+### AFMScan dataclass
 
 A processed scan's data (from any available file type) will be returned as an `AFMScan` dataclass object.
 Data such as the image itself, the pixel to nm scaling factor and metadata are attributes of this dataclass.
 
 Each example below returns an instance of `AFMScan` into `scan_data`. From here individual attributes can be
-selected:
+selected such as image data, the pixel to nanometre scaling factor, and metadata.
 
-## .topostats
+### .topostats
 
 You can open `.topostats` files using the `load_topostats` function. Just pass in the path to the file.
 
@@ -79,7 +81,7 @@ pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling
 metadata = scan_data.metadata
 ```
 
-## .spm
+### .spm
 
 You can open `.spm` files using the `load_spm` function. Just pass in the path to the file and the
 channel name that you want to use. (If in doubt use one of the following: "Height", "ZSensor",
@@ -94,7 +96,7 @@ image = scan_data.image
 pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling
 ```
 
-## .gwy
+### .gwy
 
 You can open `.gwy` files using the `load_gwy` function. Just pass in the path to the file and the
 channel name that you want to use. (If in doubt use one one of the following: "Height", "ZSensor",
@@ -109,7 +111,7 @@ image = scan_data.image
 pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling_factor
 ```
 
-## .asd
+### .asd
 
 You can open `.asd` files using the `load_asd` function. Just pass in the path to the file and the channel name that you
 want to use. (If in doubt use the `"TP"` topography channel).
@@ -129,7 +131,7 @@ pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling_factor
 metadata = scan_data.metadata
 ```
 
-## .ibw
+### .ibw
 
 You can open `.ibw` files using the `load_ibw` function. Just pass in the path to the file
 and the channel name that you want to use. (If in doubt, use `HeightTracee` (yes, with the
@@ -144,7 +146,7 @@ image = scan_data.image
 pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling_factor
 ```
 
-## .jpk
+### .jpk
 
 You can open `.jpk` files using the `load_jpk` function. Just pass in the path
 to the file and the channel name you want to use. (If in doubt, use `height_trace` or `measuredHeight_trace`).
@@ -157,3 +159,64 @@ scan_data = load_jpk(file_path="./my_jpk_file.jpk", channel="height_trace")
 image = scan_data.image
 pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling_factor
 ```
+
+### .h5-jpk
+
+You can open `.h5-jpk` files using the `load_h5jpk` funciton. Just pass in the path to the file and the channel name
+that you want to use. (If in doubt, try `height_trace`).
+
+```python
+from AFMReader.h5jpk import load_h5jpk
+
+scan_data = load_h5jpk(file_path="./my_h5jpk_file.jpk", channel="height_trace", flip_image=True)
+frames = scan_data.image
+pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling
+timestamps = scan_data.timestamps
+```
+
+#### .h5-jpk : Loading force curves
+
+```python
+from numpy import ndarray
+from AFMReader.data_classes import CurvesDataset
+import matplotlib.pyplot as plt
+
+curve_dataset: CurvesDataset | None = afm_scan.curves_dataset
+assert curve_dataset is not None
+curve_coords = (50, 52)  # Any pixel of the image
+curve_at_coords_data: dict[str, dict[str, ndarray]] = curve_dataset.get_default_volume()[
+    curve_coords[0], curve_coords[1]
+]
+
+for channel_name, curve in curve_at_coords_data.items():
+    print(channel_name)
+
+# for this file, the curve channels "height" and "vDeflection" are printed.
+
+curve_channel = "height"
+curve_direction = "extend"
+curve_at_coords = curve_at_coords_data[curve_channel][curve_direction]
+
+plt.plot(curve_at_coords)
+plt.show()
+```
+
+AFMReader uses the [Loguru](https://loguru.readthedocs.io/en/stable/overview.html) logger.
+
+By default, when using AFMReader as a package, no logs will be produced. This is to
+prevent your software from being inundated with uninvited logs.
+
+Logs can be re-enabled for AFMReader by invoking:
+
+```python
+from loguru import logger
+
+loguru.logger.enable("AFMReader")
+```
+
+Alternatively, for direct usage, the logger can be built with the desired logging level:
+
+```python
+from AFMReader.logging import configure_standalone_logging
+
+logger = configure_standalone_logging(level="INFO")
