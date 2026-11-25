@@ -45,7 +45,8 @@ dependencies = [
   "tifffile",
   "tqdm",
   "ruamel.yaml",
-  "javaproperties"
+  "javaproperties",
+  "ipykernel>=7.3.0",
 ]
 
 [dependency-groups]
@@ -144,7 +145,6 @@ exclude = [
   ".venv",
   "gwy.py",  # Black and ruff were fighting over this, going with black
 ]
-# per-file-ignores = []
 line-length = 120
 target-version = "py311"
 lint.ignore = [
@@ -157,6 +157,11 @@ lint.ignore = [
   "TRY201",
 ]
 lint.unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"examples/example_01.ipynb" = [
+    "I001",  # Organise imports
+]
 
 [tool.ruff.lint.flake8-quotes]
 docstring-quotes = "double"
