@@ -142,7 +142,6 @@ def spm_channel_list(scan: "pySPM.Bruker", encoding: str = "latin1") -> dict[str
     return channel_list
 
 
-def load_spm(file_path: Path | str, channel: str) -> tuple:
 def load_spm(file_path: Path | str, channel: str) -> AFMScan:
     """
     Extract image and pixel to nm scaling from the Bruker .spm file.
@@ -214,16 +213,15 @@ def load_spm(file_path: Path | str, channel: str) -> AFMScan:
         elif f"{request} retrace" in lookup:
             # Bare name and no trace image available — load retrace, and warn.
             logger.warning(
-                f"[{filename}] : no direction specified for '{channel}' and no "
-                f"trace image available; loading retrace."
+                f"[{filename}] : no direction specified for '{channel}' and no trace image available; loading retrace."
             )
             channel_name, backward = lookup[f"{request} retrace"]
         else:
-            logger.error(f"[{filename}] : '{channel}' not in {file_path.suffix} channel " f"list: {list(channel_list)}")
-            raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: " f"{list(channel_list)}")
+            logger.error(f"[{filename}] : '{channel}' not in {file_path.suffix} channel list: {list(channel_list)}")
+            raise ValueError(f"'{channel}' not in {file_path.suffix} channel list: {list(channel_list)}")
 
         channel_data = scan.get_channel(channel_name, backward=backward)
-        logger.info(f"[{filename}] : Extracted channel {channel_name} " f"({'retrace' if backward else 'trace'})")
+        logger.info(f"[{filename}] : Extracted channel {channel_name} ({'retrace' if backward else 'trace'})")
         unit = channel_data.zscale
 
         image = np.flipud(np.array(channel_data.pixels))

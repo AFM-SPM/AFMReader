@@ -56,10 +56,8 @@ RESOURCES = BASE_DIR / "tests" / "resources"
             (1024, 1024),
             np.float64,
             1767.6219379177087,
-            "nm",
+            "V/Arb",
             id="trailing whitespace stripped",
-            "nm",
-            id="file type 0",
         ),
     ],
 )
