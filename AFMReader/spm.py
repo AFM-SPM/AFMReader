@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pySPM
 
+from AFMReader.data_classes import AFMScan
 from AFMReader.logging import logger
 
 logger.enable(__package__)
@@ -142,6 +143,7 @@ def spm_channel_list(scan: "pySPM.Bruker", encoding: str = "latin1") -> dict[str
 
 
 def load_spm(file_path: Path | str, channel: str) -> tuple:
+def load_spm(file_path: Path | str, channel: str) -> AFMScan:
     """
     Extract image and pixel to nm scaling from the Bruker .spm file.
 
@@ -163,8 +165,8 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
 
     Returns
     -------
-    tuple(np.ndarray, float)
-        A tuple containing the image and its pixel to nanometre scaling value.
+    AFMScan
+        An AFMScan object containing the image, its pixel to nanometre scaling value, and z-axis units.
 
     Raises
     ------
@@ -179,11 +181,11 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
     Load the forward image (backwards-compatible bare name):
 
     >>> from AFMReader.spm import load_spm
-    >>> image, pixel_to_nm = load_spm(file_path="path/to/file.spm", channel="Height Sensor")
-
-    Load a specific scan direction:
-
-    >>> image, pixel_to_nm = load_spm(file_path="path/to/file.spm", channel="Height Sensor retrace")
+    >>> afm_scan = load_spm(file_path="path/to/file.spm", channel="Height")
+    >>> image = afm_scan.image
+    >>> pixel_to_nm = afm_scan.pixel_to_nanometre_scaling
+    >>> z_units = afm_scan.z_units
+    ```
     """
     logger.info(f"Loading image from : {file_path}")
     file_path = Path(file_path)
@@ -222,9 +224,43 @@ def load_spm(file_path: Path | str, channel: str) -> tuple:
 
         channel_data = scan.get_channel(channel_name, backward=backward)
         logger.info(f"[{filename}] : Extracted channel {channel_name} " f"({'retrace' if backward else 'trace'})")
+        unit = channel_data.zscale
+
         image = np.flipud(np.array(channel_data.pixels))
     except FileNotFoundError:
         logger.error(f"[{filename}] File not found : {file_path}")
         raise
 
-    return (image, spm_pixel_to_nm_scaling(filename, channel_data))
+    return AFMScan(
+        image=image,
+        pixel_to_nanometre_scaling=spm_pixel_to_nm_scaling(filename, channel_data),
+        z_units=unit,
+    )
+
+
+def get_spm_channels(file_path: Path | str) -> list:
+    """
+    Get the list of channels available in the .spm file.
+
+    Parameters
+    ----------
+    file_path : Path or str
+        Path to the .spm file.
+
+    Returns
+    -------
+    list
+        List of available channels.
+    """
+    labels = []
+    file_path = Path(file_path)
+    filename = file_path.stem
+    try:
+        scan = pySPM.Bruker(file_path)
+    except FileNotFoundError:
+        logger.error(f"[{filename}] File not found : {file_path}")
+        raise
+    for channel_option in [layer[b"@2:Image Data"][0] for layer in scan.layers]:
+        channel_name = channel_option.decode("latin1").split('"')[1]
+        labels.append(channel_name)
+    return labels
