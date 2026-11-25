@@ -9,9 +9,10 @@ config:
     allowed_elements:
       - div
 
-# Globs
-globs:
-  - "**/*.md"
+# Don't need to glob, the edited files are passed by pre-commit
+# # Globs
+# globs:
+#   - "**/*.md"
 
 # Fix any fixable errors
 fix: true
