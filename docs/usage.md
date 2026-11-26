@@ -85,10 +85,13 @@ You can open `.spm` files using the `load_spm` function. Just pass in the path t
 channel name that you want to use. (If in doubt use one of the following: "Height", "ZSensor",
 "Height Sensor").
 
+The default scan direction to open is 'trace' but you can add either "trace" or "retrace" to the channel string to
+select a scan direction explicitly if available (i.e. "Height Sensor trace" or "Height Sensor retrace").
+
 ```python
 from AFMReader.spm import load_spm
 
-scan_data = load_spm(file_path="./my_spm_file.spm", channel="Height")
+scan_data = load_spm(file_path="./my_spm_file.spm", channel="Height trace")
 
 image = scan_data.image
 pixel_to_nm_scaling = scan_data.pixel_to_nanometre_scaling
