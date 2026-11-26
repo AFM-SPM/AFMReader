@@ -175,6 +175,8 @@ def calculate_scaling_factor(
     raise ValueError(f"channel {channel} not known for .asd file type.")
 
 
+# pylint: disable=too-many-statements
+# pylint: disable=too-many-locals
 def load_asd(file_path: str | Path, channel: str) -> AFMScan:
     """
     Load a .asd file.
@@ -226,8 +228,16 @@ def load_asd(file_path: str | Path, channel: str) -> AFMScan:
                 f"File version {file_version} unknown. Please add support if you know how to decode this file version."
             )
 
-        pixel_to_nanometre_scaling_factor_x = header_dict["x_nm"] / header_dict["x_pixels"]
-        pixel_to_nanometre_scaling_factor_y = header_dict["y_nm"] / header_dict["y_pixels"]
+        x_nm = header_dict["x_nm"]
+        y_nm = header_dict["y_nm"]
+        x_pixels = header_dict["x_pixels"]
+        y_pixels = header_dict["y_pixels"]
+        assert isinstance(x_nm, (int, float)), f"Expected x_nm to be int or float, got {type(x_nm)}"
+        assert isinstance(y_nm, (int, float)), f"Expected y_nm to be int or float, got {type(y_nm)}"
+        assert isinstance(x_pixels, int), f"Expected x_pixels to be int, got {type(x_pixels)}"
+        assert isinstance(y_pixels, int), f"Expected y_pixels to be int, got {type(y_pixels)}"
+        pixel_to_nanometre_scaling_factor_x = x_nm / x_pixels
+        pixel_to_nanometre_scaling_factor_y = y_nm / y_pixels
         if pixel_to_nanometre_scaling_factor_x != pixel_to_nanometre_scaling_factor_y:
             logger.warning(
                 f"Resolution of image is different in x and y directions:"
@@ -235,17 +245,24 @@ def load_asd(file_path: str | Path, channel: str) -> AFMScan:
                 f"y: {pixel_to_nanometre_scaling_factor_y}"
             )
         pixel_to_nanometre_scaling_factor = pixel_to_nanometre_scaling_factor_x
+        num_frames = header_dict["num_frames"]
+        assert isinstance(num_frames, int), f"Expected num_frames to be int, got {type(num_frames)}"
 
         if channel == header_dict["channel1"]:
             logger.info(f"Requested channel {channel} matches first channel in file: {header_dict['channel1']}")
+            # Don't need to seek to the end of the first channel, so do nothing.
         elif channel == header_dict["channel2"]:
             logger.info(f"Requested channel {channel} matches second channel in file: {header_dict['channel2']}")
 
+            # We need to seek to the end of the first channel.
+
             # Remember that each value is two bytes (since signed int16)
-            size_of_single_frame_plus_header = (
-                header_dict["frame_header_length"] + header_dict["x_pixels"] * header_dict["y_pixels"] * 2
+            frame_header_length = header_dict["frame_header_length"]
+            assert isinstance(frame_header_length, int), (
+                f"Expected frame_header_length to be int, got {type(frame_header_length)}"
             )
-            length_of_all_first_channel_frames = header_dict["num_frames"] * size_of_single_frame_plus_header
+            size_of_single_frame_plus_header = frame_header_length + x_pixels * y_pixels * 2
+            length_of_all_first_channel_frames = num_frames * size_of_single_frame_plus_header
             _ = open_file.read(length_of_all_first_channel_frames)
         else:
             raise ValueError(
@@ -253,23 +270,43 @@ def load_asd(file_path: str | Path, channel: str) -> AFMScan:
                 f"{header_dict['channel1']}, {header_dict['channel2']}"
             )
 
+        z_piezo_gain = header_dict["z_piezo_gain"]
+        z_piezo_extension = header_dict["z_piezo_extension"]
+        scanner_sensitivity = header_dict["scanner_sensitivity"]
+        phase_sensitivity = header_dict["phase_sensitivity"]
+        assert isinstance(z_piezo_gain, (int, float)), (
+            f"Expected z_piezo_gain to be int or float, got {type(z_piezo_gain)}"
+        )
+        assert isinstance(z_piezo_extension, (int, float)), (
+            f"Expected z_piezo_extension to be int or float, got {type(z_piezo_extension)}"
+        )
+        assert isinstance(scanner_sensitivity, (int, float)), (
+            f"Expected scanner_sensitivity to be int or float, got {type(scanner_sensitivity)}"
+        )
+        assert isinstance(phase_sensitivity, (int, float)), (
+            f"Expected phase_sensitivity to be int or float, got {type(phase_sensitivity)}"
+        )
         scaling_factor = calculate_scaling_factor(
             channel=channel,
-            z_piezo_gain=header_dict["z_piezo_gain"],
-            z_piezo_extension=header_dict["z_piezo_extension"],
-            scanner_sensitivity=header_dict["scanner_sensitivity"],
-            phase_sensitivity=header_dict["phase_sensitivity"],
+            z_piezo_gain=z_piezo_gain,
+            z_piezo_extension=z_piezo_extension,
+            scanner_sensitivity=scanner_sensitivity,
+            phase_sensitivity=phase_sensitivity,
         )
 
+        analogue_digital_range = header_dict["analogue_digital_range"]
+        assert isinstance(analogue_digital_range, str), (
+            f"Expected analogue_digital_range to be a string, got {type(analogue_digital_range)}"
+        )
         analogue_digital_converter = create_analogue_digital_converter(
-            analogue_digital_range=header_dict["analogue_digital_range"],
+            analogue_digital_range=analogue_digital_range,
             scaling_factor=scaling_factor,
         )
         frames = read_channel_data(
             open_file=open_file,
-            num_frames=header_dict["num_frames"],
-            x_pixels=header_dict["x_pixels"],
-            y_pixels=header_dict["y_pixels"],
+            num_frames=num_frames,
+            x_pixels=x_pixels,
+            y_pixels=y_pixels,
             analogue_digital_converter=analogue_digital_converter,
         )
 
@@ -317,7 +354,11 @@ def get_asd_channels(file_path: Path) -> list[str]:
             raise ValueError(
                 f"File version {file_version} unknown. Please add support if you know how to decode this file version."
             )
-        return [header_dict["channel1"], header_dict["channel2"]]
+        channel_1 = header_dict["channel1"]
+        channel_2 = header_dict["channel2"]
+        assert isinstance(channel_1, str), f"Expected channel_1 to be a string, got {type(channel_1)}"
+        assert isinstance(channel_2, str), f"Expected channel_2 to be a string, got {type(channel_2)}"
+        return [channel_1, channel_2]
 
 
 def read_file_version(open_file: BinaryIO) -> int:
@@ -443,7 +484,7 @@ def read_header_file_version_0(open_file: BinaryIO) -> dict:
 
 
 # pylint: disable=too-many-statements
-def read_header_file_version_1(open_file: BinaryIO) -> dict[str, int]:
+def read_header_file_version_1(open_file: BinaryIO) -> dict[str, int | float | str]:
     """
     Read the header metadata for a .asd file using file version 1.
 
@@ -545,7 +586,8 @@ def read_header_file_version_1(open_file: BinaryIO) -> dict[str, int]:
         comment.append(chr(read_int8(open_file)))
     header_dict["comment_without_null"] = "".join([c for c in comment if c != "\x00"])
 
-    return header_dict
+    # mypy complains here but ty doesn't - temporarily disable mypy
+    return header_dict  # type: ignore
 
 
 # pylint: disable=too-many-statements
@@ -746,14 +788,15 @@ def read_channel_data(
         # Convert from Voltage to Real units
         frame_data = analogue_digital_converter.level_to_voltage(frame_data)  # type: ignore
         # Reshape frame to 2D array
-        frame_data = frame_data.reshape((y_pixels, x_pixels))  # type: ignore
+        frame_data = frame_data.reshape((y_pixels, x_pixels))
         frames.append(frame_data)
 
+    frames = np.array(frames)
     return frames
 
 
 def create_analogue_digital_converter(
-    analogue_digital_range: float, scaling_factor: float, resolution: int = 4096
+    analogue_digital_range: str, scaling_factor: float, resolution: int = 4096
 ) -> VoltageLevelConverter:
     """
     Create an analogue to digital converter for a given range, scaling factor and resolution.
@@ -762,7 +805,7 @@ def create_analogue_digital_converter(
 
     Parameters
     ----------
-    analogue_digital_range : float
+    analogue_digital_range : str
         The range of analogue voltage values.
     scaling_factor : float
         A scaling factor calculated elsewhere that scales the heightmap appropriately based on the type of channel and
@@ -853,7 +896,9 @@ def create_analogue_digital_converter(
     return converter
 
 
-def create_animation(file_name: str, frames: npt.NDArray, file_format: str = ".gif") -> None:
+def create_animation(
+    file_name: str, frames: npt.NDArray, file_format: str = ".gif", num_frames_to_sample: int | None = None
+) -> None:
     """
     Create animation from a numpy array of frames (2d numpy arrays).
 
@@ -868,28 +913,48 @@ def create_animation(file_name: str, frames: npt.NDArray, file_format: str = ".g
         W is the width of the frames and H is the height of the frames.
     file_format : str
         Optional string for the file format to save as. Formats currently available: .mp4, .gif.
+    num_frames_to_sample : int | None
+        Optional number of frames to sample from the input frames. If None, all frames are used.
     """
     fig, axis = plt.subplots()
 
-    def update(frame: npt.NDArray) -> plt.Axes:
+    # Create an initial image to display that will be updated in the animation
+    displayed_image = axis.imshow(frames[0], animated=True, vmin=np.nanmin(frames), vmax=np.nanmax(frames))
+
+    num_frames_to_sample = num_frames_to_sample if num_frames_to_sample is not None else int(frames.shape[0])
+
+    # Sample the frames if necessary
+    if num_frames_to_sample < frames.shape[0]:
+        # Sample the frames evenly
+        frame_indices = np.linspace(0, frames.shape[0] - 1, num_frames_to_sample, dtype=int)
+        frames = frames[frame_indices]
+
+    def update(frame_index: int) -> tuple[plt.AxesImage,]:
         """
-        Update the image with the latest frame.
+        Update the displayed image for the animation.
 
         Parameters
         ----------
-        frame : npt.NDArray
-            Single frame to add to the image.
+        frame_index : int
+            The index of the frame to display.
 
         Returns
         -------
-        axis
-            Matplotlib axis.
+        tuple
+            A tuple containing the updated image.
         """
-        axis.imshow(frames[frame])
-        return axis
+        displayed_image.set_array(frames[frame_index])
+        frame = frames[frame_index]
+        displayed_image.set_clim(
+            vmin=np.nanmin(frame),
+            vmax=np.nanmax(frame),
+        )
+        # Return a tuple since matplotlib expects a return of an iterable but we only have one image to update.
+        return (displayed_image,)
 
     # Create the animation object
-    ani = animation.FuncAnimation(fig, update, frames=frames.shape[0], interval=200)
+    # blit=True means that only the parts of the plot which have changed will be redrawn apparently.
+    ani = animation.FuncAnimation(fig, update, frames=frames.shape[0], interval=200, blit=True)
 
     if file_format == ".mp4":
         ani.save(f"{file_name}.mp4", writer="ffmpeg")
@@ -897,3 +962,6 @@ def create_animation(file_name: str, frames: npt.NDArray, file_format: str = ".g
         ani.save(f"{file_name}.gif", writer="imagemagick")
     else:
         raise ValueError(f"{file_format} format not supported yet.")
+
+    # close the plot
+    plt.close()

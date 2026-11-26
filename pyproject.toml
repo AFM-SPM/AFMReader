@@ -74,11 +74,11 @@ dev = [
   { include-group = "docs" },
   { include-group = "pypi" },
   { include-group = "tests" },
-  "black",
   "pre-commit",
   "pylint",
   "ruff",
   "setuptools_scm[toml]",
+  "ty>=0.0.110",
 ]
 
 [project.urls]
