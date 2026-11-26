@@ -25,7 +25,7 @@ jobs:
       - name: Install package dependencies in activated environment
         shell: bash
         run: |
-          uv sync --frozen --locked --all-extras --dev
+          uv sync --frozen --all-extras --dev
       - name: Pytest
         run: |
           uv run pytest --cov=src --cov-branch --numprocesses=logical tests
