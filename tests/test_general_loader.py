@@ -128,8 +128,9 @@ RESOURCES = BASE_DIR / "tests" / "resources"
         ),
     ],
 )
-def test_load(capsys: pytest.CaptureFixture, filepath: Path, channel: str, error: bool, message: str) -> None:
+def test_load(caplog: pytest.LogCaptureFixture, filepath: Path, channel: str, error: bool, message: str) -> None:
     """Test loading of all (asd, gwy, ibw, jpk, spm, stp, top, topostats) filetypes."""
+    caplog.set_level("DEBUG")
     loader = general_loader.LoadFile(filepath, channel)
     if error:
         with pytest.raises(ValueError, match=re.escape(message)):
@@ -139,8 +140,7 @@ def test_load(capsys: pytest.CaptureFixture, filepath: Path, channel: str, error
         assert isinstance(afm_scan.image, np.ndarray)
         assert isinstance(afm_scan.pixel_to_nanometre_scaling, float)
     # check output logs
-    captured = capsys.readouterr()
-    assert message in captured.err
+    assert any(message in logged_message for logged_message in caplog.messages)
 
 
 @pytest.mark.parametrize(
@@ -158,7 +158,7 @@ def test_load_filenotfounderror(filepath: Path) -> None:
 
     with pytest.raises(FileNotFoundError) as execinfo:
         loader.load()
-        assert "[not_a_real_file] FileNotFoundError" in execinfo.value
+        assert "[not_a_real_file] FileNotFoundError" in str(execinfo.value)
 
 
 @pytest.mark.parametrize(
