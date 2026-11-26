@@ -25,16 +25,16 @@ jobs:
       - name: Install package dependencies in activated environment
         shell: bash
         run: |
-          uv sync --frozen --locked --all-extras --dev
+          uv sync --frozen --all-extras --dev
       - name: Pytest
         run: |
           uv run pytest --cov=src --cov-branch --numprocesses=logical tests
       - name: Determine coverage
-        if: runner.os = 'Linux'
+        if: runner.os == 'Linux'
         run: |
           coverage xml
       - name: Upload coverage to Codecov
-        if: runner.os = 'Linux'
+        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v7
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
